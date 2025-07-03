@@ -1,0 +1,22 @@
+{
+  "ssid": "",
+  "password": "",
+  "netatmoClientId": "",
+  "netatmoClientSecret": "",
+  "netatmoUsername": "",
+  "netatmoPassword": "",
+  "netatmoDeviceId": "",
+  "netatmoModuleId": "",
+  "clockDuration": 10000,
+  "weatherDuration": 5000,
+  "timeZone": "",
+  "weatherUnits": "metric",
+  "brightness": 10,
+  "flipDisplay": false,
+  "ntpServer1": "pool.ntp.org",
+  "ntpServer2": "time.nist.gov",
+  "twelveHourToggle": false,
+  "showDayOfWeek": true,
+  "showIndoorTemp": true,
+  "showOutdoorTemp": true
+}

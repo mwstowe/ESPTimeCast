@@ -1,5 +1,7 @@
 ![ESPTimeCast](assets/logo.svg)
 
+# ESPTimeCast Indoor/Outdoor
+
 **ESPTimeCast** is a WiFi-connected LED matrix clock and temperature display based on ESP8266 and MAX7219.  
 It displays the current time, day of the week (with custom symbols), indoor temperature from a DS18B20 sensor, and outdoor temperature from a Netatmo weather station.  
 Setup and configuration are fully managed via a built-in web interface.  

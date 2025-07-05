@@ -481,6 +481,9 @@ String getNetatmoToken() {
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();
+      Serial.println(F("[NETATMO] Response received:"));
+      Serial.println(payload);
+      
       DynamicJsonDocument doc(1024);
       DeserializationError error = deserializeJson(doc, payload);
       
@@ -506,6 +509,11 @@ String getNetatmoToken() {
     } else {
       Serial.print(F("[NETATMO] HTTP error: "));
       Serial.println(httpCode);
+      
+      // Get the error response
+      String errorPayload = https.getString();
+      Serial.println(F("[NETATMO] Error response:"));
+      Serial.println(errorPayload);
       
       // If using an existing refresh token and it failed, clear it
       if (useRefreshToken) {
@@ -625,6 +633,10 @@ void fetchOutdoorTemperature() {
   
   if (strlen(netatmoDeviceId) == 0 || strlen(netatmoModuleId) == 0) {
     Serial.println(F("[NETATMO] Skipped: Missing device or module ID"));
+    Serial.print(F("[NETATMO] Device ID: "));
+    Serial.println(netatmoDeviceId);
+    Serial.print(F("[NETATMO] Module ID: "));
+    Serial.println(netatmoModuleId);
     outdoorTempAvailable = false;
     return;
   }
@@ -644,6 +656,11 @@ void fetchOutdoorTemperature() {
   String url = "https://api.netatmo.com/api/getstationsdata?device_id=";
   url += netatmoDeviceId;
   
+  Serial.print(F("[NETATMO] Requesting URL: "));
+  Serial.println(url);
+  Serial.print(F("[NETATMO] Using token: "));
+  Serial.println(token.substring(0, 10) + "...");
+  
   if (https.begin(*client, url)) {
     https.addHeader("Authorization", "Bearer " + token);
     
@@ -651,6 +668,9 @@ void fetchOutdoorTemperature() {
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();
+      Serial.println(F("[NETATMO] Response received:"));
+      Serial.println(payload);
+      
       DynamicJsonDocument doc(4096);
       DeserializationError error = deserializeJson(doc, payload);
       
@@ -658,12 +678,38 @@ void fetchOutdoorTemperature() {
         // Navigate through the JSON to find the outdoor module
         JsonArray devices = doc["body"]["devices"];
         
+        Serial.print(F("[NETATMO] Number of devices found: "));
+        Serial.println(devices.size());
+        
+        bool deviceFound = false;
+        bool moduleFound = false;
+        
         for (JsonObject device : devices) {
-          if (device["_id"].as<String>() == netatmoDeviceId) {
+          String deviceId = device["_id"].as<String>();
+          Serial.print(F("[NETATMO] Found device ID: "));
+          Serial.println(deviceId);
+          
+          if (deviceId == netatmoDeviceId) {
+            deviceFound = true;
+            Serial.println(F("[NETATMO] Device ID matched!"));
+            
             JsonArray modules = device["modules"];
+            Serial.print(F("[NETATMO] Number of modules found: "));
+            Serial.println(modules.size());
             
             for (JsonObject module : modules) {
-              if (module["_id"].as<String>() == netatmoModuleId) {
+              String moduleId = module["_id"].as<String>();
+              String moduleName = module["module_name"].as<String>();
+              Serial.print(F("[NETATMO] Found module: "));
+              Serial.print(moduleId);
+              Serial.print(F(" ("));
+              Serial.print(moduleName);
+              Serial.println(F(")"));
+              
+              if (moduleId == netatmoModuleId) {
+                moduleFound = true;
+                Serial.println(F("[NETATMO] Module ID matched!"));
+                
                 JsonObject dashboard_data = module["dashboard_data"];
                 
                 if (dashboard_data.containsKey("Temperature")) {
@@ -679,14 +725,30 @@ void fetchOutdoorTemperature() {
                   Serial.println(outdoorTemp);
                   outdoorTempAvailable = true;
                 } else {
-                  Serial.println(F("[NETATMO] Temperature data not found"));
+                  Serial.println(F("[NETATMO] Temperature data not found in dashboard_data"));
+                  Serial.println(F("[NETATMO] Available dashboard_data fields:"));
+                  for (JsonPair kv : dashboard_data) {
+                    Serial.print(kv.key().c_str());
+                    Serial.print(F(": "));
+                    Serial.println(kv.value().as<String>());
+                  }
                   outdoorTempAvailable = false;
                 }
                 break;
               }
             }
+            
+            if (!moduleFound) {
+              Serial.println(F("[NETATMO] Error: Module ID not found in the device's modules"));
+              outdoorTempAvailable = false;
+            }
             break;
           }
+        }
+        
+        if (!deviceFound) {
+          Serial.println(F("[NETATMO] Error: Device ID not found in the response"));
+          outdoorTempAvailable = false;
         }
       } else {
         Serial.print(F("[NETATMO] JSON parse error: "));
@@ -696,6 +758,12 @@ void fetchOutdoorTemperature() {
     } else {
       Serial.print(F("[NETATMO] HTTP error: "));
       Serial.println(httpCode);
+      
+      // Get the error response
+      String errorPayload = https.getString();
+      Serial.println(F("[NETATMO] Error response:"));
+      Serial.println(errorPayload);
+      
       outdoorTempAvailable = false;
     }
     

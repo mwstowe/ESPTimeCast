@@ -208,9 +208,9 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 
 ---
 
-## ☕ Support this project
+## ☕ Support original author
 
-If you like this project, you can [buy me a coffee](https://paypal.me/officialuphoto)!
+If you like this project, you can [buy him a coffee](https://paypal.me/officialuphoto)!
 
 ---
 

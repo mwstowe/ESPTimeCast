@@ -128,7 +128,7 @@ MD_MAX72XX::fontType_t mFactory[] PROGMEM =
 	3, 36, 52, 44, 	// 122 - 'z'
 	1, 0, 	// 123 - '{'
 	4, 0, 60, 0, 0, 	// 124 - '|' - Custom vertical line separator
-	1, 0, 	// 125 - '}'
+	4, 0, 0, 0, 0, 	// 125 - '}' - Custom invisible separator with same width as '|'
   12, 60, 66, 66, 60, 0, 126, 64, 64, 126, 0, 126, 66, 	// 126 - '~' - Custom 'OUT' symbol
 	0, 	// 127 - ''
   0, 	// 128 - '€'

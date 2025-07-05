@@ -991,8 +991,9 @@ void loop() {
       String tempDisplay;
       
       if (showIndoorTemp && indoorTempAvailable && showOutdoorTemp && outdoorTempAvailable) {
-        // Show both temperatures with a fixed separator (no blinking)
-        tempDisplay = indoorTemp + "|" + outdoorTemp;
+        // Show both temperatures with a separator that blinks but maintains alignment
+        // Use a custom invisible separator with the same width as the vertical bar
+        tempDisplay = indoorTemp + (indicatorVisible ? "|" : "}") + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
         // Show only indoor temperature with lowercase i that blinks
         tempDisplay = (indicatorVisible ? "i " : "  ") + indoorTemp + tempSymbol;

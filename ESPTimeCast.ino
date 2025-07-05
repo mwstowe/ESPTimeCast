@@ -970,11 +970,11 @@ void loop() {
         // Show both temperatures with a custom block separator
         tempDisplay = indoorTemp + "|" + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
-        // Show only indoor temperature with custom symbol
-        tempDisplay = "I " + indoorTemp + tempSymbol;
+        // Show only indoor temperature with lowercase i
+        tempDisplay = "i" + indoorTemp + tempSymbol;
       } else if (showOutdoorTemp && outdoorTempAvailable) {
-        // Show only outdoor temperature with custom symbol
-        tempDisplay = "O " + outdoorTemp + tempSymbol;
+        // Show only outdoor temperature with lowercase o
+        tempDisplay = "o" + outdoorTemp + tempSymbol;
       } else {
         // Fallback to clock if no temperatures available
         String timeString = formattedTime;

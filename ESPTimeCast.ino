@@ -967,8 +967,8 @@ void loop() {
       String tempDisplay;
       
       if (showIndoorTemp && indoorTempAvailable && showOutdoorTemp && outdoorTempAvailable) {
-        // Show both temperatures with a colon separator
-        tempDisplay = indoorTemp + ":" + outdoorTemp;
+        // Show both temperatures with a custom block separator
+        tempDisplay = indoorTemp + "|" + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
         // Show only indoor temperature with custom symbol
         tempDisplay = "I " + indoorTemp + tempSymbol;

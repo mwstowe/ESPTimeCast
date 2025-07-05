@@ -47,6 +47,7 @@ unsigned long weatherDuration = 5000;
 
 // ADVANCED SETTINGS
 int brightness = 7;
+float tempAdjust = 0.0;
 bool flipDisplay = false;
 bool twelveHourToggle = false;
 bool showDayOfWeek = true;
@@ -104,6 +105,7 @@ void printConfigToSerial() {
   Serial.print(F("Weather duration: ")); Serial.println(weatherDuration);
   Serial.print(F("TimeZone (IANA): ")); Serial.println(timeZone);
   Serial.print(F("Brightness: ")); Serial.println(brightness);
+  Serial.print(F("Temperature Adjustment: ")); Serial.println(tempAdjust);
   Serial.print(F("Flip Display: ")); Serial.println(flipDisplay ? "Yes" : "No");
   Serial.print(F("Show 12h Clock: ")); Serial.println(twelveHourToggle ? "Yes" : "No");
   Serial.print(F("Show Day of the Week: ")); Serial.println(showDayOfWeek ? "Yes" : "No");
@@ -138,6 +140,7 @@ void loadConfig() {
     doc[F("weatherDuration")] = 5000;
     doc[F("timeZone")] = "";
     doc[F("brightness")] = brightness;
+    doc[F("tempAdjust")] = tempAdjust;
     doc[F("flipDisplay")] = flipDisplay;
     doc[F("twelveHourToggle")] = twelveHourToggle;
     doc[F("showDayOfWeek")] = showDayOfWeek;
@@ -187,6 +190,7 @@ void loadConfig() {
   if (doc.containsKey("weatherDuration")) weatherDuration = doc["weatherDuration"];
   if (doc.containsKey("timeZone")) strlcpy(timeZone, doc["timeZone"], sizeof(timeZone));
   if (doc.containsKey("brightness")) brightness = doc["brightness"];
+  if (doc.containsKey("tempAdjust")) tempAdjust = doc["tempAdjust"];
   if (doc.containsKey("flipDisplay")) flipDisplay = doc["flipDisplay"];
   if (doc.containsKey("twelveHourToggle")) twelveHourToggle = doc["twelveHourToggle"];
   if (doc.containsKey("showDayOfWeek")) showDayOfWeek = doc["showDayOfWeek"];
@@ -473,6 +477,14 @@ void readIndoorTemperature() {
   float tempC = sensors.getTempCByIndex(0);
   
   if (tempC != DEVICE_DISCONNECTED_C) {
+    // Apply temperature adjustment
+    tempC += tempAdjust;
+    Serial.print(F("[DS18B20] Raw temperature: "));
+    Serial.print(tempC - tempAdjust);
+    Serial.print(F("°C, Adjusted: "));
+    Serial.print(tempC);
+    Serial.println(F("°C"));
+    
     // Convert to the correct unit based on settings
     if (strcmp(weatherUnits, "imperial") == 0) {
       float tempF = sensors.toFahrenheit(tempC);

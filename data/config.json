@@ -12,6 +12,7 @@
   "timeZone": "",
   "weatherUnits": "metric",
   "brightness": 10,
+  "tempAdjust": 0,
   "flipDisplay": false,
   "ntpServer1": "pool.ntp.org",
   "ntpServer2": "time.nist.gov",

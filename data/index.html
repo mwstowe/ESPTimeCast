@@ -478,6 +478,11 @@ textarea::placeholder {
             <!-- Brightness Slider with Value -->
       <label style="margin-top: 1.75rem;">Brightness: <span id="brightnessValue">10</span></label>
       <input style="width: 100%;" type="range" min="0" max="15" name="brightness" id="brightnessSlider" value="10" oninput="brightnessValue.textContent = brightnessSlider.value">   
+      
+      <!-- Temperature Adjustment Slider with Value -->
+      <label style="margin-top: 1.75rem;">Temperature Adjustment: <span id="tempAdjustValue">0</span>°</label>
+      <input style="width: 100%;" type="range" min="-10" max="10" step="0.5" name="tempAdjust" id="tempAdjustSlider" value="0" oninput="tempAdjustValue.textContent = tempAdjustSlider.value">
+      <div class="small">Adjust indoor temperature reading by -10° to +10° to calibrate the sensor.</div>
       </div>   
     </div>
 
@@ -538,6 +543,8 @@ window.onload = function () {
       // Advanced:
       document.getElementById('brightnessSlider').value = typeof data.brightness !== "undefined" ? data.brightness : 10;
       document.getElementById('brightnessValue').textContent = document.getElementById('brightnessSlider').value;
+      document.getElementById('tempAdjustSlider').value = typeof data.tempAdjust !== "undefined" ? data.tempAdjust : 0;
+      document.getElementById('tempAdjustValue').textContent = document.getElementById('tempAdjustSlider').value;
       document.getElementById('flipDisplay').checked = !!data.flipDisplay;
       document.getElementById('ntpServer1').value = data.ntpServer1 || "";
       document.getElementById('ntpServer2').value = data.ntpServer2 || "";
@@ -601,6 +608,7 @@ async function submitConfig(event) {
 
   // Advanced: ensure correct values are set for advanced fields
   formData.set('brightness', document.getElementById('brightnessSlider').value);
+  formData.set('tempAdjust', document.getElementById('tempAdjustSlider').value);
   formData.set('flipDisplay', document.getElementById('flipDisplay').checked ? 'on' : '');
   formData.set('twelveHourToggle', document.getElementById('twelveHourToggle').checked ? 'on' : '');
   formData.set('showDayOfWeek', document.getElementById('showDayOfWeek').checked ? 'on' : '');

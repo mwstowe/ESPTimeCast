@@ -991,13 +991,13 @@ void loop() {
       String tempDisplay;
       
       if (showIndoorTemp && indoorTempAvailable && showOutdoorTemp && outdoorTempAvailable) {
-        // Show both temperatures with a custom block separator
-        tempDisplay = indoorTemp + (indicatorVisible ? "|" : " ") + outdoorTemp;
+        // Show both temperatures with a fixed separator (no blinking)
+        tempDisplay = indoorTemp + "|" + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
-        // Show only indoor temperature with lowercase i
+        // Show only indoor temperature with lowercase i that blinks
         tempDisplay = (indicatorVisible ? "i " : "  ") + indoorTemp + tempSymbol;
       } else if (showOutdoorTemp && outdoorTempAvailable) {
-        // Show only outdoor temperature with lowercase o
+        // Show only outdoor temperature with lowercase o that blinks
         tempDisplay = (indicatorVisible ? "o " : "  ") + outdoorTemp + tempSymbol;
       } else {
         // Fallback to clock if no temperatures available

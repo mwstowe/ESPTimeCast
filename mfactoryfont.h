@@ -95,7 +95,7 @@ MD_MAX72XX::fontType_t mFactory[] PROGMEM =
 	3, 7, 248, 7, 	// 89 - 'Y'
 	4, 225, 153, 133, 131, 	// 90 - 'Z'
 	3, 62, 34, 34, 	// 91 - '['
-	3, 48, 28, 6, 	// 92 - '\' - Mirrored to look like a forward slash
+	3, 6, 28, 48, 	// 92 - '\'
 	3, 34, 34, 62, 	// 93 - ']'
 	9, 0, 66, 126, 66, 0, 126, 12, 48, 126, 	// 94 - '^' - Custom 'IN' symbol (bitmap data)
 	3, 32, 32, 32, 	// 95 - '_'

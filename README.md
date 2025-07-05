@@ -87,7 +87,7 @@ The built-in web interface provides full configuration for:
 3. Click **Save Setting** – the device saves config, reboots, and connects.
 
 ### UI Example:
-<img src="assets/webui4.png" alt="Web Interface" width="320">
+<img src="assets/webui_new.png" alt="Web Interface" width="320">
 
 ---
 

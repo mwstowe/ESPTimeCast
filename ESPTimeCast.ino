@@ -454,6 +454,8 @@ String getNetatmoToken() {
   
   // Check if we have a refresh token
   bool useRefreshToken = strlen(netatmoRefreshToken) > 0;
+  Serial.print(F("[NETATMO] Using refresh token: "));
+  Serial.println(useRefreshToken ? "Yes" : "No");
   
   // If no refresh token, check if we have username/password
   if (!useRefreshToken && (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0 || 
@@ -641,7 +643,7 @@ void saveTokensToConfig() {
 
 // Function to fetch outdoor temperature from Netatmo
 void fetchOutdoorTemperature() {
-  Serial.println(F("[NETATMO] Fetching outdoor temperature..."));
+  Serial.println(F("\n[NETATMO] Fetching outdoor temperature..."));
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Skipped: WiFi not connected"));
@@ -651,10 +653,12 @@ void fetchOutdoorTemperature() {
   
   if (strlen(netatmoDeviceId) == 0 || strlen(netatmoModuleId) == 0) {
     Serial.println(F("[NETATMO] Skipped: Missing device or module ID"));
-    Serial.print(F("[NETATMO] Device ID: "));
-    Serial.println(netatmoDeviceId);
-    Serial.print(F("[NETATMO] Module ID: "));
-    Serial.println(netatmoModuleId);
+    Serial.print(F("[NETATMO] Device ID: '"));
+    Serial.print(netatmoDeviceId);
+    Serial.println(F("'"));
+    Serial.print(F("[NETATMO] Module ID: '"));
+    Serial.print(netatmoModuleId);
+    Serial.println(F("'"));
     outdoorTempAvailable = false;
     return;
   }
@@ -808,6 +812,7 @@ void updateTemperatures() {
 
 void setup() {
   Serial.begin(115200);
+  delay(500); // Give serial monitor time to connect
   Serial.println();
   Serial.println(F("[SETUP] Starting setup..."));
   P.begin();
@@ -817,6 +822,9 @@ void setup() {
   P.setZoneEffect(0, flipDisplay, PA_FLIP_UD);
   P.setZoneEffect(0, flipDisplay, PA_FLIP_LR);
   Serial.println(F("[SETUP] Parola (LED Matrix) initialized"));
+  
+  // Check Netatmo configuration
+  checkNetatmoConfig();
   
   // Initialize DS18B20 temperature sensor
   sensors.begin();

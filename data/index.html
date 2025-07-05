@@ -132,6 +132,27 @@ textarea::placeholder {
   }
   .primary-button:active {
     transform: scale(0.97); 
+  }
+  
+  .action-button {
+    background: linear-gradient(90deg, #3e99bc, #47add4 85%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+    transition: background 0.25s, transform 0.15s ease-in-out;
+    margin-bottom: 0.5rem;
+  }
+  .action-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.35);
+  }
+  .action-button:active {
+    transform: scale(0.97); 
   }  
   .note { 
     font-size: 0.85rem; 
@@ -306,6 +327,12 @@ textarea::placeholder {
       <input type="text" id="netatmoModuleId" name="netatmoModuleId" />
     </div>
   </div>
+  
+  <button type="button" id="refreshNetatmoToken" class="action-button">Refresh Netatmo Token</button>
+  <div class="small">
+    Click this button if you're having issues with Netatmo outdoor temperature.
+  </div>
+  
   <label for="weatherUnits">Temperature Units</label>
   <select id="weatherUnits" name="weatherUnits">
     <option value="metric">Metric (°C)</option>
@@ -535,6 +562,26 @@ document.addEventListener("DOMContentLoaded", function () {
   if (mdnsInput && mdnsPreview) {
     mdnsInput.addEventListener("input", function() {
       mdnsPreview.textContent = this.value || "esptime";
+    });
+  }
+  
+  // Handle Netatmo token refresh button
+  const refreshTokenBtn = document.getElementById("refreshNetatmoToken");
+  if (refreshTokenBtn) {
+    refreshTokenBtn.addEventListener("click", function() {
+      fetch('/refresh_netatmo_token', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert("Netatmo token refresh initiated. The device will try to get a new token on the next temperature update.");
+          } else {
+            alert("Error: " + data.message);
+          }
+        })
+        .catch(err => {
+          alert("Failed to refresh token. Please try again.");
+          console.error(err);
+        });
     });
   }
 });

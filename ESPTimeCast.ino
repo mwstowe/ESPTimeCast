@@ -429,6 +429,14 @@ void setupWebServer() {
     json += "}";
     request->send(200, "application/json", json);
   });
+  
+  server.on("/refresh_netatmo_token", HTTP_POST, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /refresh_netatmo_token"));
+    forceNetatmoTokenRefresh();
+    String json = "{\"success\": true, \"message\": \"Token refresh initiated\"}";
+    request->send(200, "application/json", json);
+  });
+  });
 
   server.begin();
   Serial.println(F("[WEBSERVER] Web server started"));
@@ -786,6 +794,13 @@ void fetchOutdoorTemperature() {
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       
+      // If we get a 403 error (Forbidden), the token might be expired
+      if (httpCode == 403) {
+        Serial.println(F("[NETATMO] 403 Forbidden error - token likely expired"));
+        forceNetatmoTokenRefresh();  // Force token refresh on next API call
+        Serial.println(F("[NETATMO] Will try again with new token on next update."));
+      }
+      
       outdoorTempAvailable = false;
     }
     
@@ -808,6 +823,12 @@ void updateTemperatures() {
   
   // Set weatherFetched flag if at least one temperature is available
   weatherFetched = indoorTempAvailable || outdoorTempAvailable;
+}
+
+// Function to force a refresh of the Netatmo token on next API call
+void forceNetatmoTokenRefresh() {
+  Serial.println(F("[NETATMO] Forcing token refresh on next API call"));
+  netatmoAccessToken[0] = '\0';  // Clear access token but keep refresh token
 }
 
 void setup() {

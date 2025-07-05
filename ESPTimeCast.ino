@@ -38,6 +38,8 @@ char netatmoClientId[64] = "";
 char netatmoClientSecret[64] = "";
 char netatmoUsername[64] = "";
 char netatmoPassword[64] = "";
+char netatmoAccessToken[256] = "";
+char netatmoRefreshToken[256] = "";
 char netatmoDeviceId[64] = "";
 char netatmoModuleId[64] = "";
 char weatherUnits[12] = "metric";
@@ -135,6 +137,8 @@ void loadConfig() {
     doc[F("netatmoClientSecret")] = "";
     doc[F("netatmoUsername")] = "";
     doc[F("netatmoPassword")] = "";
+    doc[F("netatmoAccessToken")] = "";
+    doc[F("netatmoRefreshToken")] = "";
     doc[F("netatmoDeviceId")] = "";
     doc[F("netatmoModuleId")] = "";
     doc[F("weatherUnits")] = "metric";
@@ -185,6 +189,8 @@ void loadConfig() {
   if (doc.containsKey("netatmoClientSecret")) strlcpy(netatmoClientSecret, doc["netatmoClientSecret"], sizeof(netatmoClientSecret));
   if (doc.containsKey("netatmoUsername")) strlcpy(netatmoUsername, doc["netatmoUsername"], sizeof(netatmoUsername));
   if (doc.containsKey("netatmoPassword")) strlcpy(netatmoPassword, doc["netatmoPassword"], sizeof(netatmoPassword));
+  if (doc.containsKey("netatmoAccessToken")) strlcpy(netatmoAccessToken, doc["netatmoAccessToken"], sizeof(netatmoAccessToken));
+  if (doc.containsKey("netatmoRefreshToken")) strlcpy(netatmoRefreshToken, doc["netatmoRefreshToken"], sizeof(netatmoRefreshToken));
   if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
   if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
   if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));
@@ -419,8 +425,18 @@ String getNetatmoToken() {
     return "";
   }
   
-  if (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0 || 
-      strlen(netatmoUsername) == 0 || strlen(netatmoPassword) == 0) {
+  // Check if we have an access token already
+  if (strlen(netatmoAccessToken) > 0) {
+    Serial.println(F("[NETATMO] Using existing access token"));
+    return netatmoAccessToken;
+  }
+  
+  // Check if we have a refresh token
+  bool useRefreshToken = strlen(netatmoRefreshToken) > 0;
+  
+  // If no refresh token, check if we have username/password
+  if (!useRefreshToken && (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0 || 
+      strlen(netatmoUsername) == 0 || strlen(netatmoPassword) == 0)) {
     Serial.println(F("[NETATMO] Skipped: Missing Netatmo credentials"));
     return "";
   }
@@ -434,14 +450,26 @@ String getNetatmoToken() {
   if (https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
     
-    String postData = "grant_type=password&client_id=";
-    postData += netatmoClientId;
-    postData += "&client_secret=";
-    postData += netatmoClientSecret;
-    postData += "&username=";
-    postData += netatmoUsername;
-    postData += "&password=";
-    postData += netatmoPassword;
+    String postData;
+    
+    if (useRefreshToken) {
+      // Use refresh token flow
+      postData = "grant_type=refresh_token&refresh_token=";
+      postData += netatmoRefreshToken;
+      postData += "&client_id=";
+      postData += netatmoClientId;
+      postData += "&client_secret=";
+      postData += netatmoClientSecret;
+    } else {
+      // Use password flow
+      postData = "grant_type=password&client_id=";
+      postData += netatmoClientId;
+      postData += "&client_secret=";
+      postData += netatmoClientSecret;
+      postData += "&username=";
+      postData += netatmoUsername;
+      postData += "&password=";
+      postData += netatmoPassword;
     postData += "&scope=read_station";
     
     int httpCode = https.POST(postData);
@@ -453,6 +481,18 @@ String getNetatmoToken() {
       
       if (!error) {
         token = doc["access_token"].as<String>();
+        
+        // Store the tokens for future use
+        strlcpy(netatmoAccessToken, token.c_str(), sizeof(netatmoAccessToken));
+        
+        if (doc.containsKey("refresh_token")) {
+          String refreshToken = doc["refresh_token"].as<String>();
+          strlcpy(netatmoRefreshToken, refreshToken.c_str(), sizeof(netatmoRefreshToken));
+          
+          // Save the tokens to config.json
+          saveTokensToConfig();
+        }
+        
         Serial.println(F("[NETATMO] Token obtained successfully"));
       } else {
         Serial.print(F("[NETATMO] JSON parse error: "));
@@ -461,6 +501,13 @@ String getNetatmoToken() {
     } else {
       Serial.print(F("[NETATMO] HTTP error: "));
       Serial.println(httpCode);
+      
+      // If using an existing refresh token and it failed, clear it
+      if (useRefreshToken) {
+        Serial.println(F("[NETATMO] Refresh token might be expired, clearing it"));
+        netatmoRefreshToken[0] = '\0';
+        netatmoAccessToken[0] = '\0';
+      }
     }
     
     https.end();
@@ -514,6 +561,51 @@ void readIndoorTemperature() {
     Serial.println(F("[DS18B20] Error reading temperature"));
     indoorTempAvailable = false;
   }
+}
+
+// Function to save tokens to config.json
+void saveTokensToConfig() {
+  Serial.println(F("[CONFIG] Saving tokens to config.json"));
+  
+  if (!LittleFS.begin()) {
+    Serial.println(F("[CONFIG] Failed to mount file system"));
+    return;
+  }
+  
+  File configFile = LittleFS.open("/config.json", "r");
+  if (!configFile) {
+    Serial.println(F("[CONFIG] Failed to open config file for reading"));
+    return;
+  }
+  
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, configFile);
+  configFile.close();
+  
+  if (error) {
+    Serial.print(F("[CONFIG] Failed to parse config file: "));
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  // Update the tokens
+  doc["netatmoAccessToken"] = netatmoAccessToken;
+  doc["netatmoRefreshToken"] = netatmoRefreshToken;
+  
+  // Save the updated config
+  configFile = LittleFS.open("/config.json", "w");
+  if (!configFile) {
+    Serial.println(F("[CONFIG] Failed to open config file for writing"));
+    return;
+  }
+  
+  if (serializeJson(doc, configFile) == 0) {
+    Serial.println(F("[CONFIG] Failed to write to config file"));
+  } else {
+    Serial.println(F("[CONFIG] Tokens saved successfully"));
+  }
+  
+  configFile.close();
 }
 
 // Function to fetch outdoor temperature from Netatmo

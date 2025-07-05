@@ -288,6 +288,16 @@ textarea::placeholder {
   </div>
   <div class="form-row two-col">
     <div>
+      <label for="netatmoAccessToken">Access Token (Optional)</label>
+      <input type="text" id="netatmoAccessToken" name="netatmoAccessToken" />
+    </div>
+    <div>
+      <label for="netatmoRefreshToken">Refresh Token (Optional)</label>
+      <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken" />
+    </div>
+  </div>
+  <div class="form-row two-col">
+    <div>
       <label for="netatmoDeviceId">Device ID</label>
       <input type="text" id="netatmoDeviceId" name="netatmoDeviceId" />
     </div>
@@ -535,6 +545,8 @@ window.onload = function () {
       document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret || '';
       document.getElementById('netatmoUsername').value = data.netatmoUsername || '';
       document.getElementById('netatmoPassword').value = data.netatmoPassword || '';
+      document.getElementById('netatmoAccessToken').value = data.netatmoAccessToken || '';
+      document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken || '';
       document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
       document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
       document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';

@@ -5,6 +5,8 @@
   "netatmoClientSecret": "",
   "netatmoUsername": "",
   "netatmoPassword": "",
+  "netatmoAccessToken": "",
+  "netatmoRefreshToken": "",
   "netatmoDeviceId": "",
   "netatmoModuleId": "",
   "clockDuration": 10000,

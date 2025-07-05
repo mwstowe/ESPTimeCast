@@ -268,6 +268,12 @@ textarea::placeholder {
     <input type="password" id="password" name="password" required />
     <label class="small">
       <input type="checkbox" id="togglePassword" style="margin-right: 0.3rem;" />
+      Show password
+    </label>
+  </div>
+  <label for="mdnsHostname">mDNS Hostname</label>
+  <input type="text" id="mdnsHostname" name="mdnsHostname" placeholder="esptime" />
+  <p class="info">The device will be accessible at http://<span id="mdnsPreview">esptime</span>.local after reboot</p>
       Show Password
     </label>
   </div>
@@ -522,6 +528,16 @@ document.addEventListener("DOMContentLoaded", function () {
   toggleCheckbox.addEventListener("change", function () {
     passwordInput.type = this.checked ? "text" : "password";
   });
+  
+  // Update mDNS preview when hostname changes
+  const mdnsInput = document.getElementById("mdnsHostname");
+  const mdnsPreview = document.getElementById("mdnsPreview");
+  
+  if (mdnsInput && mdnsPreview) {
+    mdnsInput.addEventListener("input", function() {
+      mdnsPreview.textContent = this.value || "esptime";
+    });
+  }
 });
 
 window.onbeforeunload = function () {
@@ -549,6 +565,7 @@ window.onload = function () {
       document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken || '';
       document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
       document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
+      document.getElementById('mdnsHostname').value = data.mdnsHostname || 'esptime';
       document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';
       document.getElementById('clockDuration').value = (data.clockDuration || 10000) / 1000;
       document.getElementById('weatherDuration').value = (data.weatherDuration || 5000) / 1000;

@@ -8,6 +8,7 @@
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
+#include <ESP8266mDNS.h>  // Add mDNS library
 #include <sntp.h>
 #include <time.h>
 #include <OneWire.h>
@@ -42,6 +43,7 @@ char netatmoAccessToken[256] = "";
 char netatmoRefreshToken[256] = "";
 char netatmoDeviceId[64] = "";
 char netatmoModuleId[64] = "";
+char mdnsHostname[32] = "esptime"; // Default mDNS hostname
 char weatherUnits[12] = "metric";
 char timeZone[64] = "";
 unsigned long clockDuration = 10000;
@@ -141,6 +143,7 @@ void loadConfig() {
     doc[F("netatmoRefreshToken")] = "";
     doc[F("netatmoDeviceId")] = "";
     doc[F("netatmoModuleId")] = "";
+    doc[F("mdnsHostname")] = "esptime";
     doc[F("weatherUnits")] = "metric";
     doc[F("clockDuration")] = 10000;
     doc[F("weatherDuration")] = 5000;
@@ -193,6 +196,7 @@ void loadConfig() {
   if (doc.containsKey("netatmoRefreshToken")) strlcpy(netatmoRefreshToken, doc["netatmoRefreshToken"], sizeof(netatmoRefreshToken));
   if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
   if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
+  if (doc.containsKey("mdnsHostname")) strlcpy(mdnsHostname, doc["mdnsHostname"], sizeof(mdnsHostname));
   if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));
   if (doc.containsKey("clockDuration")) clockDuration = doc["clockDuration"];
   if (doc.containsKey("weatherDuration")) weatherDuration = doc["weatherDuration"];
@@ -231,6 +235,19 @@ void connectWiFi() {
       Serial.println(F("[WiFi] Connected: ") + WiFi.localIP().toString());
       isAPMode = false;
       animating = false;
+      
+      // Initialize mDNS
+      if (MDNS.begin(mdnsHostname)) {
+        Serial.print(F("[mDNS] Responder started: "));
+        Serial.print(mdnsHostname);
+        Serial.println(F(".local"));
+        
+        // Add service to mDNS
+        MDNS.addService("http", "tcp", 80);
+      } else {
+        Serial.println(F("[mDNS] Failed to start responder"));
+      }
+      
       break;
     } else if (now - startAttemptTime >= timeout) {
       Serial.println(F("\r\n[WiFi] Failed. Starting AP mode..."));

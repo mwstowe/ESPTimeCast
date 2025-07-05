@@ -9,6 +9,7 @@
   "netatmoRefreshToken": "",
   "netatmoDeviceId": "",
   "netatmoModuleId": "",
+  "mdnsHostname": "esptime",
   "clockDuration": 10000,
   "weatherDuration": 5000,
   "timeZone": "",

@@ -77,6 +77,7 @@ unsigned long lastSwitch = 0;
 unsigned long lastColonBlink = 0;
 int displayMode = 0;
 bool indicatorVisible = true; // Shared visibility state for colon and temperature indicators
+bool needTokenRefresh = false; // Flag to indicate we need to refresh the token soon
 
 bool ntpSyncSuccessful = false;
 
@@ -793,11 +794,10 @@ void fetchOutdoorTemperature() {
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       
-      // If we get a 403 error (Forbidden), the token might be expired
+      // If we get a 403 error (Forbidden), the token is expired
       if (httpCode == 403) {
-        Serial.println(F("[NETATMO] 403 Forbidden error - token likely expired"));
+        Serial.println(F("[NETATMO] 403 Forbidden error - token expired"));
         forceNetatmoTokenRefresh();  // Force token refresh on next API call
-        Serial.println(F("[NETATMO] Will try again with new token on next update."));
       }
       
       outdoorTempAvailable = false;
@@ -944,7 +944,17 @@ void loop() {
         updateTemperatures();
         lastTempUpdate = millis();
     }
-    if (millis() - lastTempUpdate > tempUpdateInterval) {
+    
+    // Check if we need to refresh the token sooner due to an expired token
+    if (needTokenRefresh && (millis() - lastTempUpdate > 30000)) { // 30 seconds after last attempt
+        Serial.println(F("[LOOP] Token refresh needed, updating temperatures..."));
+        weatherFetched = false;
+        updateTemperatures();
+        lastTempUpdate = millis();
+        needTokenRefresh = false; // Reset the flag
+    }
+    // Regular temperature update interval
+    else if (millis() - lastTempUpdate > tempUpdateInterval) {
         Serial.println(F("[LOOP] Updating temperatures..."));
         weatherFetched = false;
         updateTemperatures();

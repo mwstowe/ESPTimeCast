@@ -76,6 +76,7 @@ char tempSymbol = 'C';
 unsigned long lastSwitch = 0;
 unsigned long lastColonBlink = 0;
 int displayMode = 0;
+bool indicatorVisible = true; // Shared visibility state for colon and temperature indicators
 
 bool ntpSyncSuccessful = false;
 
@@ -832,6 +833,7 @@ void setup() {
   displayMode = 0;
   lastSwitch = millis();
   lastColonBlink = millis();
+  indicatorVisible = true;
 }
 
 void loop() {
@@ -863,6 +865,7 @@ void loop() {
   const unsigned long colonBlinkInterval = 800;
   if (millis() - lastColonBlink > colonBlinkInterval) {
     colonVisible = !colonVisible;
+    indicatorVisible = colonVisible; // Sync temperature indicators with colon
     lastColonBlink = millis();
   }
 
@@ -989,13 +992,13 @@ void loop() {
       
       if (showIndoorTemp && indoorTempAvailable && showOutdoorTemp && outdoorTempAvailable) {
         // Show both temperatures with a custom block separator
-        tempDisplay = indoorTemp + "|" + outdoorTemp;
+        tempDisplay = indoorTemp + (indicatorVisible ? "|" : " ") + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
         // Show only indoor temperature with lowercase i
-        tempDisplay = "i " + indoorTemp + tempSymbol;
+        tempDisplay = (indicatorVisible ? "i " : "  ") + indoorTemp + tempSymbol;
       } else if (showOutdoorTemp && outdoorTempAvailable) {
         // Show only outdoor temperature with lowercase o
-        tempDisplay = "o " + outdoorTemp + tempSymbol;
+        tempDisplay = (indicatorVisible ? "o " : "  ") + outdoorTemp + tempSymbol;
       } else {
         // Fallback to clock if no temperatures available
         String timeString = formattedTime;

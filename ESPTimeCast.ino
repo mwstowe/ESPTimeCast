@@ -76,6 +76,8 @@ int displayMode = 0;
 bool ntpSyncSuccessful = false;
 
 char daysOfTheWeek[7][12] = {"&", "*", "/", "?", "@", "=", "$"};
+char indoorSymbol[12] = {"^"};  // Custom symbol for indoor temperature
+char outdoorSymbol[12] = {"~"}; // Custom symbol for outdoor temperature
 
 // NTP Synchronization State Machine
 enum NtpState {
@@ -803,11 +805,11 @@ void loop() {
         // Show both temperatures with I/O indicators
         tempDisplay = "I" + indoorTemp + " O" + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
-        // Show only indoor temperature
-        tempDisplay = "I " + indoorTemp + tempSymbol;
+        // Show only indoor temperature with custom symbol
+        tempDisplay = String(indoorSymbol) + " " + indoorTemp + tempSymbol;
       } else if (showOutdoorTemp && outdoorTempAvailable) {
-        // Show only outdoor temperature
-        tempDisplay = "O " + outdoorTemp + tempSymbol;
+        // Show only outdoor temperature with custom symbol
+        tempDisplay = String(outdoorSymbol) + " " + outdoorTemp + tempSymbol;
       } else {
         // Fallback to clock if no temperatures available
         String timeString = formattedTime;

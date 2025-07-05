@@ -436,7 +436,6 @@ void setupWebServer() {
     String json = "{\"success\": true, \"message\": \"Token refresh initiated\"}";
     request->send(200, "application/json", json);
   });
-  });
 
   server.begin();
   Serial.println(F("[WEBSERVER] Web server started"));
@@ -823,12 +822,6 @@ void updateTemperatures() {
   
   // Set weatherFetched flag if at least one temperature is available
   weatherFetched = indoorTempAvailable || outdoorTempAvailable;
-}
-
-// Function to force a refresh of the Netatmo token on next API call
-void forceNetatmoTokenRefresh() {
-  Serial.println(F("[NETATMO] Forcing token refresh on next API call"));
-  netatmoAccessToken[0] = '\0';  // Clear access token but keep refresh token
 }
 
 void setup() {

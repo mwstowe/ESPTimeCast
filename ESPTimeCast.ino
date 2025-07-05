@@ -417,6 +417,9 @@ void setupWebServer() {
 }
 
 // Function to get Netatmo OAuth token
+// Function to save tokens to config.json
+void saveTokensToConfig();
+
 String getNetatmoToken() {
   Serial.println(F("[NETATMO] Getting OAuth token..."));
   
@@ -470,9 +473,11 @@ String getNetatmoToken() {
       postData += netatmoUsername;
       postData += "&password=";
       postData += netatmoPassword;
+    }
     postData += "&scope=read_station";
     
     int httpCode = https.POST(postData);
+    
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();

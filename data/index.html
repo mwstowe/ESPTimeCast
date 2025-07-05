@@ -271,17 +271,29 @@ textarea::placeholder {
       Show Password
     </label>
   </div>
-  <h2>Weather Settings</h2>
-  <label for="openWeatherApiKey">OpenWeather API Key</label>
-  <input type="text" id="openWeatherApiKey" name="openWeatherApiKey" />
+  <h2>Temperature Settings</h2>
+  <label for="netatmoClientId">Netatmo Client ID</label>
+  <input type="text" id="netatmoClientId" name="netatmoClientId" />
+  <label for="netatmoClientSecret">Netatmo Client Secret</label>
+  <input type="text" id="netatmoClientSecret" name="netatmoClientSecret" />
   <div class="form-row two-col">
     <div>
-      <label for="openWeatherCity">City</label>
-      <input type="text" id="openWeatherCity" name="openWeatherCity" />
+      <label for="netatmoUsername">Netatmo Username</label>
+      <input type="text" id="netatmoUsername" name="netatmoUsername" />
     </div>
     <div>
-      <label for="openWeatherCountry">Country Code</label>
-      <input type="text" id="openWeatherCountry" name="openWeatherCountry" maxlength="2" />
+      <label for="netatmoPassword">Netatmo Password</label>
+      <input type="password" id="netatmoPassword" name="netatmoPassword" />
+    </div>
+  </div>
+  <div class="form-row two-col">
+    <div>
+      <label for="netatmoDeviceId">Device ID</label>
+      <input type="text" id="netatmoDeviceId" name="netatmoDeviceId" />
+    </div>
+    <div>
+      <label for="netatmoModuleId">Module ID</label>
+      <input type="text" id="netatmoModuleId" name="netatmoModuleId" />
     </div>
   </div>
   <label for="weatherUnits">Temperature Units</label>
@@ -291,8 +303,8 @@ textarea::placeholder {
     <option value="standard">Standard (K)</option>
   </select>
   <div class="small">
-    Consult the <a href="https://openweathermap.org/price" target="_blank" rel="noopener">OpenWeatherMap</a>
-    documentation for info about getting your API key, city, and country code.
+    Create a Netatmo developer account at <a href="https://dev.netatmo.com/" target="_blank" rel="noopener">dev.netatmo.com</a>
+    to get your Client ID and Client Secret. Use the Netatmo API Explorer to find your Device ID and Module ID.
   </div>
 
   <h2>Clock Settings</h2>
@@ -436,11 +448,20 @@ textarea::placeholder {
         </span>
       </label>
 
-      <!-- Display humidity (Styled) -->
+      <!-- Display indoor temperature (Styled) -->
       <label style="display: flex; align-items: center; margin-top: 1.75rem; justify-content: space-between;">
-        <span style="margin-right: 0.5em;">Show Humidity:</span>
+        <span style="margin-right: 0.5em;">Show Indoor Temperature:</span>
         <span class="toggle-switch">
-          <input type="checkbox" name="showHumidity" id="showHumidity">
+          <input type="checkbox" name="showIndoorTemp" id="showIndoorTemp" checked>
+          <span class="toggle-slider"></span>
+        </span>
+      </label>
+
+      <!-- Display outdoor temperature (Styled) -->
+      <label style="display: flex; align-items: center; margin-top: 1.75rem; justify-content: space-between;">
+        <span style="margin-right: 0.5em;">Show Outdoor Temperature:</span>
+        <span class="toggle-switch">
+          <input type="checkbox" name="showOutdoorTemp" id="showOutdoorTemp" checked>
           <span class="toggle-slider"></span>
         </span>
       </label>
@@ -505,9 +526,12 @@ window.onload = function () {
 
       document.getElementById('ssid').value = data.ssid || '';
       document.getElementById('password').value = data.password || '';
-      document.getElementById('openWeatherApiKey').value = data.openWeatherApiKey || '';
-      document.getElementById('openWeatherCity').value = data.openWeatherCity || '';
-      document.getElementById('openWeatherCountry').value = data.openWeatherCountry || '';
+      document.getElementById('netatmoClientId').value = data.netatmoClientId || '';
+      document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret || '';
+      document.getElementById('netatmoUsername').value = data.netatmoUsername || '';
+      document.getElementById('netatmoPassword').value = data.netatmoPassword || '';
+      document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
+      document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
       document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';
       document.getElementById('clockDuration').value = (data.clockDuration || 10000) / 1000;
       document.getElementById('weatherDuration').value = (data.weatherDuration || 5000) / 1000;
@@ -519,7 +543,8 @@ window.onload = function () {
       document.getElementById('ntpServer2').value = data.ntpServer2 || "";
       document.getElementById('twelveHourToggle').checked = !!data.twelveHourToggle;
       document.getElementById('showDayOfWeek').checked = !!data.showDayOfWeek;
-      document.getElementById('showHumidity').checked = !!data.showHumidity;
+      document.getElementById('showIndoorTemp').checked = typeof data.showIndoorTemp !== "undefined" ? !!data.showIndoorTemp : true;
+      document.getElementById('showOutdoorTemp').checked = typeof data.showOutdoorTemp !== "undefined" ? !!data.showOutdoorTemp : true;
       // Auto-detect browser's timezone if not set in config
       if (!data.timeZone) {
         try {
@@ -579,7 +604,8 @@ async function submitConfig(event) {
   formData.set('flipDisplay', document.getElementById('flipDisplay').checked ? 'on' : '');
   formData.set('twelveHourToggle', document.getElementById('twelveHourToggle').checked ? 'on' : '');
   formData.set('showDayOfWeek', document.getElementById('showDayOfWeek').checked ? 'on' : '');
-  formData.set('showHumidity', document.getElementById('showHumidity').checked ? 'on' : '');
+  formData.set('showIndoorTemp', document.getElementById('showIndoorTemp').checked ? 'on' : '');
+  formData.set('showOutdoorTemp', document.getElementById('showOutdoorTemp').checked ? 'on' : '');
 
   const params = new URLSearchParams();
   for (const pair of formData.entries()) {

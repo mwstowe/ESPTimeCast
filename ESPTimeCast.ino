@@ -477,19 +477,31 @@ void readIndoorTemperature() {
   float tempC = sensors.getTempCByIndex(0);
   
   if (tempC != DEVICE_DISCONNECTED_C) {
-    // Apply temperature adjustment
-    tempC += tempAdjust;
-    Serial.print(F("[DS18B20] Raw temperature: "));
-    Serial.print(tempC - tempAdjust);
-    Serial.print(F("°C, Adjusted: "));
-    Serial.print(tempC);
-    Serial.println(F("°C"));
-    
     // Convert to the correct unit based on settings
     if (strcmp(weatherUnits, "imperial") == 0) {
+      // For imperial units (Fahrenheit)
       float tempF = sensors.toFahrenheit(tempC);
+      // Apply adjustment in Fahrenheit
+      tempF += tempAdjust;
+      
+      Serial.print(F("[DS18B20] Raw temperature: "));
+      Serial.print(sensors.toFahrenheit(tempC));
+      Serial.print(F("°F, Adjusted: "));
+      Serial.print(tempF);
+      Serial.println(F("°F"));
+      
       indoorTemp = String((int)round(tempF)) + "º";
     } else {
+      // For metric (Celsius) or standard (Kelvin) units
+      // Apply adjustment in Celsius
+      tempC += tempAdjust;
+      
+      Serial.print(F("[DS18B20] Raw temperature: "));
+      Serial.print(tempC - tempAdjust);
+      Serial.print(F("°C, Adjusted: "));
+      Serial.print(tempC);
+      Serial.println(F("°C"));
+      
       indoorTemp = String((int)round(tempC)) + "º";
     }
     

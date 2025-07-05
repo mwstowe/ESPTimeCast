@@ -76,8 +76,8 @@ int displayMode = 0;
 bool ntpSyncSuccessful = false;
 
 char daysOfTheWeek[7][12] = {"&", "*", "/", "?", "@", "=", "$"};
-char indoorSymbol[12] = {"^"};  // Custom symbol for indoor temperature
-char outdoorSymbol[12] = {"~"}; // Custom symbol for outdoor temperature
+char indoorSymbol[12] = {"^"};  // Custom symbol for indoor temperature (IN)
+char outdoorSymbol[12] = {"~"}; // Custom symbol for outdoor temperature (OUT)
 
 // NTP Synchronization State Machine
 enum NtpState {

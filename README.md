@@ -183,8 +183,8 @@ The following table summarizes what will appear on the display in each scenario:
 - In **Clock** mode, if NTP time is available, you'll see the current time plus a unique day-of-week icon. If NTP is not available, you'll see `no ntp`.
 - In **Temperature** mode, you'll see indoor and/or outdoor temperatures depending on what's available:
   - If both are available, it shows both with "I" and "O" indicators
-  - If only indoor is available, it shows a custom symbol (^) followed by the temperature
-  - If only outdoor is available, it shows a custom symbol (~) followed by the temperature
+  - If only indoor is available, it shows a custom "IN" symbol followed by the temperature
+  - If only outdoor is available, it shows a custom "OUT" symbol followed by the temperature
   - If neither is available but time is, it falls back to showing the clock
   - If no data is available, you'll see `no temp`
 - All status/error messages (`no ntp`, `no temp`) are shown exactly as written.

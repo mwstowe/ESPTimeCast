@@ -835,6 +835,10 @@ void setup() {
 }
 
 void loop() {
+  // Update mDNS responder
+  if (WiFi.status() == WL_CONNECTED && !isAPMode) {
+    MDNS.update();
+  }
 
   // --- AP Mode Animation ---
   static unsigned long apAnimTimer = 0;

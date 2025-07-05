@@ -271,12 +271,6 @@ textarea::placeholder {
       Show password
     </label>
   </div>
-  <label for="mdnsHostname">mDNS Hostname</label>
-  <input type="text" id="mdnsHostname" name="mdnsHostname" placeholder="esptime" />
-  <p class="info">The device will be accessible at http://<span id="mdnsPreview">esptime</span>.local after reboot</p>
-      Show Password
-    </label>
-  </div>
   <h2>Temperature Settings</h2>
   <label for="netatmoClientId">Netatmo Client ID</label>
   <input type="text" id="netatmoClientId" name="netatmoClientId" />
@@ -445,6 +439,11 @@ textarea::placeholder {
 
       <label>Secondary NTP Server:</label>
       <input type="text" name="ntpServer2" id="ntpServer2" placeholder="Enter NTP address">
+      
+      <label for="mdnsHostname">mDNS Hostname:</label>
+      <input type="text" id="mdnsHostname" name="mdnsHostname" placeholder="esptime" />
+      <p class="info">The device will be accessible at http://<span id="mdnsPreview">esptime</span>.local after reboot</p>
+      
       <div class="toggles" style="padding: 0 1rem;">
       <!-- Day of the week Toggle (Styled) -->
       <label style="display: flex; align-items: center; margin-top: 1.75rem; justify-content: space-between;">

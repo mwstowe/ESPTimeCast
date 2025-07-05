@@ -804,10 +804,10 @@ void loop() {
         tempDisplay = "I" + indoorTemp + " O" + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
         // Show only indoor temperature
-        tempDisplay = "In " + indoorTemp + tempSymbol;
+        tempDisplay = "I " + indoorTemp + tempSymbol;
       } else if (showOutdoorTemp && outdoorTempAvailable) {
         // Show only outdoor temperature
-        tempDisplay = "Out " + outdoorTemp + tempSymbol;
+        tempDisplay = "O " + outdoorTemp + tempSymbol;
       } else {
         // Fallback to clock if no temperatures available
         String timeString = formattedTime;

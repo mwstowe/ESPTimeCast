@@ -106,6 +106,8 @@ Click the **cog icon** next to "Advanced Settings" in the web UI to reveal extra
 - **Flip Display**: Invert the display vertically/horizontally
 - **Brightness**: 0 (dim) to 15 (bright)
 
+*Note: Netatmo settings have been moved to the Advanced Settings section for a cleaner interface.*
+
 *Tip: Changing these options takes effect after saving and rebooting.*
 
 ---

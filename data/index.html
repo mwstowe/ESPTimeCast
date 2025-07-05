@@ -293,56 +293,12 @@ textarea::placeholder {
     </label>
   </div>
   <h2>Temperature Settings</h2>
-  <label for="netatmoClientId">Netatmo Client ID</label>
-  <input type="text" id="netatmoClientId" name="netatmoClientId" />
-  <label for="netatmoClientSecret">Netatmo Client Secret</label>
-  <input type="text" id="netatmoClientSecret" name="netatmoClientSecret" />
-  <div class="form-row two-col">
-    <div>
-      <label for="netatmoUsername">Netatmo Username</label>
-      <input type="text" id="netatmoUsername" name="netatmoUsername" />
-    </div>
-    <div>
-      <label for="netatmoPassword">Netatmo Password</label>
-      <input type="password" id="netatmoPassword" name="netatmoPassword" />
-    </div>
-  </div>
-  <div class="form-row two-col">
-    <div>
-      <label for="netatmoAccessToken">Access Token (Optional)</label>
-      <input type="text" id="netatmoAccessToken" name="netatmoAccessToken" />
-    </div>
-    <div>
-      <label for="netatmoRefreshToken">Refresh Token (Optional)</label>
-      <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken" />
-    </div>
-  </div>
-  <div class="form-row two-col">
-    <div>
-      <label for="netatmoDeviceId">Device ID</label>
-      <input type="text" id="netatmoDeviceId" name="netatmoDeviceId" />
-    </div>
-    <div>
-      <label for="netatmoModuleId">Module ID</label>
-      <input type="text" id="netatmoModuleId" name="netatmoModuleId" />
-    </div>
-  </div>
-  
-  <button type="button" id="refreshNetatmoToken" class="action-button">Refresh Netatmo Token</button>
-  <div class="small">
-    Click this button if you're having issues with Netatmo outdoor temperature.
-  </div>
-  
   <label for="weatherUnits">Temperature Units</label>
   <select id="weatherUnits" name="weatherUnits">
     <option value="metric">Metric (°C)</option>
     <option value="imperial">Imperial (°F)</option>
     <option value="standard">Standard (K)</option>
   </select>
-  <div class="small">
-    Create a Netatmo developer account at <a href="https://dev.netatmo.com/" target="_blank" rel="noopener">dev.netatmo.com</a>
-    to get your Client ID and Client Secret. Use the Netatmo API Explorer to find your Device ID and Module ID.
-  </div>
 
   <h2>Clock Settings</h2>
   <label for="timeZone">Time Zone</label>
@@ -470,6 +426,52 @@ textarea::placeholder {
       <label for="mdnsHostname">mDNS Hostname:</label>
       <input type="text" id="mdnsHostname" name="mdnsHostname" placeholder="esptime" />
       <p class="info">The device will be accessible at http://<span id="mdnsPreview">esptime</span>.local after reboot</p>
+      
+      <!-- Netatmo Settings -->
+      <h3>Netatmo Settings</h3>
+      <div class="small">
+        Create a Netatmo developer account at <a href="https://dev.netatmo.com/" target="_blank" rel="noopener">dev.netatmo.com</a>
+        to get your Client ID and Client Secret. Use the Netatmo API Explorer to find your Device ID and Module ID.
+      </div>
+      <label for="netatmoClientId">Netatmo Client ID</label>
+      <input type="text" id="netatmoClientId" name="netatmoClientId" />
+      <label for="netatmoClientSecret">Netatmo Client Secret</label>
+      <input type="text" id="netatmoClientSecret" name="netatmoClientSecret" />
+      <div class="form-row two-col">
+        <div>
+          <label for="netatmoUsername">Netatmo Username</label>
+          <input type="text" id="netatmoUsername" name="netatmoUsername" />
+        </div>
+        <div>
+          <label for="netatmoPassword">Netatmo Password</label>
+          <input type="password" id="netatmoPassword" name="netatmoPassword" />
+        </div>
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label for="netatmoAccessToken">Access Token (Optional)</label>
+          <input type="text" id="netatmoAccessToken" name="netatmoAccessToken" />
+        </div>
+        <div>
+          <label for="netatmoRefreshToken">Refresh Token (Optional)</label>
+          <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken" />
+        </div>
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label for="netatmoDeviceId">Device ID</label>
+          <input type="text" id="netatmoDeviceId" name="netatmoDeviceId" />
+        </div>
+        <div>
+          <label for="netatmoModuleId">Module ID</label>
+          <input type="text" id="netatmoModuleId" name="netatmoModuleId" />
+        </div>
+      </div>
+      
+      <button type="button" id="refreshNetatmoToken" class="action-button">Refresh Netatmo Token</button>
+      <div class="small">
+        Click this button if you're having issues with Netatmo outdoor temperature.
+      </div>
       
       <div class="toggles" style="padding: 0 1rem;">
       <!-- Day of the week Toggle (Styled) -->

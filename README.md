@@ -171,7 +171,7 @@ The following table summarizes what will appear on the display in each scenario:
 |:------------:|:----------:|:-------------:|:--------------:|:--------------------------------------------|
 | **Clock**    | ✅ Yes      | —             | —              | 🗓️ Day Icon + ⏰ Time (e.g. `@ 14:53`)           |
 | **Clock**    | ❌ No       | —             | —              |  `no ntp` (NTP sync failed)               |
-| **Temp**     | —          | ✅ Yes        | ✅ Yes         | 🏠 Indoor + 🌍 Outdoor (e.g. `23º■18º`)      |
+| **Temp**     | —          | ✅ Yes        | ✅ Yes         | 🏠 Indoor + 🌍 Outdoor (e.g. `23º│18º`)      |
 | **Temp**     | —          | ✅ Yes        | ❌ No          | 🏠 Indoor only (e.g. `i 23ºC`)              |
 | **Temp**     | —          | ❌ No         | ✅ Yes         | 🌍 Outdoor only (e.g. `o 18ºC`)            |
 | **Temp**     | ✅ Yes      | ❌ No         | ❌ No          | 🗓️ Day Icon + ⏰ Time (e.g. `@ 14:53`)           |
@@ -182,7 +182,7 @@ The following table summarizes what will appear on the display in each scenario:
 - The display automatically alternates between **Clock** and **Temperature** modes (the duration for each is configurable).
 - In **Clock** mode, if NTP time is available, you'll see the current time plus a unique day-of-week icon. If NTP is not available, you'll see `no ntp`.
 - In **Temperature** mode, you'll see indoor and/or outdoor temperatures depending on what's available:
-  - If both are available, it shows both temperatures separated by a small block (e.g., "23º■18º")
+  - If both are available, it shows both temperatures separated by a short vertical line (e.g., "23º│18º")
   - If only indoor is available, it shows lowercase "i" followed by the temperature (e.g., "i 23ºC")
   - If only outdoor is available, it shows lowercase "o" followed by the temperature (e.g., "o 18ºC")
   - If neither is available but time is, it falls back to showing the clock

@@ -172,8 +172,8 @@ The following table summarizes what will appear on the display in each scenario:
 | **Clock**    | ✅ Yes      | —             | —              | 🗓️ Day Icon + ⏰ Time (e.g. `@ 14:53`)           |
 | **Clock**    | ❌ No       | —             | —              |  `no ntp` (NTP sync failed)               |
 | **Temp**     | —          | ✅ Yes        | ✅ Yes         | 🏠 Indoor + 🌍 Outdoor (e.g. `23º/18º`)      |
-| **Temp**     | —          | ✅ Yes        | ❌ No          | 🏠 Indoor only (e.g. `23ºC`)              |
-| **Temp**     | —          | ❌ No         | ✅ Yes         | 🌍 Outdoor only (e.g. `18ºC`)            |
+| **Temp**     | —          | ✅ Yes        | ❌ No          | 🏠 Indoor only (e.g. `I 23ºC`)              |
+| **Temp**     | —          | ❌ No         | ✅ Yes         | 🌍 Outdoor only (e.g. `O 18ºC`)            |
 | **Temp**     | ✅ Yes      | ❌ No         | ❌ No          | 🗓️ Day Icon + ⏰ Time (e.g. `@ 14:53`)           |
 | **Temp**     | ❌ No       | ❌ No         | ❌ No          |  `no temp` (no temperature or time data)    |
 
@@ -183,8 +183,8 @@ The following table summarizes what will appear on the display in each scenario:
 - In **Clock** mode, if NTP time is available, you'll see the current time plus a unique day-of-week icon. If NTP is not available, you'll see `no ntp`.
 - In **Temperature** mode, you'll see indoor and/or outdoor temperatures depending on what's available:
   - If both are available, it shows both temperatures separated by a slash (e.g., "23º/18º")
-  - If only indoor is available, it shows just the temperature
-  - If only outdoor is available, it shows just the temperature
+  - If only indoor is available, it shows "I" followed by the temperature
+  - If only outdoor is available, it shows "O" followed by the temperature
   - If neither is available but time is, it falls back to showing the clock
   - If no data is available, you'll see `no temp`
 - All status/error messages (`no ntp`, `no temp`) are shown exactly as written.

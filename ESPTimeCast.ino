@@ -967,14 +967,14 @@ void loop() {
       String tempDisplay;
       
       if (showIndoorTemp && indoorTempAvailable && showOutdoorTemp && outdoorTempAvailable) {
-        // Show both temperatures with I/O indicators
-        tempDisplay = "I" + indoorTemp + " O" + outdoorTemp;
+        // Show both temperatures with a slash separator
+        tempDisplay = indoorTemp + "/" + outdoorTemp;
       } else if (showIndoorTemp && indoorTempAvailable) {
-        // Show only indoor temperature with custom symbol
-        tempDisplay = String(indoorSymbol) + " " + indoorTemp + tempSymbol;
+        // Show only indoor temperature
+        tempDisplay = indoorTemp + tempSymbol;
       } else if (showOutdoorTemp && outdoorTempAvailable) {
-        // Show only outdoor temperature with custom symbol
-        tempDisplay = String(outdoorSymbol) + " " + outdoorTemp + tempSymbol;
+        // Show only outdoor temperature
+        tempDisplay = outdoorTemp + tempSymbol;
       } else {
         // Fallback to clock if no temperatures available
         String timeString = formattedTime;

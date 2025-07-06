@@ -77,7 +77,7 @@ void fetchNetatmoIndoorTemperature() {
             Serial.println(F("[NETATMO] Device ID matched!"));
             
             // First check if the indoor module is the main device itself
-            if (netatmoIndoorModuleId == deviceId) {
+            if (String(netatmoIndoorModuleId) == deviceId) {
               moduleFound = true;
               Serial.println(F("[NETATMO] Indoor module is the main device"));
               
@@ -117,7 +117,7 @@ void fetchNetatmoIndoorTemperature() {
                 Serial.print(moduleName);
                 Serial.println(F(")"));
                 
-                if (moduleId == netatmoIndoorModuleId) {
+                if (moduleId == String(netatmoIndoorModuleId)) {
                   moduleFound = true;
                   Serial.println(F("[NETATMO] Indoor module ID matched!"));
                   

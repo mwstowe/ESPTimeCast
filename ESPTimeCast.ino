@@ -757,7 +757,7 @@ void fetchOutdoorTemperature() {
           Serial.print(F("[NETATMO] Found device ID: "));
           Serial.println(deviceId);
           
-          if (deviceId == netatmoDeviceId) {
+          if (deviceId == String(netatmoDeviceId)) {
             deviceFound = true;
             Serial.println(F("[NETATMO] Device ID matched!"));
             
@@ -774,7 +774,7 @@ void fetchOutdoorTemperature() {
               Serial.print(moduleName);
               Serial.println(F(")"));
               
-              if (moduleId == netatmoModuleId) {
+              if (moduleId == String(netatmoModuleId)) {
                 moduleFound = true;
                 Serial.println(F("[NETATMO] Module ID matched!"));
                 

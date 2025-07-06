@@ -56,10 +56,9 @@ void fetchNetatmoIndoorTemperature() {
       Serial.println(F("[NETATMO] Response:"));
       Serial.println(payload);
       
-      DynamicJsonDocument doc(4096);
-      DeserializationError error = deserializeJson(doc, payload);
+      DynamicJsonDocument doc(8192); // Increased from 4096 to 8192
       
-      if (!error) {
+      if (parseNetatmoJson(payload, doc)) {
         // Navigate through the JSON to find the indoor module
         JsonArray devices = doc["body"]["devices"];
         
@@ -160,8 +159,7 @@ void fetchNetatmoIndoorTemperature() {
           netatmoIndoorTempAvailable = false;
         }
       } else {
-        Serial.print(F("[NETATMO] JSON parse error: "));
-        Serial.println(error.c_str());
+        Serial.println(F("[NETATMO] JSON parsing failed"));
         netatmoIndoorTempAvailable = false;
       }
     } else {

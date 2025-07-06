@@ -744,10 +744,9 @@ void fetchOutdoorTemperature() {
       Serial.println(F("[NETATMO] Response received:"));
       Serial.println(payload);
       
-      DynamicJsonDocument doc(4096);
-      DeserializationError error = deserializeJson(doc, payload);
+      DynamicJsonDocument doc(8192); // Increased from 4096 to 8192
       
-      if (!error) {
+      if (parseNetatmoJson(payload, doc)) {
         // Navigate through the JSON to find the outdoor module
         JsonArray devices = doc["body"]["devices"];
         
@@ -824,8 +823,7 @@ void fetchOutdoorTemperature() {
           outdoorTempAvailable = false;
         }
       } else {
-        Serial.print(F("[NETATMO] JSON parse error: "));
-        Serial.println(error.c_str());
+        Serial.println(F("[NETATMO] JSON parsing failed"));
         outdoorTempAvailable = false;
       }
     } else {

@@ -118,7 +118,14 @@ Click the **cog icon** next to "Advanced Settings" in the web UI to reveal extra
   1. Create a Netatmo developer account at [https://dev.netatmo.com/](https://dev.netatmo.com/)
   2. Create a new app to get your Client ID and Client Secret
   3. Use your Netatmo account email and password for the username and password fields
-- **Device ID and Module ID:** Find these using the Netatmo API Explorer
+- **Device ID and Module IDs:** 
+  - Find these using the Netatmo API Explorer
+  - For outdoor temperature, use the outdoor module ID
+  - For indoor temperature, you can optionally use the base station or another indoor module ID
+- **Temperature Source Options:**
+  - **Local sensor primary:** Uses the DS18B20 sensor for indoor temperature, falls back to Netatmo if local sensor fails
+  - **Netatmo primary:** Uses Netatmo for indoor temperature, falls back to local sensor if Netatmo fails
+  - **Netatmo only:** Only uses Netatmo for indoor temperature, ignores local sensor
 - **Time Zone:** Select from IANA zones (e.g., `America/New_York`, handles DST automatically)
 - **Units:** `metric` (°C), `imperial` (°F), or `standard` (K)
 

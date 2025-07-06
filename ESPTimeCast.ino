@@ -43,11 +43,13 @@ char netatmoAccessToken[256] = "";
 char netatmoRefreshToken[256] = "";
 char netatmoDeviceId[64] = "";
 char netatmoModuleId[64] = "";
+char netatmoIndoorModuleId[64] = ""; // New: Module ID for indoor temperature from Netatmo
 char mdnsHostname[32] = "esptime"; // Default mDNS hostname
 char weatherUnits[12] = "metric";
 char timeZone[64] = "";
 unsigned long clockDuration = 10000;
 unsigned long weatherDuration = 5000;
+int tempSource = 0; // 0: Local sensor primary, 1: Netatmo primary, 2: Netatmo only
 
 // ADVANCED SETTINGS
 int brightness = 7;
@@ -68,6 +70,8 @@ String indoorTemp = "";
 String outdoorTemp = "";
 bool indoorTempAvailable = false;
 bool outdoorTempAvailable = false;
+float netatmoIndoorTemp = 0;
+bool netatmoIndoorTempAvailable = false;
 bool weatherFetched = false;
 bool weatherFetchInitiated = false;
 bool isAPMode = false;
@@ -145,6 +149,8 @@ void loadConfig() {
     doc[F("netatmoRefreshToken")] = "";
     doc[F("netatmoDeviceId")] = "";
     doc[F("netatmoModuleId")] = "";
+    doc[F("netatmoIndoorModuleId")] = "";
+    doc[F("tempSource")] = 0;
     doc[F("mdnsHostname")] = "esptime";
     doc[F("weatherUnits")] = "metric";
     doc[F("clockDuration")] = 10000;
@@ -198,6 +204,8 @@ void loadConfig() {
   if (doc.containsKey("netatmoRefreshToken")) strlcpy(netatmoRefreshToken, doc["netatmoRefreshToken"], sizeof(netatmoRefreshToken));
   if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
   if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
+  if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
+  if (doc.containsKey("tempSource")) tempSource = doc["tempSource"];
   if (doc.containsKey("mdnsHostname")) strlcpy(mdnsHostname, doc["mdnsHostname"], sizeof(mdnsHostname));
   if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));
   if (doc.containsKey("clockDuration")) clockDuration = doc["clockDuration"];
@@ -328,6 +336,7 @@ void setupWebServer() {
       else if (n == "twelveHourToggle") doc[n] = (v == "true" || v == "on" || v == "1");
       else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1"); 
       else if (n == "showHumidity") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "tempSource") doc[n] = v.toInt();
       else doc[n] = v;
     }
     if (LittleFS.exists("/config.json")) {
@@ -567,43 +576,28 @@ void readIndoorTemperature() {
   float tempC = sensors.getTempCByIndex(0);
   
   if (tempC != DEVICE_DISCONNECTED_C) {
-    // Convert to the correct unit based on settings
-    if (strcmp(weatherUnits, "imperial") == 0) {
-      // For imperial units (Fahrenheit)
-      float tempF = sensors.toFahrenheit(tempC);
-      // Apply adjustment in Fahrenheit
-      tempF += tempAdjust;
-      
-      Serial.print(F("[DS18B20] Raw temperature: "));
-      Serial.print(sensors.toFahrenheit(tempC));
-      Serial.print(F("°F, Adjusted: "));
-      Serial.print(tempF);
-      Serial.println(F("°F"));
-      
-      indoorTemp = String((int)round(tempF)) + "º";
-    } else {
+    Serial.print(F("[DS18B20] Raw temperature: "));
+    Serial.print(tempC);
+    Serial.println(F("°C"));
+    
+    // Format the temperature using our helper function
+    indoorTemp = formatTemperature(tempC);
+    indoorTemp += "º";
+    
+    indoorTempAvailable = true;
+    Serial.print(F("[DS18B20] Formatted indoor temperature: "));
+    Serial.println(indoorTemp);
+  } else {
+    Serial.println(F("[DS18B20] Error: Could not read temperature data"));
+    indoorTempAvailable = false;
+  }
+}
       // For metric (Celsius) or standard (Kelvin) units
       // Apply adjustment in Celsius
       tempC += tempAdjust;
       
       Serial.print(F("[DS18B20] Raw temperature: "));
       Serial.print(tempC - tempAdjust);
-      Serial.print(F("°C, Adjusted: "));
-      Serial.print(tempC);
-      Serial.println(F("°C"));
-      
-      indoorTemp = String((int)round(tempC)) + "º";
-    }
-    
-    Serial.print(F("[DS18B20] Indoor temperature: "));
-    Serial.println(indoorTemp);
-    indoorTempAvailable = true;
-  } else {
-    Serial.println(F("[DS18B20] Error reading temperature"));
-    indoorTempAvailable = false;
-  }
-}
-
 // Function to save tokens to config.json
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));
@@ -814,8 +808,55 @@ void fetchOutdoorTemperature() {
 void updateTemperatures() {
   Serial.println(F("[TEMP] Updating temperatures..."));
   
-  // Read indoor temperature from DS18B20
-  readIndoorTemperature();
+  // Handle indoor temperature based on source setting
+  if (tempSource == 0) { // Local sensor primary
+    // Read indoor temperature from DS18B20
+    readIndoorTemperature();
+    
+    // If local sensor failed and Netatmo indoor module is configured, try that as fallback
+    if (!indoorTempAvailable && strlen(netatmoIndoorModuleId) > 0) {
+      fetchNetatmoIndoorTemperature();
+      if (netatmoIndoorTempAvailable) {
+        // Convert Netatmo temperature to the same format as local sensor
+        indoorTemp = formatTemperature(netatmoIndoorTemp);
+        indoorTempAvailable = true;
+        Serial.println(F("[TEMP] Using Netatmo as fallback for indoor temperature"));
+      }
+    }
+  } else if (tempSource == 1) { // Netatmo primary
+    // Try Netatmo first if configured
+    if (strlen(netatmoIndoorModuleId) > 0) {
+      fetchNetatmoIndoorTemperature();
+      if (netatmoIndoorTempAvailable) {
+        // Convert Netatmo temperature to the same format as local sensor
+        indoorTemp = formatTemperature(netatmoIndoorTemp);
+        indoorTempAvailable = true;
+      } else {
+        // Fallback to local sensor if Netatmo failed
+        readIndoorTemperature();
+        if (indoorTempAvailable) {
+          Serial.println(F("[TEMP] Using local sensor as fallback for indoor temperature"));
+        }
+      }
+    } else {
+      // No Netatmo indoor module configured, use local sensor
+      readIndoorTemperature();
+    }
+  } else if (tempSource == 2) { // Netatmo only
+    // Only use Netatmo if configured
+    if (strlen(netatmoIndoorModuleId) > 0) {
+      fetchNetatmoIndoorTemperature();
+      if (netatmoIndoorTempAvailable) {
+        // Convert Netatmo temperature to the same format as local sensor
+        indoorTemp = formatTemperature(netatmoIndoorTemp);
+        indoorTempAvailable = true;
+      } else {
+        indoorTempAvailable = false;
+      }
+    } else {
+      indoorTempAvailable = false;
+    }
+  }
   
   // Fetch outdoor temperature from Netatmo
   fetchOutdoorTemperature();

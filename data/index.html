@@ -463,8 +463,22 @@ textarea::placeholder {
           <input type="text" id="netatmoDeviceId" name="netatmoDeviceId" />
         </div>
         <div>
-          <label for="netatmoModuleId">Module ID</label>
+          <label for="netatmoModuleId">Outdoor Module ID</label>
           <input type="text" id="netatmoModuleId" name="netatmoModuleId" />
+        </div>
+      </div>
+      <div class="form-row two-col">
+        <div>
+          <label for="netatmoIndoorModuleId">Indoor Module ID (Optional)</label>
+          <input type="text" id="netatmoIndoorModuleId" name="netatmoIndoorModuleId" />
+        </div>
+        <div>
+          <label for="tempSource">Temperature Source</label>
+          <select id="tempSource" name="tempSource">
+            <option value="0">Local sensor primary, Netatmo fallback</option>
+            <option value="1">Netatmo primary, Local sensor fallback</option>
+            <option value="2">Netatmo only</option>
+          </select>
         </div>
       </div>
       
@@ -613,6 +627,8 @@ window.onload = function () {
       document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken || '';
       document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
       document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
+      document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId || '';
+      document.getElementById('tempSource').value = data.tempSource || '0';
       document.getElementById('mdnsHostname').value = data.mdnsHostname || 'esptime';
       document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';
       document.getElementById('clockDuration').value = (data.clockDuration || 10000) / 1000;

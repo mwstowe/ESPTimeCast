@@ -43,6 +43,8 @@ void fetchNetatmoIndoorTemperature() {
   
   if (https.begin(*client, url)) {
     https.addHeader("Authorization", "Bearer " + token);
+    https.addHeader("Accept", "application/json");
+    https.addHeader("User-Agent", "ESPTimeCast/1.0");
     
     Serial.println(F("[NETATMO] Sending request..."));
     int httpCode = https.GET();
@@ -188,6 +190,11 @@ void fetchNetatmoIndoorTemperature() {
         if (errorType == "access_denied" || errorMessage.indexOf("blocked") >= 0) {
           Serial.println(F("[NETATMO] Request blocked - check your Netatmo app permissions"));
         }
+      }
+      
+      // Check for "request is blocked" HTML response
+      if (errorPayload.indexOf("The request is blocked") > 0) {
+        handleBlockedRequest(errorPayload);
       }
       
       // If we get a 403 error (Forbidden), the token is expired

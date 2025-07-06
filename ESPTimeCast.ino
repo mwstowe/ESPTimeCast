@@ -82,6 +82,7 @@ unsigned long lastColonBlink = 0;
 int displayMode = 0;
 bool indicatorVisible = true; // Shared visibility state for colon and temperature indicators
 bool needTokenRefresh = false; // Flag to indicate we need to refresh the token soon
+unsigned long lastBlockedRequest = 0; // Timestamp of the last blocked request
 
 bool ntpSyncSuccessful = false;
 
@@ -489,6 +490,8 @@ String getNetatmoToken() {
   
   if (https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    https.addHeader("Accept", "application/json");
+    https.addHeader("User-Agent", "ESPTimeCast/1.0");
     
     String postData;
     
@@ -511,7 +514,7 @@ String getNetatmoToken() {
       postData += "&password=";
       postData += netatmoPassword;
     }
-    postData += "&scope=read_station read_thermostat";
+    postData += "&scope=read_station read_thermostat read_homecoach";
     
     Serial.print(F("[NETATMO] POST data: "));
     // Print a redacted version of the POST data for debugging
@@ -728,6 +731,8 @@ void fetchOutdoorTemperature() {
   
   if (https.begin(*client, url)) {
     https.addHeader("Authorization", "Bearer " + token);
+    https.addHeader("Accept", "application/json");
+    https.addHeader("User-Agent", "ESPTimeCast/1.0");
     
     Serial.println(F("[NETATMO] Sending request..."));
     int httpCode = https.GET();
@@ -851,6 +856,10 @@ void fetchOutdoorTemperature() {
         }
       }
       
+      // Check for "request is blocked" HTML response
+      if (errorPayload.indexOf("The request is blocked") > 0) {
+        handleBlockedRequest(errorPayload);
+      }
       // If we get a 403 error (Forbidden), the token is expired
       if (httpCode == 403 || httpCode == 401) {
         Serial.println(F("[NETATMO] 403/401 error - token expired or invalid"));
@@ -1050,12 +1059,26 @@ void loop() {
     }
     
     // Check if we need to refresh the token sooner due to an expired token
-    if (needTokenRefresh && (millis() - lastTempUpdate > 30000)) { // 30 seconds after last attempt
-        Serial.println(F("[LOOP] Token refresh needed, updating temperatures..."));
-        weatherFetched = false;
-        updateTemperatures();
-        lastTempUpdate = millis();
-        needTokenRefresh = false; // Reset the flag
+    if (needTokenRefresh) {
+        // If we had a blocked request, wait longer (2 minutes)
+        if (lastBlockedRequest > 0) {
+            if (millis() - lastBlockedRequest > 120000) { // 2 minutes after blocked request
+                Serial.println(F("[LOOP] Retry after blocked request, updating temperatures..."));
+                weatherFetched = false;
+                updateTemperatures();
+                lastTempUpdate = millis();
+                needTokenRefresh = false; // Reset the flag
+                lastBlockedRequest = 0;   // Reset the blocked request timestamp
+            }
+        } 
+        // Otherwise, just wait 30 seconds
+        else if (millis() - lastTempUpdate > 30000) { // 30 seconds after last attempt
+            Serial.println(F("[LOOP] Token refresh needed, updating temperatures..."));
+            weatherFetched = false;
+            updateTemperatures();
+            lastTempUpdate = millis();
+            needTokenRefresh = false; // Reset the flag
+        }
     }
     // Regular temperature update interval
     else if (millis() - lastTempUpdate > tempUpdateInterval) {

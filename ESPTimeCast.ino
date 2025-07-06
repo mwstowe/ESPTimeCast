@@ -592,12 +592,7 @@ void readIndoorTemperature() {
     indoorTempAvailable = false;
   }
 }
-      // For metric (Celsius) or standard (Kelvin) units
-      // Apply adjustment in Celsius
-      tempC += tempAdjust;
-      
-      Serial.print(F("[DS18B20] Raw temperature: "));
-      Serial.print(tempC - tempAdjust);
+
 // Function to save tokens to config.json
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));

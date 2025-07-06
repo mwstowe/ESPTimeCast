@@ -511,7 +511,30 @@ String getNetatmoToken() {
       postData += "&password=";
       postData += netatmoPassword;
     }
-    postData += "&scope=read_station";
+    postData += "&scope=read_station read_thermostat";
+    
+    Serial.print(F("[NETATMO] POST data: "));
+    // Print a redacted version of the POST data for debugging
+    String redactedPostData = postData;
+    if (redactedPostData.indexOf("client_secret=") >= 0) {
+      int start = redactedPostData.indexOf("client_secret=") + 14;
+      int end = redactedPostData.indexOf("&", start);
+      if (end < 0) end = redactedPostData.length();
+      redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
+    }
+    if (redactedPostData.indexOf("password=") >= 0) {
+      int start = redactedPostData.indexOf("password=") + 9;
+      int end = redactedPostData.indexOf("&", start);
+      if (end < 0) end = redactedPostData.length();
+      redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
+    }
+    if (redactedPostData.indexOf("refresh_token=") >= 0) {
+      int start = redactedPostData.indexOf("refresh_token=") + 14;
+      int end = redactedPostData.indexOf("&", start);
+      if (end < 0) end = redactedPostData.length();
+      redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
+    }
+    Serial.println(redactedPostData);
     
     int httpCode = https.POST(postData);
     
@@ -552,11 +575,34 @@ String getNetatmoToken() {
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       
+      // Try to parse the error message
+      DynamicJsonDocument errorDoc(1024);
+      DeserializationError errorParseError = deserializeJson(errorDoc, errorPayload);
+      if (!errorParseError && errorDoc.containsKey("error")) {
+        String errorType = errorDoc["error"].as<String>();
+        String errorMessage = errorDoc.containsKey("error_description") ? 
+                             errorDoc["error_description"].as<String>() : "Unknown error";
+        
+        Serial.print(F("[NETATMO] Error type: "));
+        Serial.println(errorType);
+        Serial.print(F("[NETATMO] Error message: "));
+        Serial.println(errorMessage);
+        
+        // Handle specific error types
+        if (errorType == "invalid_grant" || errorType == "invalid_client") {
+          Serial.println(F("[NETATMO] Invalid credentials or refresh token, clearing tokens"));
+          netatmoRefreshToken[0] = '\0';
+          netatmoAccessToken[0] = '\0';
+          saveTokensToConfig();
+        }
+      }
+      
       // If using an existing refresh token and it failed, clear it
       if (useRefreshToken) {
         Serial.println(F("[NETATMO] Refresh token might be expired, clearing it"));
         netatmoRefreshToken[0] = '\0';
         netatmoAccessToken[0] = '\0';
+        saveTokensToConfig();
       }
     }
     
@@ -683,7 +729,10 @@ void fetchOutdoorTemperature() {
   if (https.begin(*client, url)) {
     https.addHeader("Authorization", "Bearer " + token);
     
+    Serial.println(F("[NETATMO] Sending request..."));
     int httpCode = https.GET();
+    Serial.print(F("[NETATMO] HTTP response code: "));
+    Serial.println(httpCode);
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();
@@ -783,9 +832,28 @@ void fetchOutdoorTemperature() {
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       
+      // Try to parse the error message
+      DynamicJsonDocument errorDoc(1024);
+      DeserializationError errorParseError = deserializeJson(errorDoc, errorPayload);
+      if (!errorParseError && errorDoc.containsKey("error")) {
+        String errorType = errorDoc["error"].as<String>();
+        String errorMessage = errorDoc.containsKey("error_description") ? 
+                             errorDoc["error_description"].as<String>() : "Unknown error";
+        
+        Serial.print(F("[NETATMO] Error type: "));
+        Serial.println(errorType);
+        Serial.print(F("[NETATMO] Error message: "));
+        Serial.println(errorMessage);
+        
+        // Handle specific error types
+        if (errorType == "access_denied" || errorMessage.indexOf("blocked") >= 0) {
+          Serial.println(F("[NETATMO] Request blocked - check your Netatmo app permissions"));
+        }
+      }
+      
       // If we get a 403 error (Forbidden), the token is expired
-      if (httpCode == 403) {
-        Serial.println(F("[NETATMO] 403 Forbidden error - token expired"));
+      if (httpCode == 403 || httpCode == 401) {
+        Serial.println(F("[NETATMO] 403/401 error - token expired or invalid"));
         forceNetatmoTokenRefresh();  // Force token refresh on next API call
       }
       

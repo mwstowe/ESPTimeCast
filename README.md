@@ -118,6 +118,8 @@ Click the **cog icon** next to "Advanced Settings" in the web UI to reveal extra
   1. Create a Netatmo developer account at [https://dev.netatmo.com/](https://dev.netatmo.com/)
   2. Create a new app to get your Client ID and Client Secret
   3. Use your Netatmo account email and password for the username and password fields
+  4. **Important**: Make sure to enable both `read_station` and `read_thermostat` scopes for your app
+  5. If you see "request blocked" errors, check your app permissions in the Netatmo developer portal
 - **Device ID and Module IDs:** 
   - Find these using the Netatmo API Explorer
   - For outdoor temperature, use the outdoor module ID

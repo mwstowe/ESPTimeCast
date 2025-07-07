@@ -299,12 +299,6 @@ void setupTime() {
 
 void setupWebServer() {
   Serial.println(F("[WEBSERVER] Setting up web server..."));
-  server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println(F("[WEBSERVER] Request: /debug"));
-    debugNetatmoAuth();
-    request->send(200, "text/plain", "Debug information sent to serial monitor");
-  });
-  
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /"));
     request->send(LittleFS, "/index.html", "text/html");
@@ -452,6 +446,13 @@ void setupWebServer() {
     forceNetatmoTokenRefresh();
     String json = "{\"success\": true, \"message\": \"Token refresh initiated\"}";
     request->send(200, "application/json", json);
+  });
+  
+  // Add new API endpoint to fetch Netatmo devices
+  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
+    String devices = fetchNetatmoDevices();
+    request->send(200, "application/json", devices);
   });
 
   server.begin();

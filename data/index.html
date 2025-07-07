@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ESPTimeCast Settings</title>
+<script src="netatmo-devices.js"></script>
 <style>
 
 :root{
@@ -460,17 +461,26 @@ textarea::placeholder {
       <div class="form-row two-col">
         <div>
           <label for="netatmoDeviceId">Device ID</label>
-          <input type="text" id="netatmoDeviceId" name="netatmoDeviceId" />
+          <select id="netatmoDeviceId" name="netatmoDeviceId">
+            <option value="">Select a device...</option>
+          </select>
+          <input type="text" id="netatmoDeviceIdManual" name="netatmoDeviceIdManual" placeholder="Or enter manually..." style="margin-top: 5px;" />
         </div>
         <div>
           <label for="netatmoModuleId">Outdoor Module ID</label>
-          <input type="text" id="netatmoModuleId" name="netatmoModuleId" />
+          <select id="netatmoModuleId" name="netatmoModuleId">
+            <option value="">Select a module...</option>
+          </select>
+          <input type="text" id="netatmoModuleIdManual" name="netatmoModuleIdManual" placeholder="Or enter manually..." style="margin-top: 5px;" />
         </div>
       </div>
       <div class="form-row two-col">
         <div>
           <label for="netatmoIndoorModuleId">Indoor Module ID (Optional)</label>
-          <input type="text" id="netatmoIndoorModuleId" name="netatmoIndoorModuleId" />
+          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
+            <option value="">Select a module...</option>
+          </select>
+          <input type="text" id="netatmoIndoorModuleIdManual" name="netatmoIndoorModuleIdManual" placeholder="Or enter manually..." style="margin-top: 5px;" />
         </div>
         <div>
           <label for="tempSource">Temperature Source</label>
@@ -600,6 +610,148 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
   }
+  
+  // Handle Netatmo device selection
+  const netatmoDeviceSelect = document.getElementById("netatmoDeviceId");
+  const netatmoModuleSelect = document.getElementById("netatmoModuleId");
+  const netatmoIndoorModuleSelect = document.getElementById("netatmoIndoorModuleId");
+  const netatmoDeviceIdManual = document.getElementById("netatmoDeviceIdManual");
+  const netatmoModuleIdManual = document.getElementById("netatmoModuleIdManual");
+  const netatmoIndoorModuleIdManual = document.getElementById("netatmoIndoorModuleIdManual");
+  
+  // Function to fetch Netatmo devices
+  function fetchNetatmoDevices() {
+    // Check if we have client ID and secret
+    const clientId = document.getElementById("netatmoClientId").value;
+    const clientSecret = document.getElementById("netatmoClientSecret").value;
+    const username = document.getElementById("netatmoUsername").value;
+    const password = document.getElementById("netatmoPassword").value;
+    
+    if (!clientId || !clientSecret || !username || !password) {
+      console.log("Missing Netatmo credentials, skipping device fetch");
+      return;
+    }
+    
+    console.log("Fetching Netatmo devices...");
+    fetch('/api/netatmo/devices')
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          console.error("Error fetching Netatmo devices:", data.error);
+          return;
+        }
+        
+        // Clear existing options
+        netatmoDeviceSelect.innerHTML = '<option value="">Select a device...</option>';
+        netatmoModuleSelect.innerHTML = '<option value="">Select a module...</option>';
+        netatmoIndoorModuleSelect.innerHTML = '<option value="">Select a module...</option>';
+        
+        // Add devices to the dropdown
+        if (data.devices && data.devices.length > 0) {
+          data.devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.id;
+            option.textContent = device.name;
+            option.dataset.modules = JSON.stringify(device.modules);
+            netatmoDeviceSelect.appendChild(option);
+          });
+          
+          // If we have a saved device ID, select it
+          const savedDeviceId = document.getElementById("netatmoDeviceIdManual").value;
+          if (savedDeviceId) {
+            netatmoDeviceSelect.value = savedDeviceId;
+            // Trigger change event to populate modules
+            const event = new Event('change');
+            netatmoDeviceSelect.dispatchEvent(event);
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching Netatmo devices:', error);
+      });
+  }
+  
+  // Handle device selection change
+  if (netatmoDeviceSelect) {
+    netatmoDeviceSelect.addEventListener('change', function() {
+      // Clear module dropdowns
+      netatmoModuleSelect.innerHTML = '<option value="">Select a module...</option>';
+      netatmoIndoorModuleSelect.innerHTML = '<option value="">Select a module...</option>';
+      
+      // Get selected device
+      const selectedOption = this.options[this.selectedIndex];
+      if (selectedOption && selectedOption.dataset.modules) {
+        const modules = JSON.parse(selectedOption.dataset.modules);
+        
+        // Add modules to the dropdowns
+        modules.forEach(module => {
+          // Add to outdoor module dropdown
+          const outdoorOption = document.createElement('option');
+          outdoorOption.value = module.id;
+          outdoorOption.textContent = `${module.name} (${module.type})`;
+          netatmoModuleSelect.appendChild(outdoorOption);
+          
+          // Add to indoor module dropdown
+          const indoorOption = document.createElement('option');
+          indoorOption.value = module.id;
+          indoorOption.textContent = `${module.name} (${module.type})`;
+          netatmoIndoorModuleSelect.appendChild(indoorOption);
+        });
+        
+        // If we have saved module IDs, select them
+        const savedModuleId = document.getElementById("netatmoModuleIdManual").value;
+        if (savedModuleId) {
+          netatmoModuleSelect.value = savedModuleId;
+        }
+        
+        const savedIndoorModuleId = document.getElementById("netatmoIndoorModuleIdManual").value;
+        if (savedIndoorModuleId) {
+          netatmoIndoorModuleSelect.value = savedIndoorModuleId;
+        }
+      }
+      
+      // Update the manual input field
+      netatmoDeviceIdManual.value = this.value;
+    });
+  }
+  
+  // Handle module selection changes
+  if (netatmoModuleSelect) {
+    netatmoModuleSelect.addEventListener('change', function() {
+      netatmoModuleIdManual.value = this.value;
+    });
+  }
+  
+  if (netatmoIndoorModuleSelect) {
+    netatmoIndoorModuleSelect.addEventListener('change', function() {
+      netatmoIndoorModuleIdManual.value = this.value;
+    });
+  }
+  
+  // Handle manual input changes
+  if (netatmoDeviceIdManual) {
+    netatmoDeviceIdManual.addEventListener('input', function() {
+      netatmoDeviceSelect.value = '';
+    });
+  }
+  
+  if (netatmoModuleIdManual) {
+    netatmoModuleIdManual.addEventListener('input', function() {
+      netatmoModuleSelect.value = '';
+    });
+  }
+  
+  if (netatmoIndoorModuleIdManual) {
+    netatmoIndoorModuleIdManual.addEventListener('input', function() {
+      netatmoIndoorModuleSelect.value = '';
+    });
+  }
+  
+  // Fetch Netatmo devices when credentials are entered
+  document.getElementById("netatmoClientId").addEventListener('change', fetchNetatmoDevices);
+  document.getElementById("netatmoClientSecret").addEventListener('change', fetchNetatmoDevices);
+  document.getElementById("netatmoUsername").addEventListener('change', fetchNetatmoDevices);
+  document.getElementById("netatmoPassword").addEventListener('change', fetchNetatmoDevices);
 });
 
 window.onbeforeunload = function () {

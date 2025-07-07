@@ -1,4 +1,9 @@
 // Function to generate a random state string for OAuth2
+String generateRandomState();
+// Function to exchange authorization code for tokens
+bool exchangeCodeForTokens(String code);
+
+// Function to generate a random state string for OAuth2
 String generateRandomState() {
   const char charset[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
   String state = "";

@@ -228,56 +228,90 @@ button:hover {
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Show the body once everything is loaded
-  document.body.classList.add('loaded');
-  
-  // Set up form submission
-  const form = document.getElementById('netatmoForm');
-  if (form) {
-    form.addEventListener('submit', function(event) {
-      event.preventDefault();
-      saveConfig();
-    });
+  try {
+    // Show the body once everything is loaded
+    document.body.classList.add('loaded');
+    
+    // Set up form submission
+    const form = document.getElementById('netatmoForm');
+    if (form) {
+      form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        saveConfig();
+      });
+    } else {
+      console.warn('Netatmo form not found');
+    }
+    
+    // Load configuration
+    loadConfig();
+  } catch (e) {
+    console.error('Error in DOMContentLoaded:', e);
+    alert('Error initializing page: ' + e.message);
   }
-  
-  // Load configuration
-  loadConfig();
 });
 
 // Function to load configuration
 function loadConfig() {
+  console.log('Loading configuration...');
+  
   fetch('/config.json')
     .then(response => {
+      console.log('Config response status:', response.status);
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
       return response.json();
     })
     .then(data => {
-      // Update form fields with configuration values
-      if (data.netatmoClientId) document.getElementById('netatmoClientId').value = data.netatmoClientId;
-      if (data.netatmoClientSecret) document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret;
-      if (data.netatmoUsername) document.getElementById('netatmoUsername').value = data.netatmoUsername;
-      if (data.netatmoPassword) document.getElementById('netatmoPassword').value = data.netatmoPassword;
-      if (data.netatmoDeviceId) document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId;
-      if (data.netatmoModuleId) document.getElementById('netatmoModuleId').value = data.netatmoModuleId;
-      if (data.netatmoIndoorModuleId) document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId;
+      console.log('Configuration loaded');
+      debugObject(data, 'config');
       
-      // Set checkbox values
-      if (data.useNetatmoOutdoor !== undefined) {
-        document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor;
-      }
-      if (data.prioritizeNetatmoIndoor !== undefined) {
-        document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor;
+      // Update form fields with configuration values
+      try {
+        const setFieldValue = (id, value) => {
+          const element = document.getElementById(id);
+          if (element && value !== undefined) {
+            element.value = value;
+          }
+        };
+        
+        setFieldValue('netatmoClientId', data.netatmoClientId);
+        setFieldValue('netatmoClientSecret', data.netatmoClientSecret);
+        setFieldValue('netatmoUsername', data.netatmoUsername);
+        setFieldValue('netatmoPassword', data.netatmoPassword);
+        setFieldValue('netatmoDeviceId', data.netatmoDeviceId);
+        setFieldValue('netatmoModuleId', data.netatmoModuleId);
+        setFieldValue('netatmoIndoorModuleId', data.netatmoIndoorModuleId);
+        
+        // Set checkbox values
+        const setCheckboxValue = (id, value) => {
+          const element = document.getElementById(id);
+          if (element && value !== undefined) {
+            element.checked = value;
+          }
+        };
+        
+        setCheckboxValue('useNetatmoOutdoor', data.useNetatmoOutdoor);
+        setCheckboxValue('prioritizeNetatmoIndoor', data.prioritizeNetatmoIndoor);
+      } catch (e) {
+        console.error('Error updating form fields:', e);
+        showMessage('Error updating form fields: ' + e.message, true);
       }
       
       // Check if tokens are set
       const tokenStatus = document.getElementById('tokenStatus');
       if (tokenStatus) {
-        if (data.netatmoAccessToken && data.netatmoAccessToken.length > 0) {
-          tokenStatus.textContent = 'OAuth tokens are set';
-          tokenStatus.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
-        } else {
+        try {
+          if (data.netatmoAccessToken && data.netatmoAccessToken.length > 0) {
+            tokenStatus.textContent = 'OAuth tokens are set';
+            tokenStatus.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
+          } else {
+            tokenStatus.textContent = 'No OAuth tokens set';
+            tokenStatus.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+          }
+        } catch (e) {
+          console.error('Error updating token status:', e);
           tokenStatus.textContent = 'No OAuth tokens set';
           tokenStatus.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
         }
@@ -359,6 +393,8 @@ function showModalWithButton(message) {
 
 // Function to show a message
 function showMessage(message, isError = false) {
+  console.log(message); // Add console logging
+  
   // Check if status message element exists
   let statusDiv = document.getElementById('statusMessage');
   
@@ -377,12 +413,34 @@ function showMessage(message, isError = false) {
   // Update the message
   statusDiv.textContent = message;
   statusDiv.className = isError ? 'status error' : 'status success';
+  statusDiv.style.display = 'block'; // Make sure it's visible
   
   // Hide success messages after a delay
   if (!isError) {
     setTimeout(() => {
       statusDiv.style.display = 'none';
     }, 3000);
+  }
+}
+
+// Debug function to help identify issues
+function debugObject(obj, name = 'Object') {
+  try {
+    console.log(`Debug ${name}:`, obj);
+    if (obj === null) {
+      console.log(`${name} is null`);
+      return;
+    }
+    if (obj === undefined) {
+      console.log(`${name} is undefined`);
+      return;
+    }
+    console.log(`${name} type:`, typeof obj);
+    if (typeof obj === 'object') {
+      console.log(`${name} keys:`, Object.keys(obj));
+    }
+  } catch (e) {
+    console.error(`Error debugging ${name}:`, e);
   }
 }
 </script>

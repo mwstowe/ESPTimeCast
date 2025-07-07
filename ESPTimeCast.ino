@@ -450,15 +450,19 @@ void setupWebServer() {
       }
     }
     
-    // Read the first few bytes to check content
-    Serial.print(F("[WEBSERVER] First bytes of config.json: "));
-    for (int i = 0; i < min(20, (int)fileSize); i++) {
-      Serial.print((char)f.read());
-    }
-    Serial.println();
+    // Read the file content for debugging
+    String fileContent = f.readString();
+    Serial.print(F("[WEBSERVER] config.json content: "));
+    Serial.println(fileContent);
     
     // Reset file position
-    f.seek(0);
+    f.close();
+    f = LittleFS.open("/config.json", "r");
+    if (!f) {
+      Serial.println(F("[WEBSERVER] Error reopening /config.json"));
+      request->send(500, "application/json", "{\"error\":\"Failed to reopen config.json\"}");
+      return;
+    }
     
     DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, f);
@@ -467,16 +471,11 @@ void setupWebServer() {
       Serial.print(F("[WEBSERVER] Error parsing /config.json: "));
       Serial.println(err.f_str());
       
-      // Try to read the file content for debugging
-      File debugFile = LittleFS.open("/config.json", "r");
-      if (debugFile) {
-        String content = debugFile.readString();
-        Serial.print(F("[WEBSERVER] config.json content: "));
-        Serial.println(content);
-        debugFile.close();
-      }
+      // Try to fix the JSON file if it's malformed
+      Serial.println(F("[WEBSERVER] Attempting to fix config.json"));
+      createDefaultConfig();
       
-      request->send(500, "application/json", "{\"error\":\"Failed to parse config.json\"}");
+      request->send(500, "application/json", "{\"error\":\"Failed to parse config.json: " + String(err.f_str()) + "\"}");
       return;
     }
     
@@ -613,6 +612,31 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
+  });
+  
+  // Add a route to reset the configuration
+  server.on("/reset_config", HTTP_POST, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /reset_config"));
+    
+    // Format the file system
+    bool success = formatLittleFS();
+    
+    if (success) {
+      // Try to mount and create default config
+      if (LittleFS.begin()) {
+        createDefaultConfig();
+      }
+      
+      // Send success response
+      request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration reset successfully\"}");
+      
+      // Schedule a restart
+      delay(1000);
+      ESP.restart();
+    } else {
+      // Send error response
+      request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to reset configuration\"}");
+    }
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

@@ -445,7 +445,11 @@ function updateTokenStatus(accessToken) {
   if (accessToken && accessToken.length > 0) {
     tokenStatus.textContent = 'Connected to Netatmo';
     tokenStatus.className = 'token-status token-valid';
-    document.getElementById('connectButton').textContent = 'Reconnect to Netatmo';
+    
+    const connectButton = document.getElementById('connectButton');
+    if (connectButton) {
+      connectButton.textContent = 'Reconnect to Netatmo';
+    }
   } else {
     tokenStatus.textContent = 'Not connected to Netatmo';
     tokenStatus.className = 'token-status token-expired';
@@ -459,7 +463,14 @@ function showStatus(message, type) {
   if (!statusDiv) {
     statusDiv = document.createElement('div');
     statusDiv.id = 'statusMessage';
-    document.querySelector('.container').insertBefore(statusDiv, document.querySelector('h1').nextSibling);
+    const container = document.querySelector('.container');
+    const h1 = document.querySelector('h1');
+    
+    if (container && h1) {
+      container.insertBefore(statusDiv, h1.nextElementSibling);
+    } else {
+      document.body.insertBefore(statusDiv, document.body.firstChild);
+    }
   }
   
   statusDiv.textContent = message;

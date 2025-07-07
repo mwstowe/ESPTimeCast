@@ -1,22 +1,22 @@
 // Function to fetch Netatmo stations and devices
 String fetchNetatmoDevices() {
   Serial.println(F("[NETATMO] Fetching stations and devices..."));
+  Serial.print(F("[MEMORY] Free heap before fetch: "));
+  Serial.println(ESP.getFreeHeap());
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Skipped: WiFi not connected"));
     return "{\"error\":\"WiFi not connected\"}";
   }
   
-  // Get access token from config with error handling
+  // Get access token from config
   if (!LittleFS.begin()) {
     Serial.println(F("[NETATMO] Failed to mount file system"));
     return "{\"error\":\"Failed to mount file system\"}";
   }
   
-  if (!LittleFS.exists("/config.json")) {
-    Serial.println(F("[NETATMO] Config file does not exist"));
-    return "{\"error\":\"Configuration file not found\"}";
-  }
+  // Read the access token directly from the file to avoid memory issues
+  String accessToken = "";
   
   File f = LittleFS.open("/config.json", "r");
   if (!f) {
@@ -24,191 +24,481 @@ String fetchNetatmoDevices() {
     return "{\"error\":\"Failed to open config file\"}";
   }
   
-  size_t fileSize = f.size();
-  if (fileSize == 0) {
-    f.close();
-    Serial.println(F("[NETATMO] Config file is empty"));
-    return "{\"error\":\"Configuration file is empty\"}";
+  // Read the file line by line to find the access token
+  while (f.available()) {
+    String line = f.readStringUntil('\n');
+    if (line.indexOf("\"netatmoAccessToken\"") >= 0) {
+      int startPos = line.indexOf(":") + 1;
+      int endPos = line.indexOf(",");
+      if (endPos < 0) endPos = line.indexOf("}");
+      if (endPos < 0) endPos = line.length() - 1;
+      
+      accessToken = line.substring(startPos, endPos);
+      accessToken.trim();
+      
+      // Remove quotes if present
+      if (accessToken.startsWith("\"") && accessToken.endsWith("\"")) {
+        accessToken = accessToken.substring(1, accessToken.length() - 1);
+      }
+      
+      break;
+    }
   }
   
-  // Read the file content
-  String fileContent = f.readString();
   f.close();
   
-  // Parse the JSON
-  DynamicJsonDocument doc(2048);
-  DeserializationError err = deserializeJson(doc, fileContent);
-  
-  if (err) {
-    Serial.print(F("[NETATMO] Failed to parse config file: "));
-    Serial.println(err.c_str());
-    return "{\"error\":\"Failed to parse config file: " + String(err.c_str()) + "\"}";
-  }
-  
-  // Check if access token exists
-  if (!doc.containsKey("netatmoAccessToken") || doc["netatmoAccessToken"].as<String>().length() == 0) {
+  if (accessToken.length() == 0) {
     Serial.println(F("[NETATMO] No access token available"));
     return "{\"error\":\"No access token available. Please authorize with Netatmo first.\"}";
   }
   
-  String accessToken = doc["netatmoAccessToken"].as<String>();
+  Serial.println(F("[NETATMO] Access token found"));
   
-  // Make API request to get devices with timeout protection
-  WiFiClient client;
-  HTTPClient http;
+  // Make API request to get devices
+  WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
   
-  http.begin(client, "https://api.netatmo.com/api/getstationsdata");
-  http.addHeader("Authorization", "Bearer " + accessToken);
-  http.setTimeout(10000); // 10 second timeout
+  Serial.println(F("[NETATMO] Connecting to api.netatmo.com..."));
   
-  Serial.println(F("[NETATMO] Sending request to Netatmo API"));
-  int httpCode = http.GET();
-  Serial.print(F("[NETATMO] HTTP response code: "));
-  Serial.println(httpCode);
+  if (!client.connect("api.netatmo.com", 443)) {
+    Serial.println(F("[NETATMO] Connection failed"));
+    return "{\"error\":\"Failed to connect to Netatmo API\"}";
+  }
   
-  if (httpCode == HTTP_CODE_UNAUTHORIZED) {
+  Serial.println(F("[NETATMO] Connected to api.netatmo.com"));
+  Serial.print(F("[MEMORY] Free heap after connection: "));
+  Serial.println(ESP.getFreeHeap());
+  
+  // Prepare the HTTP request
+  String request = "GET /api/getstationsdata HTTP/1.1\r\n";
+  request += "Host: api.netatmo.com\r\n";
+  request += "Authorization: Bearer " + accessToken + "\r\n";
+  request += "Connection: close\r\n";
+  request += "\r\n";
+  
+  Serial.println(F("[NETATMO] Sending request..."));
+  client.print(request);
+  
+  Serial.print(F("[MEMORY] Free heap after request: "));
+  Serial.println(ESP.getFreeHeap());
+  
+  // Wait for the response
+  unsigned long timeout = millis() + 10000; // 10 second timeout
+  while (client.available() == 0) {
+    if (millis() > timeout) {
+      Serial.println(F("[NETATMO] Client timeout"));
+      client.stop();
+      return "{\"error\":\"Request timeout\"}";
+    }
+    delay(10);
+  }
+  
+  Serial.println(F("[NETATMO] Response received"));
+  
+  // Check the response status
+  String status_line = client.readStringUntil('\n');
+  Serial.print(F("[NETATMO] Status: "));
+  Serial.println(status_line);
+  
+  // Skip HTTP headers
+  while (client.available()) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      break;
+    }
+  }
+  
+  // Check if we need to refresh the token
+  if (status_line.indexOf("401") > 0) {
+    client.stop();
     Serial.println(F("[NETATMO] Token expired, refreshing"));
     
     // Try to refresh the token
     if (refreshNetatmoToken()) {
-      // Get the new access token
-      File f = LittleFS.open("/config.json", "r");
-      if (!f) {
-        http.end();
-        Serial.println(F("[NETATMO] Failed to open config file after token refresh"));
-        return "{\"error\":\"Failed to open config file after token refresh\"}";
-      }
-      
-      String fileContent = f.readString();
-      f.close();
-      
-      DynamicJsonDocument refreshDoc(2048);
-      DeserializationError refreshErr = deserializeJson(refreshDoc, fileContent);
-      
-      if (refreshErr) {
-        http.end();
-        Serial.println(F("[NETATMO] Failed to parse config file after token refresh"));
-        return "{\"error\":\"Failed to parse config file after token refresh\"}";
-      }
-      
-      accessToken = refreshDoc["netatmoAccessToken"].as<String>();
-      
-      // Retry the request with the new token
-      http.end();
-      http.begin(client, "https://api.netatmo.com/api/getstationsdata");
-      http.addHeader("Authorization", "Bearer " + accessToken);
-      http.setTimeout(10000); // 10 second timeout
-      
-      Serial.println(F("[NETATMO] Retrying request with new token"));
-      httpCode = http.GET();
-      Serial.print(F("[NETATMO] HTTP response code after refresh: "));
-      Serial.println(httpCode);
+      // Try again with the new token
+      return fetchNetatmoDevices();
     } else {
-      http.end();
-      Serial.println(F("[NETATMO] Failed to refresh token"));
       return "{\"error\":\"Failed to refresh token\"}";
     }
   }
   
-  if (httpCode != HTTP_CODE_OK) {
-    String errorPayload = http.getString();
-    Serial.print(F("[NETATMO] API request failed: "));
-    Serial.println(httpCode);
-    Serial.print(F("[NETATMO] Response: "));
-    Serial.println(errorPayload);
-    http.end();
-    return "{\"error\":\"API request failed: " + String(httpCode) + "\"}";
+  // Check for other errors
+  if (status_line.indexOf("200") <= 0) {
+    client.stop();
+    Serial.print(F("[NETATMO] HTTP error: "));
+    Serial.println(status_line);
+    return "{\"error\":\"HTTP error: " + status_line + "\"}";
   }
   
-  String payload = http.getString();
-  http.end();
-  
-  Serial.println(F("[NETATMO] Response received, parsing..."));
-  
-  // Parse the response with error handling
-  DynamicJsonDocument apiDoc(8192);
-  DeserializationError apiErr = deserializeJson(apiDoc, payload);
-  
-  if (apiErr) {
-    Serial.print(F("[NETATMO] Failed to parse API response: "));
-    Serial.println(apiErr.c_str());
-    return "{\"error\":\"Failed to parse API response: " + String(apiErr.c_str()) + "\"}";
-  }
-  
-  // Check for API error
-  if (!apiDoc.containsKey("status") || apiDoc["status"] != "ok") {
-    String errorMsg = apiDoc.containsKey("error") && apiDoc["error"].containsKey("message") ? 
-                      apiDoc["error"]["message"].as<String>() : "Unknown error";
-    Serial.print(F("[NETATMO] API error: "));
-    Serial.println(errorMsg);
-    return "{\"error\":\"API error: " + errorMsg + "\"}";
-  }
-  
-  // Check if body and devices exist
-  if (!apiDoc.containsKey("body") || !apiDoc["body"].containsKey("devices")) {
-    Serial.println(F("[NETATMO] No devices found in response"));
-    return "{\"error\":\"No devices found in response\"}";
-  }
-  
-  // Extract devices
-  JsonArray devices = apiDoc["body"]["devices"];
+  // Process the response in chunks to avoid memory issues
+  Serial.println(F("[NETATMO] Processing response..."));
   
   // Create a simplified response
-  DynamicJsonDocument responseDoc(4096);
-  JsonArray responseDevices = responseDoc.createNestedArray("devices");
+  String simpleResponse = "{\"devices\":[";
+  bool firstDevice = true;
   
-  Serial.print(F("[NETATMO] Found "));
-  Serial.print(devices.size());
-  Serial.println(F(" devices"));
+  // Variables for parsing
+  bool inDevices = false;
+  bool inDevice = false;
+  bool inModules = false;
+  bool inModule = false;
   
-  for (JsonObject device : devices) {
-    if (!device.containsKey("_id") || !device.containsKey("station_name")) {
-      Serial.println(F("[NETATMO] Skipping device with missing ID or name"));
-      continue;
-    }
+  String currentDeviceId = "";
+  String currentDeviceName = "";
+  String currentDeviceType = "";
+  
+  String currentModuleId = "";
+  String currentModuleName = "";
+  String currentModuleType = "";
+  
+  // Buffer for reading
+  const int bufferSize = 128;
+  char buffer[bufferSize];
+  int bufferPos = 0;
+  
+  // Read the response in chunks
+  while (client.available()) {
+    char c = client.read();
     
-    JsonObject responseDevice = responseDevices.createNestedObject();
+    // Add to buffer
+    buffer[bufferPos++] = c;
     
-    responseDevice["id"] = device["_id"].as<String>();
-    responseDevice["name"] = device["station_name"].as<String>();
-    responseDevice["type"] = device.containsKey("type") ? device["type"].as<String>() : "unknown";
-    
-    // Add the main device as a module option (for indoor temperature)
-    JsonArray responseModules = responseDevice.createNestedArray("modules");
-    JsonObject mainModule = responseModules.createNestedObject();
-    mainModule["id"] = device["_id"].as<String>();
-    mainModule["name"] = "Main Station";
-    mainModule["type"] = "NAMain";
-    
-    // Add modules
-    if (device.containsKey("modules")) {
-      JsonArray modules = device["modules"];
+    // Process buffer when full or at end of line
+    if (bufferPos >= bufferSize - 1 || c == '\n') {
+      buffer[bufferPos] = '\0'; // Null terminate
+      String chunk = String(buffer);
+      bufferPos = 0;
       
-      Serial.print(F("[NETATMO] Found "));
-      Serial.print(modules.size());
-      Serial.println(F(" modules for this device"));
+      // Look for device info
+      if (chunk.indexOf("\"devices\"") >= 0) {
+        inDevices = true;
+      }
       
-      for (JsonObject module : modules) {
-        if (!module.containsKey("_id") || !module.containsKey("module_name") || !module.containsKey("type")) {
-          Serial.println(F("[NETATMO] Skipping module with missing ID, name, or type"));
-          continue;
+      if (inDevices) {
+        // Start of a device
+        if (chunk.indexOf("\"_id\"") >= 0 && !inDevice) {
+          inDevice = true;
+          
+          // Extract device ID
+          int idStart = chunk.indexOf("\"") + 1;
+          int idEnd = chunk.indexOf("\"", idStart);
+          if (idStart > 0 && idEnd > idStart) {
+            currentDeviceId = chunk.substring(idStart, idEnd);
+          }
         }
         
-        JsonObject responseModule = responseModules.createNestedObject();
+        // Device name
+        if (inDevice && chunk.indexOf("\"station_name\"") >= 0) {
+          int nameStart = chunk.indexOf("\"", chunk.indexOf(":")) + 1;
+          int nameEnd = chunk.indexOf("\"", nameStart);
+          if (nameStart > 0 && nameEnd > nameStart) {
+            currentDeviceName = chunk.substring(nameStart, nameEnd);
+          }
+        }
         
-        responseModule["id"] = module["_id"].as<String>();
-        responseModule["name"] = module["module_name"].as<String>();
-        responseModule["type"] = module["type"].as<String>();
+        // Device type
+        if (inDevice && chunk.indexOf("\"type\"") >= 0) {
+          int typeStart = chunk.indexOf("\"", chunk.indexOf(":")) + 1;
+          int typeEnd = chunk.indexOf("\"", typeStart);
+          if (typeStart > 0 && typeEnd > typeStart) {
+            currentDeviceType = chunk.substring(typeStart, typeEnd);
+          }
+        }
+        
+        // Start of modules array
+        if (inDevice && chunk.indexOf("\"modules\"") >= 0) {
+          inModules = true;
+          
+          // Add the device to the response
+          if (currentDeviceId.length() > 0) {
+            if (!firstDevice) {
+              simpleResponse += ",";
+            }
+            firstDevice = false;
+            
+            simpleResponse += "{\"id\":\"" + currentDeviceId + "\",";
+            simpleResponse += "\"name\":\"" + currentDeviceName + "\",";
+            simpleResponse += "\"type\":\"" + currentDeviceType + "\",";
+            simpleResponse += "\"modules\":[";
+            
+            // Add the main device as a module
+            simpleResponse += "{\"id\":\"" + currentDeviceId + "\",";
+            simpleResponse += "\"name\":\"Main Station\",";
+            simpleResponse += "\"type\":\"NAMain\"}";
+          }
+        }
+        
+        // Start of a module
+        if (inModules && chunk.indexOf("\"_id\"") >= 0 && !inModule) {
+          inModule = true;
+          
+          // Extract module ID
+          int idStart = chunk.indexOf("\"", chunk.indexOf(":")) + 1;
+          int idEnd = chunk.indexOf("\"", idStart);
+          if (idStart > 0 && idEnd > idStart) {
+            currentModuleId = chunk.substring(idStart, idEnd);
+          }
+        }
+        
+        // Module name
+        if (inModule && chunk.indexOf("\"module_name\"") >= 0) {
+          int nameStart = chunk.indexOf("\"", chunk.indexOf(":")) + 1;
+          int nameEnd = chunk.indexOf("\"", nameStart);
+          if (nameStart > 0 && nameEnd > nameStart) {
+            currentModuleName = chunk.substring(nameStart, nameEnd);
+          }
+        }
+        
+        // Module type
+        if (inModule && chunk.indexOf("\"type\"") >= 0) {
+          int typeStart = chunk.indexOf("\"", chunk.indexOf(":")) + 1;
+          int typeEnd = chunk.indexOf("\"", typeStart);
+          if (typeStart > 0 && typeEnd > typeStart) {
+            currentModuleType = chunk.substring(typeStart, typeEnd);
+          }
+        }
+        
+        // End of a module
+        if (inModule && chunk.indexOf("}") >= 0) {
+          // Add the module to the response
+          if (currentModuleId.length() > 0) {
+            simpleResponse += ",{\"id\":\"" + currentModuleId + "\",";
+            simpleResponse += "\"name\":\"" + currentModuleName + "\",";
+            simpleResponse += "\"type\":\"" + currentModuleType + "\"}";
+          }
+          
+          // Reset module info
+          currentModuleId = "";
+          currentModuleName = "";
+          currentModuleType = "";
+          inModule = false;
+        }
+        
+        // End of modules array
+        if (inModules && chunk.indexOf("]") >= 0) {
+          simpleResponse += "]}";
+          inModules = false;
+        }
+        
+        // End of a device
+        if (inDevice && chunk.indexOf("}") >= 0 && !inModules) {
+          // Reset device info
+          currentDeviceId = "";
+          currentDeviceName = "";
+          currentDeviceType = "";
+          inDevice = false;
+        }
+        
+        // End of devices array
+        if (inDevices && chunk.indexOf("]") >= 0 && !inDevice) {
+          inDevices = false;
+        }
       }
     }
   }
   
-  // Serialize the response
-  String response;
-  serializeJson(responseDoc, response);
+  client.stop();
   
-  Serial.println(F("[NETATMO] Successfully processed devices"));
-  return response;
+  // Finalize the response
+  simpleResponse += "]}";
+  
+  Serial.println(F("[NETATMO] Response processing complete"));
+  Serial.print(F("[MEMORY] Free heap after processing: "));
+  Serial.println(ESP.getFreeHeap());
+  
+  return simpleResponse;
+}
+
+// Function to refresh Netatmo token
+bool refreshNetatmoToken() {
+  Serial.println(F("[NETATMO] Refreshing token"));
+  Serial.print(F("[MEMORY] Free heap before refresh: "));
+  Serial.println(ESP.getFreeHeap());
+  
+  // Get refresh token from config
+  if (!LittleFS.begin()) {
+    Serial.println(F("[NETATMO] Failed to mount file system"));
+    return false;
+  }
+  
+  // Read the client ID, client secret, and refresh token directly from the file
+  String clientId = "";
+  String clientSecret = "";
+  String refreshToken = "";
+  
+  File f = LittleFS.open("/config.json", "r");
+  if (!f) {
+    Serial.println(F("[NETATMO] Failed to open config file"));
+    return false;
+  }
+  
+  // Read the file line by line
+  while (f.available()) {
+    String line = f.readStringUntil('\n');
+    
+    if (line.indexOf("\"netatmoClientId\"") >= 0) {
+      int startPos = line.indexOf(":") + 1;
+      int endPos = line.indexOf(",");
+      if (endPos < 0) endPos = line.indexOf("}");
+      if (endPos < 0) endPos = line.length() - 1;
+      
+      clientId = line.substring(startPos, endPos);
+      clientId.trim();
+      
+      // Remove quotes if present
+      if (clientId.startsWith("\"") && clientId.endsWith("\"")) {
+        clientId = clientId.substring(1, clientId.length() - 1);
+      }
+    }
+    
+    if (line.indexOf("\"netatmoClientSecret\"") >= 0) {
+      int startPos = line.indexOf(":") + 1;
+      int endPos = line.indexOf(",");
+      if (endPos < 0) endPos = line.indexOf("}");
+      if (endPos < 0) endPos = line.length() - 1;
+      
+      clientSecret = line.substring(startPos, endPos);
+      clientSecret.trim();
+      
+      // Remove quotes if present
+      if (clientSecret.startsWith("\"") && clientSecret.endsWith("\"")) {
+        clientSecret = clientSecret.substring(1, clientSecret.length() - 1);
+      }
+    }
+    
+    if (line.indexOf("\"netatmoRefreshToken\"") >= 0) {
+      int startPos = line.indexOf(":") + 1;
+      int endPos = line.indexOf(",");
+      if (endPos < 0) endPos = line.indexOf("}");
+      if (endPos < 0) endPos = line.length() - 1;
+      
+      refreshToken = line.substring(startPos, endPos);
+      refreshToken.trim();
+      
+      // Remove quotes if present
+      if (refreshToken.startsWith("\"") && refreshToken.endsWith("\"")) {
+        refreshToken = refreshToken.substring(1, refreshToken.length() - 1);
+      }
+    }
+    
+    // Break if we have all the values
+    if (clientId.length() > 0 && clientSecret.length() > 0 && refreshToken.length() > 0) {
+      break;
+    }
+  }
+  
+  f.close();
+  
+  if (clientId.length() == 0 || clientSecret.length() == 0 || refreshToken.length() == 0) {
+    Serial.println(F("[NETATMO] Missing client credentials or refresh token"));
+    return false;
+  }
+  
+  // Exchange the refresh token for a new access token
+  WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
+  
+  Serial.println(F("[NETATMO] Connecting to api.netatmo.com..."));
+  
+  if (!client.connect("api.netatmo.com", 443)) {
+    Serial.println(F("[NETATMO] Connection failed"));
+    return false;
+  }
+  
+  Serial.println(F("[NETATMO] Connected to api.netatmo.com"));
+  
+  // Prepare the POST data
+  String postData = "grant_type=refresh_token";
+  postData += "&client_id=" + clientId;
+  postData += "&client_secret=" + clientSecret;
+  postData += "&refresh_token=" + refreshToken;
+  
+  // Prepare the HTTP request
+  String request = "POST /oauth2/token HTTP/1.1\r\n";
+  request += "Host: api.netatmo.com\r\n";
+  request += "Connection: close\r\n";
+  request += "Content-Type: application/x-www-form-urlencoded\r\n";
+  request += "Content-Length: " + String(postData.length()) + "\r\n";
+  request += "\r\n";
+  request += postData;
+  
+  Serial.println(F("[NETATMO] Sending token refresh request..."));
+  client.print(request);
+  
+  // Wait for the response
+  unsigned long timeout = millis() + 10000; // 10 second timeout
+  while (client.available() == 0) {
+    if (millis() > timeout) {
+      Serial.println(F("[NETATMO] Client timeout"));
+      client.stop();
+      return false;
+    }
+    delay(10);
+  }
+  
+  Serial.println(F("[NETATMO] Response received"));
+  
+  // Check the response status
+  String status_line = client.readStringUntil('\n');
+  Serial.print(F("[NETATMO] Status: "));
+  Serial.println(status_line);
+  
+  // Skip HTTP headers
+  while (client.available()) {
+    String line = client.readStringUntil('\n');
+    if (line == "\r") {
+      break;
+    }
+  }
+  
+  // Check for errors
+  if (status_line.indexOf("200") <= 0) {
+    client.stop();
+    Serial.print(F("[NETATMO] HTTP error: "));
+    Serial.println(status_line);
+    return false;
+  }
+  
+  // Read the response body
+  String response = client.readString();
+  client.stop();
+  
+  // Parse the response
+  int accessTokenStart = response.indexOf("\"access_token\":\"");
+  int newRefreshTokenStart = response.indexOf("\"refresh_token\":\"");
+  
+  if (accessTokenStart < 0) {
+    Serial.println(F("[NETATMO] Failed to find access token in response"));
+    return false;
+  }
+  
+  accessTokenStart += 16; // Length of "\"access_token\":\""
+  int accessTokenEnd = response.indexOf("\"", accessTokenStart);
+  
+  if (accessTokenEnd < 0) {
+    Serial.println(F("[NETATMO] Failed to parse access token"));
+    return false;
+  }
+  
+  String accessToken = response.substring(accessTokenStart, accessTokenEnd);
+  
+  // Extract new refresh token if present
+  String newRefreshToken = "";
+  if (newRefreshTokenStart >= 0) {
+    newRefreshTokenStart += 17; // Length of "\"refresh_token\":\""
+    int newRefreshTokenEnd = response.indexOf("\"", newRefreshTokenStart);
+    
+    if (newRefreshTokenEnd >= 0) {
+      newRefreshToken = response.substring(newRefreshTokenStart, newRefreshTokenEnd);
+    }
+  }
+  
+  Serial.println(F("[NETATMO] Successfully extracted tokens"));
+  
+  // Save tokens to config
+  saveNetatmoTokens(accessToken, newRefreshToken.length() > 0 ? newRefreshToken : refreshToken);
+  
+  return true;
 }
 
 // Helper function to parse Netatmo JSON response

@@ -1314,6 +1314,9 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED && !isAPMode) {
     MDNS.update();
   }
+  
+  // Check for pending Netatmo token exchanges
+  checkPendingTokenExchange();
 
   // --- AP Mode Animation ---
   static unsigned long apAnimTimer = 0;

@@ -728,13 +728,6 @@ void setupWebServer() {
   Serial.println(F("[WEBSERVER] Web server started"));
 }
 
-// Function to handle blocked API requests
-void handleBlockedRequest(String errorPayload) {
-  Serial.println(F("[API] Request blocked by rate limiting"));
-  Serial.println(errorPayload);
-  lastBlockedRequest = millis();
-}
-
 // Function to get Netatmo OAuth token
 // Function to save tokens to config.json
 void saveTokensToConfig();
@@ -1248,23 +1241,6 @@ void updateTemperatures() {
   
   // Set weatherFetched flag if at least one temperature is available
   weatherFetched = indoorTempAvailable || outdoorTempAvailable;
-}
-
-// Function to check Netatmo configuration
-void checkNetatmoConfig() {
-  // Check if we have Netatmo credentials
-  if (strlen(netatmoClientId) > 0 && strlen(netatmoClientSecret) > 0) {
-    Serial.println(F("[NETATMO] Netatmo credentials found"));
-    
-    // Check if we have a refresh token
-    if (strlen(netatmoRefreshToken) > 0) {
-      Serial.println(F("[NETATMO] Refresh token found, will use OAuth2"));
-    } else {
-      Serial.println(F("[NETATMO] No refresh token found, please authorize with Netatmo"));
-    }
-  } else {
-    Serial.println(F("[NETATMO] No Netatmo credentials found"));
-  }
 }
 
 void setup() {

@@ -506,6 +506,17 @@ void setupWebServer() {
       return;
     }
     
+    // Ensure all required fields exist
+    if (!doc.containsKey("useNetatmoOutdoor")) {
+      doc["useNetatmoOutdoor"] = false;
+    }
+    if (!doc.containsKey("prioritizeNetatmoIndoor")) {
+      doc["prioritizeNetatmoIndoor"] = false;
+    }
+    if (!doc.containsKey("netatmoIndoorModuleId")) {
+      doc["netatmoIndoorModuleId"] = "";
+    }
+    
     doc[F("mode")] = isAPMode ? "ap" : "sta";
     String response;
     serializeJson(doc, response);
@@ -521,7 +532,11 @@ void setupWebServer() {
       if (n == "brightness") doc[n] = v.toInt();
       else if (n == "flipDisplay") doc[n] = (v == "true" || v == "on" || v == "1");
       else if (n == "twelveHourToggle") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1"); 
+      else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "showIndoorTemp") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "showOutdoorTemp") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "useNetatmoOutdoor") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "prioritizeNetatmoIndoor") doc[n] = (v == "true" || v == "on" || v == "1"); 
       else if (n == "showHumidity") doc[n] = (v == "true" || v == "on" || v == "1");
       else if (n == "tempSource") doc[n] = v.toInt();
       else doc[n] = v;

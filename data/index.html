@@ -769,10 +769,12 @@ window.onload = function () {
       
       // Set the toggle values for Netatmo temperature sources
       if (document.getElementById('useNetatmoOutdoor')) {
-        document.getElementById('useNetatmoOutdoor').checked = !!data.useNetatmoOutdoor;
+        // Check if the field exists in the config, if not, default to false
+        document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor === true;
       }
       if (document.getElementById('prioritizeNetatmoIndoor')) {
-        document.getElementById('prioritizeNetatmoIndoor').checked = !!data.prioritizeNetatmoIndoor;
+        // Check if the field exists in the config, if not, default to false
+        document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor === true;
       }
       
       document.getElementById('mdnsHostname').value = data.mdnsHostname || 'esptime';

@@ -65,6 +65,42 @@
       background-color: #f2dede;
       color: #a94442;
     }
+    .loading {
+      background-color: #d9edf7;
+      color: #31708f;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: white;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 5px;
+      width: 80%;
+      max-width: 500px;
+      text-align: center;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 2s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
   <script>
     // Simple function to load configuration
@@ -72,7 +108,7 @@
       // Show loading message
       const statusDiv = document.createElement('div');
       statusDiv.id = 'statusMessage';
-      statusDiv.className = 'status';
+      statusDiv.className = 'status loading';
       statusDiv.textContent = 'Loading configuration...';
       document.querySelector('.container').insertBefore(statusDiv, document.querySelector('form'));
       
@@ -88,6 +124,9 @@
           // Update status
           statusDiv.className = 'status success';
           statusDiv.textContent = 'Configuration loaded successfully!';
+          setTimeout(() => {
+            statusDiv.style.display = 'none';
+          }, 3000);
           
           // Update form fields with configuration values
           if (data.ssid) document.getElementById('ssid').value = data.ssid;
@@ -108,14 +147,97 @@
           statusDiv.textContent = 'Failed to load configuration: ' + error.message;
           console.error('Error loading configuration:', error);
         });
+        
+      // Set up form submission
+      document.getElementById('configForm').addEventListener('submit', function(event) {
+        event.preventDefault();
+        saveConfig();
+      });
     };
+    
+    // Function to save configuration using AJAX
+    function saveConfig() {
+      // Show saving modal
+      const modal = document.getElementById('savingModal');
+      const modalText = document.getElementById('savingModalText');
+      modal.style.display = 'block';
+      modalText.textContent = 'Saving configuration...';
+      
+      // Get form data
+      const form = document.getElementById('configForm');
+      const formData = new FormData(form);
+      
+      // Convert FormData to URL-encoded string
+      const urlEncodedData = new URLSearchParams(formData).toString();
+      
+      // Send AJAX request
+      fetch('/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: urlEncodedData
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        // Show success message
+        modalText.textContent = 'Configuration saved successfully!';
+        
+        // Add restart button if needed
+        if (data.restart_required) {
+          const restartBtn = document.createElement('button');
+          restartBtn.textContent = 'Restart Device';
+          restartBtn.onclick = function() {
+            modalText.textContent = 'Restarting device...';
+            fetch('/restart', { method: 'POST' })
+              .then(() => {
+                modalText.textContent = 'Device is restarting. Please wait...';
+                setTimeout(() => {
+                  window.location.reload();
+                }, 10000);
+              })
+              .catch(error => {
+                modalText.textContent = 'Error restarting device: ' + error.message;
+              });
+          };
+          document.getElementById('modalButtons').appendChild(restartBtn);
+        }
+        
+        // Add close button
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.onclick = function() {
+          modal.style.display = 'none';
+          document.getElementById('modalButtons').innerHTML = '';
+        };
+        document.getElementById('modalButtons').appendChild(closeBtn);
+      })
+      .catch(error => {
+        // Show error message
+        modalText.textContent = 'Error saving configuration: ' + error.message;
+        
+        // Add close button
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.onclick = function() {
+          modal.style.display = 'none';
+          document.getElementById('modalButtons').innerHTML = '';
+        };
+        document.getElementById('modalButtons').appendChild(closeBtn);
+      });
+    }
   </script>
 </head>
 <body>
   <div class="container">
     <h1>ESPTimeCast Configuration</h1>
     
-    <form id="configForm" action="/save" method="post">
+    <form id="configForm">
       <div class="section">
         <h2>WiFi Settings</h2>
         <label for="ssid">WiFi SSID:</label>
@@ -187,6 +309,15 @@
       
       <button type="submit">Save Configuration</button>
     </form>
+  </div>
+  
+  <!-- Saving Modal -->
+  <div id="savingModal" class="modal">
+    <div class="modal-content">
+      <div class="spinner"></div>
+      <p id="savingModalText">Saving configuration...</p>
+      <div id="modalButtons"></div>
+    </div>
   </div>
 </body>
 </html>

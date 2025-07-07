@@ -516,25 +516,79 @@ void setupWebServer() {
       if (n == "brightness") doc[n] = v.toInt();
       else if (n == "flipDisplay") doc[n] = (v == "true" || v == "on" || v == "1");
       else if (n == "twelveHourToggle") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1"); 
-      else if (n == "showHumidity") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "tempSource") doc[n] = v.toInt();
+      else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "showIndoorTemp") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "showOutdoorTemp") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "useNetatmoOutdoor") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "prioritizeNetatmoIndoor") doc[n] = (v == "true" || v == "on" || v == "1");
+      else if (n == "clockDuration") doc[n] = v.toInt() * 1000;
+      else if (n == "weatherDuration") doc[n] = v.toInt() * 1000;
+      else if (n == "tempAdjust") doc[n] = v.toFloat();
       else doc[n] = v;
     }
+    
+    // Save to config.json
+    if (!LittleFS.begin()) {
+      Serial.println(F("[WEBSERVER] ERROR: LittleFS not mounted"));
+      request->send(500, "application/json", "{\"error\":\"LittleFS not mounted\"}");
+      return;
+    }
+    
+    // Backup existing config
     if (LittleFS.exists("/config.json")) {
       LittleFS.rename("/config.json", "/config.bak");
     }
+    
     File f = LittleFS.open("/config.json", "w");
     if (!f) {
-      Serial.println(F("[WEBSERVER] Failed to open /config.json for writing"));
-      DynamicJsonDocument errorDoc(256);
-      errorDoc[F("error")] = "Failed to write config";
-      String response;
-      serializeJson(errorDoc, response);
-      request->send(500, "application/json", response);
+      Serial.println(F("[WEBSERVER] ERROR: Failed to open config.json for writing"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open config.json for writing\"}");
       return;
     }
-    serializeJson(doc, f);
+    
+    if (serializeJsonPretty(doc, f) == 0) {
+      Serial.println(F("[WEBSERVER] ERROR: Failed to write to config.json"));
+      f.close();
+      request->send(500, "application/json", "{\"error\":\"Failed to write to config.json\"}");
+      return;
+    }
+    
+    f.close();
+    Serial.println(F("[WEBSERVER] Configuration saved successfully"));
+    
+    // Update variables from config
+    if (doc.containsKey("ssid")) strlcpy(ssid, doc["ssid"], sizeof(ssid));
+    if (doc.containsKey("password")) strlcpy(password, doc["password"], sizeof(password));
+    if (doc.containsKey("mdnsHostname")) strlcpy(mdnsHostname, doc["mdnsHostname"], sizeof(mdnsHostname));
+    if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));
+    if (doc.containsKey("timeZone")) strlcpy(timeZone, doc["timeZone"], sizeof(timeZone));
+    if (doc.containsKey("brightness")) brightness = doc["brightness"];
+    if (doc.containsKey("flipDisplay")) flipDisplay = doc["flipDisplay"];
+    if (doc.containsKey("twelveHourToggle")) twelveHourToggle = doc["twelveHourToggle"];
+    if (doc.containsKey("showDayOfWeek")) showDayOfWeek = doc["showDayOfWeek"];
+    if (doc.containsKey("showIndoorTemp")) showIndoorTemp = doc["showIndoorTemp"];
+    if (doc.containsKey("showOutdoorTemp")) showOutdoorTemp = doc["showOutdoorTemp"];
+    
+    // Check if WiFi settings changed
+    bool wifiChanged = false;
+    if (doc.containsKey("ssid") || doc.containsKey("password")) {
+      wifiChanged = true;
+    }
+    
+    // Send JSON response
+    DynamicJsonDocument response(256);
+    response["success"] = true;
+    response["restart_required"] = wifiChanged;
+    
+    String responseStr;
+    serializeJson(response, responseStr);
+    request->send(200, "application/json", responseStr);
+    
+    // Restart if WiFi settings changed
+    if (wifiChanged) {
+      delay(1000);
+      ESP.restart();
+    }
     f.close();
     File verify = LittleFS.open("/config.json", "r");
     DynamicJsonDocument test(2048);
@@ -634,6 +688,13 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
+  });
+
+  server.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /restart"));
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Restarting device...\"}");
+    delay(1000);
+    ESP.restart();
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

@@ -434,21 +434,6 @@ void setupWebServer() {
     if (!LittleFS.exists("/config.json")) {
       Serial.println(F("[WEBSERVER] config.json not found, creating default"));
       createDefaultConfig();
-      
-      // Verify the file was created
-      if (!LittleFS.exists("/config.json")) {
-        Serial.println(F("[WEBSERVER] ERROR: Failed to create config.json"));
-        request->send(500, "application/json", "{\"error\":\"Failed to create config.json\"}");
-        return;
-      }
-    }
-    
-    // Print file info
-    File infoFile = LittleFS.open("/config.json", "r");
-    if (infoFile) {
-      Serial.print(F("[WEBSERVER] config.json size: "));
-      Serial.println(infoFile.size());
-      infoFile.close();
     }
     
     File f = LittleFS.open("/config.json", "r");
@@ -458,25 +443,6 @@ void setupWebServer() {
       return;
     }
     
-    // Check file size
-    size_t fileSize = f.size();
-    if (fileSize == 0) {
-      Serial.println(F("[WEBSERVER] ERROR: config.json is empty"));
-      f.close();
-      
-      // Try to recreate the file
-      Serial.println(F("[WEBSERVER] Attempting to recreate config.json"));
-      createDefaultConfig();
-      
-      // Try to open again
-      f = LittleFS.open("/config.json", "r");
-      if (!f || f.size() == 0) {
-        Serial.println(F("[WEBSERVER] ERROR: Failed to recreate config.json"));
-        request->send(500, "application/json", "{\"error\":\"config.json is empty\"}");
-        return;
-      }
-    }
-    
     // Read the file content for debugging
     String fileContent = f.readString();
     Serial.print(F("[WEBSERVER] config.json content: "));
@@ -484,47 +450,28 @@ void setupWebServer() {
     
     // Reset file position
     f.close();
-    
-    // Create a new JSON document with the required fields
-    DynamicJsonDocument doc(2048);
-    
-    // Parse the file content
-    DeserializationError err = deserializeJson(doc, fileContent);
-    if (err) {
-      Serial.print(F("[WEBSERVER] Error parsing /config.json: "));
-      Serial.println(err.f_str());
-      
-      // Try to fix the JSON file if it's malformed
-      Serial.println(F("[WEBSERVER] Attempting to fix config.json"));
-      createDefaultConfig();
-      
-      request->send(500, "application/json", "{\"error\":\"Failed to parse config.json: " + String(err.f_str()) + "\"}");
+    f = LittleFS.open("/config.json", "r");
+    if (!f) {
+      Serial.println(F("[WEBSERVER] Error reopening /config.json"));
+      request->send(500, "application/json", "{\"error\":\"Failed to reopen config.json\"}");
       return;
     }
     
-    // Ensure all required fields exist
-    if (!doc.containsKey("useNetatmoOutdoor")) {
-      doc["useNetatmoOutdoor"] = false;
-    }
-    if (!doc.containsKey("prioritizeNetatmoIndoor")) {
-      doc["prioritizeNetatmoIndoor"] = false;
-    }
-    if (!doc.containsKey("netatmoIndoorModuleId")) {
-      doc["netatmoIndoorModuleId"] = "";
+    DynamicJsonDocument doc(2048);
+    DeserializationError err = deserializeJson(doc, f);
+    f.close();
+    if (err) {
+      Serial.print(F("[WEBSERVER] Error parsing /config.json: "));
+      Serial.println(err.f_str());
+      request->send(500, "application/json", "{\"error\":\"Failed to parse config.json\"}");
+      return;
     }
     
-    doc["mode"] = isAPMode ? "ap" : "sta";
-    
-    // Serialize to a string
+    doc[F("mode")] = isAPMode ? "ap" : "sta";
     String response;
     serializeJson(doc, response);
-    
-    // Log the response for debugging
-    Serial.print(F("[WEBSERVER] Response: "));
-    Serial.println(response);
-    
-    // Send the response
     request->send(200, "application/json", response);
+  });
   });
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /save"));    
@@ -658,12 +605,6 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
-  });
-  
-  // Add a simple test endpoint
-  server.on("/test", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println(F("[WEBSERVER] Request: /test"));
-    request->send(200, "application/json", "{\"test\":\"ok\",\"time\":\"" + String(millis()) + "\"}");
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

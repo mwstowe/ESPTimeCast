@@ -299,6 +299,12 @@ void setupTime() {
 
 void setupWebServer() {
   Serial.println(F("[WEBSERVER] Setting up web server..."));
+  server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /debug"));
+    debugNetatmoAuth();
+    request->send(200, "text/plain", "Debug information sent to serial monitor");
+  });
+  
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /"));
     request->send(LittleFS, "/index.html", "text/html");
@@ -513,6 +519,13 @@ String getNetatmoToken() {
       postData += netatmoUsername;
       postData += "&password=";
       postData += netatmoPassword;
+      
+      // Check for special characters in credentials that might need URL encoding
+      if (postData.indexOf('@') != -1 || postData.indexOf('+') != -1 || 
+          postData.indexOf('%') != -1 || postData.indexOf('&') != -1 ||
+          postData.indexOf('=') != -1 || postData.indexOf(' ') != -1) {
+        Serial.println(F("[NETATMO] WARNING: Credentials contain special characters that might need URL encoding"));
+      }
     }
     postData += "&scope=read_station read_thermostat read_homecoach";
     
@@ -539,32 +552,38 @@ String getNetatmoToken() {
     }
     Serial.println(redactedPostData);
     
+    Serial.println(F("[NETATMO] Sending token request..."));
     int httpCode = https.POST(postData);
-    
+    Serial.print(F("[NETATMO] HTTP response code: "));
+    Serial.println(httpCode);
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();
       Serial.println(F("[NETATMO] Response received:"));
       Serial.println(payload);
       
-      DynamicJsonDocument doc(1024);
+      DynamicJsonDocument doc(2048); // Increased from 1024 to 2048
       DeserializationError error = deserializeJson(doc, payload);
       
       if (!error) {
-        token = doc["access_token"].as<String>();
-        
-        // Store the tokens for future use
-        strlcpy(netatmoAccessToken, token.c_str(), sizeof(netatmoAccessToken));
-        
-        if (doc.containsKey("refresh_token")) {
-          String refreshToken = doc["refresh_token"].as<String>();
-          strlcpy(netatmoRefreshToken, refreshToken.c_str(), sizeof(netatmoRefreshToken));
+        if (doc.containsKey("access_token")) {
+          token = doc["access_token"].as<String>();
           
-          // Save the tokens to config.json
-          saveTokensToConfig();
+          // Store the tokens for future use
+          strlcpy(netatmoAccessToken, token.c_str(), sizeof(netatmoAccessToken));
+          
+          if (doc.containsKey("refresh_token")) {
+            String refreshToken = doc["refresh_token"].as<String>();
+            strlcpy(netatmoRefreshToken, refreshToken.c_str(), sizeof(netatmoRefreshToken));
+            
+            // Save the tokens to config.json
+            saveTokensToConfig();
+          }
+          
+          Serial.println(F("[NETATMO] Token obtained successfully"));
+        } else {
+          Serial.println(F("[NETATMO] Error: No access token in response"));
         }
-        
-        Serial.println(F("[NETATMO] Token obtained successfully"));
       } else {
         Serial.print(F("[NETATMO] JSON parse error: "));
         Serial.println(error.c_str());
@@ -579,7 +598,7 @@ String getNetatmoToken() {
       Serial.println(errorPayload);
       
       // Try to parse the error message
-      DynamicJsonDocument errorDoc(1024);
+      DynamicJsonDocument errorDoc(2048); // Increased from 1024 to 2048
       DeserializationError errorParseError = deserializeJson(errorDoc, errorPayload);
       if (!errorParseError && errorDoc.containsKey("error")) {
         String errorType = errorDoc["error"].as<String>();
@@ -598,6 +617,11 @@ String getNetatmoToken() {
           netatmoAccessToken[0] = '\0';
           saveTokensToConfig();
         }
+      }
+      
+      // Check for "request is blocked" HTML response
+      if (errorPayload.indexOf("The request is blocked") > 0) {
+        handleBlockedRequest(errorPayload);
       }
       
       // If using an existing refresh token and it failed, clear it

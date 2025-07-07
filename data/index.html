@@ -4,7 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>ESPTimeCast Settings</title>
-<script src="netatmo-devices.js"></script>
 <style>
 :root{
   --accent-color: #0075ff;
@@ -238,7 +237,14 @@ window.onload = function() {
   statusDiv.id = 'statusMessage';
   statusDiv.className = 'status loading';
   statusDiv.textContent = 'Loading configuration...';
-  document.querySelector('.container').insertBefore(statusDiv, document.querySelector('form'));
+  const container = document.querySelector('.container');
+  const form = document.querySelector('form');
+  
+  if (container && form) {
+    container.insertBefore(statusDiv, form);
+  } else if (container) {
+    container.insertBefore(statusDiv, container.firstChild);
+  }
   
   // Fetch configuration
   fetch('/config.json')

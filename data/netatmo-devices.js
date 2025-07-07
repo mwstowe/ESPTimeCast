@@ -20,60 +20,57 @@ function fetchNetatmoDevices() {
   // Show loading message
   showSavingModal("Fetching Netatmo devices...");
   
-  fetch('/api/netatmo/devices')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Hide loading message
-      document.getElementById('savingModal').style.display = 'none';
-      document.body.classList.remove('modal-open');
-      
-      // Store devices globally
-      window.netatmoDevices = data.devices || [];
-      
-      // Populate device dropdown
-      if (data.devices && data.devices.length > 0) {
-        data.devices.forEach(device => {
-          const option = document.createElement('option');
-          option.value = device.id;
-          option.textContent = device.name || device.id;
-          deviceSelect.appendChild(option);
-        });
-        
-        // Restore previous selection if possible
-        if (currentDeviceId) {
-          deviceSelect.value = currentDeviceId;
-          // Trigger change to load modules
-          loadModules();
-          
-          // Restore module selections
-          if (currentModuleId) {
-            moduleSelect.value = currentModuleId;
-          }
-          if (currentIndoorModuleId) {
-            indoorModuleSelect.value = currentIndoorModuleId;
-          }
+  // In this simplified version, we'll just use mock data
+  setTimeout(() => {
+    // Hide loading message
+    document.getElementById('savingModal').style.display = 'none';
+    document.body.classList.remove('modal-open');
+    
+    // Mock data
+    const mockData = {
+      devices: [
+        {
+          id: "manual",
+          name: "Manual Configuration",
+          type: "station",
+          modules: [
+            {
+              id: "manual_main",
+              name: "Main Station",
+              type: "NAMain"
+            },
+            {
+              id: "manual_outdoor",
+              name: "Outdoor Module",
+              type: "NAModule1"
+            },
+            {
+              id: "manual_indoor",
+              name: "Indoor Module",
+              type: "NAModule4"
+            }
+          ]
         }
-      } else {
-        alert('No Netatmo devices found');
-      }
-    })
-    .catch(error => {
-      // Hide loading message
-      document.getElementById('savingModal').style.display = 'none';
-      document.body.classList.remove('modal-open');
-      
-      // Show error
-      alert('Error fetching Netatmo devices: ' + error.message);
+      ]
+    };
+    
+    // Store devices globally
+    window.netatmoDevices = mockData.devices;
+    
+    // Populate device dropdown
+    mockData.devices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.id;
+      option.textContent = device.name;
+      deviceSelect.appendChild(option);
     });
+    
+    // Select the first device
+    deviceSelect.value = "manual";
+    
+    // Load modules
+    loadModules();
+  }, 500);
 }
 
 // Function to load modules for selected device
@@ -88,21 +85,21 @@ function loadModules() {
   
   if (!deviceId) return;
   
-  // Get the device data from the previously loaded devices
+  // Get the device data
   const deviceData = window.netatmoDevices.find(d => d.id === deviceId);
   if (!deviceData || !deviceData.modules) return;
   
-  // Populate outdoor modules
+  // Populate modules
   deviceData.modules.forEach(module => {
     if (module.type === 'NAModule1') { // Outdoor module
       const option = document.createElement('option');
       option.value = module.id;
-      option.textContent = module.name || module.id;
+      option.textContent = module.name;
       moduleSelect.appendChild(option);
-    } else if (module.type === 'NAModule4') { // Indoor module
+    } else if (module.type === 'NAModule4' || module.type === 'NAMain') { // Indoor module or main station
       const option = document.createElement('option');
       option.value = module.id;
-      option.textContent = module.name || module.id;
+      option.textContent = module.name;
       indoorModuleSelect.appendChild(option);
     }
   });

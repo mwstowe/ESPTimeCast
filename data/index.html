@@ -618,19 +618,18 @@ function loadModules() {
         </div>
         
         <div class="oauth-section">
-          <p>Authorize ESPTimeCast to access your Netatmo account:</p>
-          <a href="javascript:authorizeNetatmo()" id="authorizeBtn" class="oauth-button">Authorize Netatmo</a>
-          <div id="tokenStatus" class="token-status">No OAuth tokens set</div>
-        </div>
-        
-        <div class="form-group" style="display: none;">
-          <label for="netatmoAccessToken">Access Token:</label>
-          <input type="text" id="netatmoAccessToken" name="netatmoAccessToken">
-        </div>
-        
-        <div class="form-group" style="display: none;">
-          <label for="netatmoRefreshToken">Refresh Token:</label>
-          <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken">
+          <p>Enter your Netatmo OAuth credentials manually:</p>
+          <p><small>Due to memory constraints, automatic OAuth flow is not possible on this device.</small></p>
+          <p><small>Please generate tokens using the <a href="https://dev.netatmo.com/" target="_blank">Netatmo Developer Portal</a>.</small></p>
+          <div class="form-group">
+            <label for="netatmoAccessToken">Access Token:</label>
+            <input type="text" id="netatmoAccessToken" name="netatmoAccessToken">
+          </div>
+          
+          <div class="form-group">
+            <label for="netatmoRefreshToken">Refresh Token:</label>
+            <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken">
+          </div>
         </div>
         
         <div class="form-group">

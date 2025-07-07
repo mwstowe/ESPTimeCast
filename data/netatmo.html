@@ -254,7 +254,12 @@ window.onload = function() {
   statusDiv.id = 'statusMessage';
   statusDiv.className = 'status loading';
   statusDiv.textContent = 'Loading configuration...';
-  document.querySelector('.container').insertBefore(statusDiv, document.querySelector('form'));
+  
+  const container = document.querySelector('.container');
+  if (container) {
+    // Insert at the beginning of the container
+    container.insertBefore(statusDiv, container.firstChild);
+  }
   
   // Fetch configuration
   fetch('/config.json')

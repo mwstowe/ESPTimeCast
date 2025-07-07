@@ -32,6 +32,19 @@ void createDefaultConfig();
 
 // Function to create default config.json
 void createDefaultConfig() {
+  // External variables used in this function
+  extern int brightness;
+  extern float tempAdjust;
+  extern bool flipDisplay;
+  extern bool twelveHourToggle;
+  extern bool showDayOfWeek;
+  extern bool showIndoorTemp;
+  extern bool showOutdoorTemp;
+  extern bool useNetatmoOutdoor;
+  extern bool prioritizeNetatmoIndoor;
+  extern char ntpServer1[64];
+  extern char ntpServer2[64];
+  
   Serial.println(F("[CONFIG] Creating default config.json"));
   DynamicJsonDocument doc(512);
   doc[F("ssid")] = "";

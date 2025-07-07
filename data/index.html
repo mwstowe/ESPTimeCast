@@ -288,10 +288,6 @@ window.onload = function() {
       if (data.useNetatmoOutdoor !== undefined) document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor;
       if (data.prioritizeNetatmoIndoor !== undefined) document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor;
       
-      // Weather fields
-      if (data.weatherCity) document.getElementById('weatherCity').value = data.weatherCity;
-      if (data.weatherApiKey) document.getElementById('weatherApiKey').value = data.weatherApiKey;
-      
       // Auto-detect browser's timezone if not set in config
       if (!data.timeZone) {
         try {
@@ -487,19 +483,6 @@ function updateSavingModal(message, showSpinner = true) {
             <option value="Asia/Tokyo">Tokyo</option>
             <option value="Australia/Sydney">Sydney</option>
           </select>
-        </div>
-      </div>
-      
-      <div class="section">
-        <h2>Weather Settings</h2>
-        <div class="form-group">
-          <label for="weatherCity">City:</label>
-          <input type="text" id="weatherCity" name="weatherCity" placeholder="e.g., London,UK">
-        </div>
-        
-        <div class="form-group">
-          <label for="weatherApiKey">OpenWeatherMap API Key:</label>
-          <input type="text" id="weatherApiKey" name="weatherApiKey">
         </div>
       </div>
       

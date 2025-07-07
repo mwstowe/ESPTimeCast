@@ -284,9 +284,10 @@ window.onload = function() {
       if (data.showIndoorTemp !== undefined) document.getElementById('showIndoorTemp').checked = data.showIndoorTemp;
       if (data.showOutdoorTemp !== undefined) document.getElementById('showOutdoorTemp').checked = data.showOutdoorTemp;
       
-      // Weather fields
-      if (data.weatherCity) document.getElementById('weatherCity').value = data.weatherCity;
-      if (data.weatherApiKey) document.getElementById('weatherApiKey').value = data.weatherApiKey;
+      // Netatmo temperature settings
+      if (data.useNetatmoOutdoor !== undefined) document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor;
+      if (data.prioritizeNetatmoIndoor !== undefined) document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor;
+      
       // Weather fields
       if (data.weatherCity) document.getElementById('weatherCity').value = data.weatherCity;
       if (data.weatherApiKey) document.getElementById('weatherApiKey').value = data.weatherApiKey;
@@ -302,9 +303,6 @@ window.onload = function() {
           console.error('Error detecting timezone:', e);
         }
       }
-      
-      // Update token status
-      updateTokenStatus();
       
       // Show the body now that everything is loaded
       document.body.classList.add('loaded');
@@ -527,6 +525,16 @@ function updateSavingModal(message, showSpinner = true) {
         <div class="checkbox-group">
           <input type="checkbox" id="showOutdoorTemp" name="showOutdoorTemp" checked>
           <label for="showOutdoorTemp">Show Outdoor Temperature</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
+          <label for="useNetatmoOutdoor">Use Netatmo for outdoor temperature</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="prioritizeNetatmoIndoor" name="prioritizeNetatmoIndoor">
+          <label for="prioritizeNetatmoIndoor">Prioritize Netatmo for indoor temperature</label>
         </div>
       </div>
       

@@ -635,6 +635,22 @@ void setupWebServer() {
   });
   
   // Add new API endpoint to fetch Netatmo devices
+  // Add a test endpoint to trigger a crash for testing
+  server.on("/crash", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /crash"));
+    
+    // Send response before crashing
+    request->send(200, "text/html", "<html><body><h1>Triggering crash...</h1><p>The device will crash now. Check the debug page after restart.</p></body></html>");
+    
+    // Delay to allow the response to be sent
+    delay(1000);
+    
+    // Trigger a crash by dereferencing a null pointer
+    Serial.println(F("[WEBSERVER] Triggering crash..."));
+    char* p = NULL;
+    *p = 'x';
+  });
+  
   server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
@@ -644,60 +660,98 @@ void setupWebServer() {
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /debug"));
     
-    DynamicJsonDocument doc(1024);
-    doc[F("heap")] = ESP.getFreeHeap();
-    doc[F("sketch_size")] = ESP.getSketchSize();
-    doc[F("free_sketch_space")] = ESP.getFreeSketchSpace();
-    doc[F("flash_chip_size")] = ESP.getFlashChipSize();
-    doc[F("flash_chip_real_size")] = ESP.getFlashChipRealSize();
+    String html = "<html><body>";
+    html += "<h1>ESPTimeCast Debug Information</h1>";
+    
+    // Add crash information
+    html += getCrashInfoHtml();
+    
+    // Add memory information
+    html += "<h2>Memory Information</h2>";
+    html += "<p>Free Heap: " + String(ESP.getFreeHeap()) + " bytes</p>";
+    html += "<p>Heap Fragmentation: " + String(ESP.getHeapFragmentation()) + "%</p>";
+    html += "<p>Free Stack: " + String(ESP.getFreeContStack()) + " bytes</p>";
+    
+    // Add system information
+    html += "<h2>System Information</h2>";
+    html += "<p>Chip ID: " + String(ESP.getChipId(), HEX) + "</p>";
+    html += "<p>Core Version: " + String(ESP.getCoreVersion()) + "</p>";
+    html += "<p>SDK Version: " + String(ESP.getSdkVersion()) + "</p>";
+    html += "<p>CPU Frequency: " + String(ESP.getCpuFreqMHz()) + " MHz</p>";
+    html += "<p>Flash Chip ID: " + String(ESP.getFlashChipId(), HEX) + "</p>";
+    html += "<p>Flash Chip Size: " + String(ESP.getFlashChipSize() / 1024) + " KB</p>";
+    html += "<p>Flash Chip Real Size: " + String(ESP.getFlashChipRealSize() / 1024) + " KB</p>";
+    html += "<p>Flash Chip Speed: " + String(ESP.getFlashChipSpeed() / 1000000) + " MHz</p>";
+    html += "<p>Sketch Size: " + String(ESP.getSketchSize() / 1024) + " KB</p>";
+    html += "<p>Free Sketch Space: " + String(ESP.getFreeSketchSpace() / 1024) + " KB</p>";
+    
+    // Add WiFi information
+    html += "<h2>WiFi Information</h2>";
+    html += "<p>WiFi Mode: " + String(WiFi.getMode()) + "</p>";
+    html += "<p>MAC Address: " + WiFi.macAddress() + "</p>";
+    html += "<p>SSID: " + WiFi.SSID() + "</p>";
+    html += "<p>RSSI: " + String(WiFi.RSSI()) + " dBm</p>";
+    html += "<p>IP Address: " + WiFi.localIP().toString() + "</p>";
+    html += "<p>Subnet Mask: " + WiFi.subnetMask().toString() + "</p>";
+    html += "<p>Gateway IP: " + WiFi.gatewayIP().toString() + "</p>";
+    html += "<p>DNS IP: " + WiFi.dnsIP().toString() + "</p>";
+    
+    // Add file system information
+    html += "<h2>File System Information</h2>";
     
     // Check LittleFS
-    bool fsOK = LittleFS.begin();
-    doc[F("littlefs_mounted")] = fsOK;
-    
-    if (fsOK) {
+    if (LittleFS.begin()) {
       FSInfo fs_info;
       LittleFS.info(fs_info);
-      doc[F("fs_total_bytes")] = fs_info.totalBytes;
-      doc[F("fs_used_bytes")] = fs_info.usedBytes;
-      doc[F("fs_block_size")] = fs_info.blockSize;
-      doc[F("fs_page_size")] = fs_info.pageSize;
+      html += "<p>Total Bytes: " + String(fs_info.totalBytes) + "</p>";
+      html += "<p>Used Bytes: " + String(fs_info.usedBytes) + "</p>";
+      html += "<p>Block Size: " + String(fs_info.blockSize) + "</p>";
+      html += "<p>Page Size: " + String(fs_info.pageSize) + "</p>";
+      html += "<p>Max Open Files: " + String(fs_info.maxOpenFiles) + "</p>";
+      html += "<p>Max Path Length: " + String(fs_info.maxPathLength) + "</p>";
+      
+      // List files
+      html += "<h3>Files:</h3>";
+      html += "<ul>";
       
       // List files
       Dir dir = LittleFS.openDir("/");
-      JsonArray files = doc.createNestedArray("files");
       while (dir.next()) {
-        JsonObject file = files.createNestedObject();
-        file["name"] = dir.fileName();
-        file["size"] = dir.fileSize();
+        html += "<li>" + dir.fileName() + " - " + String(dir.fileSize()) + " bytes</li>";
       }
+      html += "</ul>";
       
       // Check config.json
       bool configExists = LittleFS.exists("/config.json");
-      doc[F("config_exists")] = configExists;
+      html += "<h3>Configuration File:</h3>";
       
       if (configExists) {
         File f = LittleFS.open("/config.json", "r");
         if (f) {
-          doc[F("config_size")] = f.size();
+          html += "<p>Size: " + String(f.size()) + " bytes</p>";
           
           if (f.size() > 0) {
             String configContent = f.readString();
-            doc[F("config_content")] = configContent.substring(0, 100) + "..."; // First 100 chars
+            html += "<p>Content (first 100 chars): <pre>" + configContent.substring(0, 100) + "...</pre></p>";
           } else {
-            doc[F("config_content")] = "Empty file";
+            html += "<p>File is empty</p>";
           }
           
           f.close();
         } else {
-          doc[F("config_open_error")] = true;
+          html += "<p>Failed to open config file</p>";
         }
+      } else {
+        html += "<p>Config file does not exist</p>";
       }
+    } else {
+      html += "<p>Failed to mount file system</p>";
     }
     
-    String response;
-    serializeJson(doc, response);
-    request->send(200, "application/json", response);
+    html += "<p><a href='/'>Return to configuration</a></p>";
+    html += "</body></html>";
+    
+    request->send(200, "text/html", html);
   });
   
   server.on("/format", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -1274,6 +1328,10 @@ void setup() {
   delay(500); // Give serial monitor time to connect
   Serial.println();
   Serial.println(F("[SETUP] Starting setup..."));
+  
+  // Initialize crash handler
+  setupCrashHandler();
+  
   P.begin();
   P.setFont(mFactory); // Custom font
   

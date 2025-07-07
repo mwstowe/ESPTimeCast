@@ -741,20 +741,46 @@ window.onbeforeunload = function () {
 
 window.onload = function () {
   console.log("Loading configuration...");
-  fetch('/config.json')
-    .then(response => {
-      console.log("Config response status:", response.status);
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(data => {
-      console.log("Config loaded successfully");
-      isAPMode = (data.mode === "ap");
-      if (isAPMode) {
-        document.querySelector('.footer').style.display = 'none';
-      }
+  
+  // Try to use hardcoded config for testing
+  try {
+    console.log("Using hardcoded config for testing");
+    const hardcodedConfig = {
+      "ssid": "",
+      "password": "",
+      "netatmoClientId": "",
+      "netatmoClientSecret": "",
+      "netatmoUsername": "",
+      "netatmoPassword": "",
+      "netatmoAccessToken": "",
+      "netatmoRefreshToken": "",
+      "netatmoDeviceId": "",
+      "netatmoModuleId": "",
+      "mdnsHostname": "esptime",
+      "clockDuration": 10000,
+      "weatherDuration": 5000,
+      "timeZone": "",
+      "weatherUnits": "metric",
+      "brightness": 10,
+      "tempAdjust": 0,
+      "flipDisplay": false,
+      "ntpServer1": "pool.ntp.org",
+      "ntpServer2": "time.nist.gov",
+      "twelveHourToggle": false,
+      "showDayOfWeek": true,
+      "showIndoorTemp": true,
+      "showOutdoorTemp": true,
+      "mode": "sta"
+    };
+    
+    // Use the hardcoded config
+    const data = hardcodedConfig;
+    
+    // Process the config
+    isAPMode = (data.mode === "ap");
+    if (isAPMode) {
+      document.querySelector('.footer').style.display = 'none';
+    }
 
       document.getElementById('ssid').value = data.ssid || '';
       document.getElementById('password').value = data.password || '';
@@ -809,34 +835,31 @@ window.onload = function () {
       } else {
         document.getElementById('timeZone').value = data.timeZone;
       }
-    })
-    .catch(err => {
-      console.error('Failed to load config:', err);
-      
-      // Create an error message element
-      const errorDiv = document.createElement('div');
-      errorDiv.style.backgroundColor = '#ff5555';
-      errorDiv.style.color = 'white';
-      errorDiv.style.padding = '20px';
-      errorDiv.style.margin = '20px 0';
-      errorDiv.style.borderRadius = '5px';
-      errorDiv.innerHTML = `
-        <h3>Configuration Error</h3>
-        <p>Failed to load configuration: ${err.message}</p>
-        <p>Please check the serial console for more details.</p>
-      `;
-      
-      // Insert at the top of the body
-      document.body.insertBefore(errorDiv, document.body.firstChild);
-      
-      showSavingModal("");
-      updateSavingModal("⚠️ Failed to load configuration.", false);
-
-      // Show appropriate button for load error
-      removeReloadButton();
-      removeRestoreButton();
-      ensureReloadButton();
-    });
+    document.body.classList.add('loaded');
+  } catch (err) {
+    console.error('Error processing hardcoded config:', err);
+    
+    // Create an error message element
+    const errorDiv = document.createElement('div');
+    errorDiv.style.backgroundColor = '#ff5555';
+    errorDiv.style.color = 'white';
+    errorDiv.style.padding = '20px';
+    errorDiv.style.margin = '20px 0';
+    errorDiv.style.borderRadius = '5px';
+    errorDiv.innerHTML = `
+      <h3>Configuration Error</h3>
+      <p>Failed to process hardcoded configuration: ${err.message}</p>
+      <p>Error location: ${err.stack}</p>
+    `;
+    
+    // Insert at the top of the body
+    document.body.insertBefore(errorDiv, document.body.firstChild);
+    
+    showSavingModal("");
+    updateSavingModal("⚠️ Failed to process configuration.", false);
+    ensureReloadButton();
+  }
+};
   document.querySelector('html').style.height = 'unset';       
   document.body.classList.add('loaded');     
 };

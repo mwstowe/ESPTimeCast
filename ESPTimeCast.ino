@@ -643,7 +643,7 @@ String getNetatmoToken() {
 }
 
 // Function to read indoor temperature from DS18B20
-void readIndoorTemperature() {
+void readIndoorTemperature(bool roundToInteger = false) {
   Serial.println(F("[DS18B20] Reading indoor temperature..."));
   
   sensors.requestTemperatures();
@@ -655,7 +655,7 @@ void readIndoorTemperature() {
     Serial.println(F("°C"));
     
     // Format the temperature using our helper function
-    indoorTemp = formatTemperature(tempC);
+    indoorTemp = formatTemperature(tempC, roundToInteger);
     indoorTemp += "º";
     
     indoorTempAvailable = true;
@@ -713,7 +713,7 @@ void saveTokensToConfig() {
 }
 
 // Function to fetch outdoor temperature from Netatmo
-void fetchOutdoorTemperature() {
+void fetchOutdoorTemperature(bool roundToInteger = true) {
   Serial.println(F("\n[NETATMO] Fetching outdoor temperature..."));
   
   if (WiFi.status() != WL_CONNECTED) {
@@ -817,7 +817,7 @@ void fetchOutdoorTemperature() {
                     temp = (temp * 9.0 / 5.0) + 32.0; // Convert to Fahrenheit
                   }
                   
-                  outdoorTemp = String((int)round(temp)) + "º";
+                  outdoorTemp = formatTemperature(temp, roundToInteger) + "º";
                   Serial.print(F("[NETATMO] Outdoor temperature: "));
                   Serial.println(outdoorTemp);
                   outdoorTempAvailable = true;
@@ -903,17 +903,22 @@ void fetchOutdoorTemperature() {
 void updateTemperatures() {
   Serial.println(F("[TEMP] Updating temperatures..."));
   
+  // Determine if we need to round temperatures to integers
+  // (when both indoor and outdoor temps will be displayed)
+  bool shouldRound = showIndoorTemp && (strlen(netatmoDeviceId) > 0 && strlen(netatmoModuleId) > 0);
+  
   // Handle indoor temperature based on source setting
   if (tempSource == 0) { // Local sensor primary
     // Read indoor temperature from DS18B20
-    readIndoorTemperature();
+    readIndoorTemperature(shouldRound);
     
     // If local sensor failed and Netatmo indoor module is configured, try that as fallback
     if (!indoorTempAvailable && strlen(netatmoIndoorModuleId) > 0) {
       fetchNetatmoIndoorTemperature();
       if (netatmoIndoorTempAvailable) {
         // Convert Netatmo temperature to the same format as local sensor
-        indoorTemp = formatTemperature(netatmoIndoorTemp);
+        indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound);
+        indoorTemp += "º";
         indoorTempAvailable = true;
         Serial.println(F("[TEMP] Using Netatmo as fallback for indoor temperature"));
       }
@@ -924,18 +929,19 @@ void updateTemperatures() {
       fetchNetatmoIndoorTemperature();
       if (netatmoIndoorTempAvailable) {
         // Convert Netatmo temperature to the same format as local sensor
-        indoorTemp = formatTemperature(netatmoIndoorTemp);
+        indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound);
+        indoorTemp += "º";
         indoorTempAvailable = true;
       } else {
         // Fallback to local sensor if Netatmo failed
-        readIndoorTemperature();
+        readIndoorTemperature(shouldRound);
         if (indoorTempAvailable) {
           Serial.println(F("[TEMP] Using local sensor as fallback for indoor temperature"));
         }
       }
     } else {
       // No Netatmo indoor module configured, use local sensor
-      readIndoorTemperature();
+      readIndoorTemperature(shouldRound);
     }
   } else if (tempSource == 2) { // Netatmo only
     // Only use Netatmo if configured
@@ -943,7 +949,8 @@ void updateTemperatures() {
       fetchNetatmoIndoorTemperature();
       if (netatmoIndoorTempAvailable) {
         // Convert Netatmo temperature to the same format as local sensor
-        indoorTemp = formatTemperature(netatmoIndoorTemp);
+        indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound);
+        indoorTemp += "º";
         indoorTempAvailable = true;
       } else {
         indoorTempAvailable = false;
@@ -954,7 +961,7 @@ void updateTemperatures() {
   }
   
   // Fetch outdoor temperature from Netatmo
-  fetchOutdoorTemperature();
+  fetchOutdoorTemperature(shouldRound);
   
   // Set weatherFetched flag if at least one temperature is available
   weatherFetched = indoorTempAvailable || outdoorTempAvailable;

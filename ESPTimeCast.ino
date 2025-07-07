@@ -529,6 +529,10 @@ void setupWebServer() {
     }
     serializeJson(doc, f);
     f.close();
+    
+    // Create a backup of the configuration
+    backupConfig();
+    
     File verify = LittleFS.open("/config.json", "r");
     DynamicJsonDocument test(2048);
     DeserializationError err = deserializeJson(test, verify);
@@ -1272,6 +1276,12 @@ void setup() {
   Serial.println(F("[SETUP] Starting setup..."));
   P.begin();
   P.setFont(mFactory); // Custom font
+  
+  // Check and repair configuration if needed
+  if (!checkAndRepairConfig()) {
+    Serial.println(F("[SETUP] WARNING: Configuration check failed"));
+  }
+  
   loadConfig(); // Load config before setting intensity & flip
   P.setIntensity(brightness);
   P.setZoneEffect(0, flipDisplay, PA_FLIP_UD);

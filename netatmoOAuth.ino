@@ -82,15 +82,30 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   Serial.print(F("[NETATMO] Received authorization code: "));
   Serial.println(code);
   
+  // Send a response immediately to prevent timeout
+  String html = "<html><body><h1>Processing Authorization</h1>";
+  html += "<p>Processing your Netatmo authorization...</p>";
+  html += "<p>This may take a moment. Please wait.</p>";
+  html += "<script>setTimeout(function(){ window.location.href = '/'; }, 5000);</script>";
+  html += "</body></html>";
+  
+  request->send(200, "text/html", html);
+  
+  // Process the authorization code asynchronously
+  processNetatmoCode(code);
+}
+
+// Process Netatmo authorization code asynchronously
+void processNetatmoCode(String code) {
   // Get client ID and secret from config
   if (!LittleFS.begin()) {
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Failed to mount file system</p></body></html>");
+    Serial.println(F("[NETATMO] Failed to mount file system"));
     return;
   }
   
   File f = LittleFS.open("/config.json", "r");
   if (!f) {
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Failed to open config file</p></body></html>");
+    Serial.println(F("[NETATMO] Failed to open config file"));
     return;
   }
   
@@ -99,7 +114,7 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   f.close();
   
   if (err) {
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Failed to parse config file</p></body></html>");
+    Serial.println(F("[NETATMO] Failed to parse config file"));
     return;
   }
   
@@ -107,7 +122,7 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   String clientSecret = doc["netatmoClientSecret"].as<String>();
   
   if (clientId.length() == 0 || clientSecret.length() == 0) {
-    request->send(400, "text/html", "<html><body><h1>Error</h1><p>Netatmo Client ID or Secret not configured</p></body></html>");
+    Serial.println(F("[NETATMO] Missing client credentials"));
     return;
   }
   
@@ -115,12 +130,13 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   String ipAddress = WiFi.localIP().toString();
   String redirectUri = "http://" + ipAddress + "/oauth2/callback";
   
-  // Exchange the authorization code for tokens
+  // Exchange the authorization code for tokens with timeout protection
   WiFiClient client;
   HTTPClient http;
   
   http.begin(client, "https://api.netatmo.com/oauth2/token");
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.setTimeout(10000); // 10 second timeout
   
   String postData = "grant_type=authorization_code";
   postData += "&client_id=" + clientId;
@@ -141,13 +157,6 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
     Serial.print(F("[NETATMO] Response: "));
     Serial.println(payload);
     
-    String html = "<html><body><h1>Token Exchange Failed</h1>";
-    html += "<p>Error: " + error + "</p>";
-    html += "<p>Response: " + payload + "</p>";
-    html += "<p><a href='/'>Return to configuration</a></p>";
-    html += "</body></html>";
-    
-    request->send(500, "text/html", html);
     http.end();
     return;
   }
@@ -165,7 +174,6 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   if (tokenErr) {
     Serial.print(F("[NETATMO] Failed to parse token response: "));
     Serial.println(tokenErr.c_str());
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Failed to parse token response</p></body></html>");
     return;
   }
   
@@ -175,7 +183,6 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   
   if (accessToken.length() == 0 || refreshToken.length() == 0) {
     Serial.println(F("[NETATMO] Invalid token response - missing tokens"));
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Invalid token response</p></body></html>");
     return;
   }
   
@@ -188,29 +195,17 @@ void handleNetatmoCallback(AsyncWebServerRequest *request) {
   File configFile = LittleFS.open("/config.json", "w");
   if (!configFile) {
     Serial.println(F("[NETATMO] Failed to open config file for writing"));
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Failed to open config file for writing</p></body></html>");
     return;
   }
   
   if (serializeJsonPretty(doc, configFile) == 0) {
     configFile.close();
     Serial.println(F("[NETATMO] Failed to write config file"));
-    request->send(500, "text/html", "<html><body><h1>Error</h1><p>Failed to write config file</p></body></html>");
     return;
   }
   
   configFile.close();
   Serial.println(F("[NETATMO] Tokens saved to config"));
-  
-  // Redirect back to the configuration page
-  String html = "<html><body><h1>Authorization Successful</h1>";
-  html += "<p>Netatmo authorization completed successfully!</p>";
-  html += "<p>The access and refresh tokens have been saved.</p>";
-  html += "<script>setTimeout(function(){ window.location.href = '/'; }, 3000);</script>";
-  html += "<p><a href='/'>Return to configuration</a></p>";
-  html += "</body></html>";
-  
-  request->send(200, "text/html", html);
 }
 
 // Function to refresh Netatmo token
@@ -254,6 +249,7 @@ bool refreshNetatmoToken() {
   
   http.begin(client, "https://api.netatmo.com/oauth2/token");
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.setTimeout(10000); // 10 second timeout
   
   String postData = "grant_type=refresh_token";
   postData += "&client_id=" + clientId;

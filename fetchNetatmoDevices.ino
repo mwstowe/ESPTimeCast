@@ -7,38 +7,64 @@ String fetchNetatmoDevices() {
     return "{\"error\":\"WiFi not connected\"}";
   }
   
-  // Get access token from config
+  // Get access token from config with error handling
   if (!LittleFS.begin()) {
+    Serial.println(F("[NETATMO] Failed to mount file system"));
     return "{\"error\":\"Failed to mount file system\"}";
+  }
+  
+  if (!LittleFS.exists("/config.json")) {
+    Serial.println(F("[NETATMO] Config file does not exist"));
+    return "{\"error\":\"Configuration file not found\"}";
   }
   
   File f = LittleFS.open("/config.json", "r");
   if (!f) {
+    Serial.println(F("[NETATMO] Failed to open config file"));
     return "{\"error\":\"Failed to open config file\"}";
   }
   
-  DynamicJsonDocument doc(2048);
-  DeserializationError err = deserializeJson(doc, f);
+  size_t fileSize = f.size();
+  if (fileSize == 0) {
+    f.close();
+    Serial.println(F("[NETATMO] Config file is empty"));
+    return "{\"error\":\"Configuration file is empty\"}";
+  }
+  
+  // Read the file content
+  String fileContent = f.readString();
   f.close();
   
+  // Parse the JSON
+  DynamicJsonDocument doc(2048);
+  DeserializationError err = deserializeJson(doc, fileContent);
+  
   if (err) {
-    return "{\"error\":\"Failed to parse config file\"}";
+    Serial.print(F("[NETATMO] Failed to parse config file: "));
+    Serial.println(err.c_str());
+    return "{\"error\":\"Failed to parse config file: " + String(err.c_str()) + "\"}";
+  }
+  
+  // Check if access token exists
+  if (!doc.containsKey("netatmoAccessToken") || doc["netatmoAccessToken"].as<String>().length() == 0) {
+    Serial.println(F("[NETATMO] No access token available"));
+    return "{\"error\":\"No access token available. Please authorize with Netatmo first.\"}";
   }
   
   String accessToken = doc["netatmoAccessToken"].as<String>();
   
-  if (accessToken.length() == 0) {
-    return "{\"error\":\"No access token available. Please authorize with Netatmo first.\"}";
-  }
-  
-  // Make API request to get devices
+  // Make API request to get devices with timeout protection
   WiFiClient client;
   HTTPClient http;
   
   http.begin(client, "https://api.netatmo.com/api/getstationsdata");
   http.addHeader("Authorization", "Bearer " + accessToken);
+  http.setTimeout(10000); // 10 second timeout
   
+  Serial.println(F("[NETATMO] Sending request to Netatmo API"));
   int httpCode = http.GET();
+  Serial.print(F("[NETATMO] HTTP response code: "));
+  Serial.println(httpCode);
   
   if (httpCode == HTTP_CODE_UNAUTHORIZED) {
     Serial.println(F("[NETATMO] Token expired, refreshing"));
@@ -49,28 +75,37 @@ String fetchNetatmoDevices() {
       File f = LittleFS.open("/config.json", "r");
       if (!f) {
         http.end();
+        Serial.println(F("[NETATMO] Failed to open config file after token refresh"));
         return "{\"error\":\"Failed to open config file after token refresh\"}";
       }
       
-      DynamicJsonDocument doc(2048);
-      DeserializationError err = deserializeJson(doc, f);
+      String fileContent = f.readString();
       f.close();
       
-      if (err) {
+      DynamicJsonDocument refreshDoc(2048);
+      DeserializationError refreshErr = deserializeJson(refreshDoc, fileContent);
+      
+      if (refreshErr) {
         http.end();
+        Serial.println(F("[NETATMO] Failed to parse config file after token refresh"));
         return "{\"error\":\"Failed to parse config file after token refresh\"}";
       }
       
-      accessToken = doc["netatmoAccessToken"].as<String>();
+      accessToken = refreshDoc["netatmoAccessToken"].as<String>();
       
       // Retry the request with the new token
       http.end();
       http.begin(client, "https://api.netatmo.com/api/getstationsdata");
       http.addHeader("Authorization", "Bearer " + accessToken);
+      http.setTimeout(10000); // 10 second timeout
       
+      Serial.println(F("[NETATMO] Retrying request with new token"));
       httpCode = http.GET();
+      Serial.print(F("[NETATMO] HTTP response code after refresh: "));
+      Serial.println(httpCode);
     } else {
       http.end();
+      Serial.println(F("[NETATMO] Failed to refresh token"));
       return "{\"error\":\"Failed to refresh token\"}";
     }
   }
@@ -88,22 +123,31 @@ String fetchNetatmoDevices() {
   String payload = http.getString();
   http.end();
   
-  // Parse the response
+  Serial.println(F("[NETATMO] Response received, parsing..."));
+  
+  // Parse the response with error handling
   DynamicJsonDocument apiDoc(8192);
   DeserializationError apiErr = deserializeJson(apiDoc, payload);
   
   if (apiErr) {
     Serial.print(F("[NETATMO] Failed to parse API response: "));
     Serial.println(apiErr.c_str());
-    return "{\"error\":\"Failed to parse API response\"}";
+    return "{\"error\":\"Failed to parse API response: " + String(apiErr.c_str()) + "\"}";
   }
   
   // Check for API error
-  if (apiDoc["status"] != "ok") {
-    String errorMsg = apiDoc["error"]["message"].as<String>();
+  if (!apiDoc.containsKey("status") || apiDoc["status"] != "ok") {
+    String errorMsg = apiDoc.containsKey("error") && apiDoc["error"].containsKey("message") ? 
+                      apiDoc["error"]["message"].as<String>() : "Unknown error";
     Serial.print(F("[NETATMO] API error: "));
     Serial.println(errorMsg);
     return "{\"error\":\"API error: " + errorMsg + "\"}";
+  }
+  
+  // Check if body and devices exist
+  if (!apiDoc.containsKey("body") || !apiDoc["body"].containsKey("devices")) {
+    Serial.println(F("[NETATMO] No devices found in response"));
+    return "{\"error\":\"No devices found in response\"}";
   }
   
   // Extract devices
@@ -113,12 +157,21 @@ String fetchNetatmoDevices() {
   DynamicJsonDocument responseDoc(4096);
   JsonArray responseDevices = responseDoc.createNestedArray("devices");
   
+  Serial.print(F("[NETATMO] Found "));
+  Serial.print(devices.size());
+  Serial.println(F(" devices"));
+  
   for (JsonObject device : devices) {
+    if (!device.containsKey("_id") || !device.containsKey("station_name")) {
+      Serial.println(F("[NETATMO] Skipping device with missing ID or name"));
+      continue;
+    }
+    
     JsonObject responseDevice = responseDevices.createNestedObject();
     
     responseDevice["id"] = device["_id"].as<String>();
     responseDevice["name"] = device["station_name"].as<String>();
-    responseDevice["type"] = device["type"].as<String>();
+    responseDevice["type"] = device.containsKey("type") ? device["type"].as<String>() : "unknown";
     
     // Add the main device as a module option (for indoor temperature)
     JsonArray responseModules = responseDevice.createNestedArray("modules");
@@ -131,7 +184,16 @@ String fetchNetatmoDevices() {
     if (device.containsKey("modules")) {
       JsonArray modules = device["modules"];
       
+      Serial.print(F("[NETATMO] Found "));
+      Serial.print(modules.size());
+      Serial.println(F(" modules for this device"));
+      
       for (JsonObject module : modules) {
+        if (!module.containsKey("_id") || !module.containsKey("module_name") || !module.containsKey("type")) {
+          Serial.println(F("[NETATMO] Skipping module with missing ID, name, or type"));
+          continue;
+        }
+        
         JsonObject responseModule = responseModules.createNestedObject();
         
         responseModule["id"] = module["_id"].as<String>();
@@ -141,8 +203,11 @@ String fetchNetatmoDevices() {
     }
   }
   
+  // Serialize the response
   String response;
   serializeJson(responseDoc, response);
+  
+  Serial.println(F("[NETATMO] Successfully processed devices"));
   return response;
 }
 

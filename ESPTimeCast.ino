@@ -393,6 +393,12 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /"));
     request->send(LittleFS, "/index.html", "text/html");
   });
+  
+  server.on("/netatmo.html", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /netatmo.html"));
+    request->send(LittleFS, "/netatmo.html", "text/html");
+  });
+  
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /config.json"));
     

@@ -155,6 +155,28 @@ button:hover {
   height: 40px;
   animation: spin 1s linear infinite;
   margin: 20px auto;
+  .nav-links {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .nav-links a {
+    color: #ffffff;
+    text-decoration: none;
+    margin: 0 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    transition: background-color 0.2s;
+  }
+
+  .nav-links a:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .nav-links a.active {
+    background-color: var(--accent-color);
+  }
 }
 
 @keyframes spin {
@@ -590,6 +612,11 @@ function loadModules() {
 <body>
   <div class="container">
     <h1>ESPTimeCast Settings</h1>
+    
+    <div class="nav-links">
+      <a href="/" class="active">General Settings</a>
+      <a href="/netatmo.html">Netatmo Settings</a>
+    </div>
     
     <form id="configForm">
       <div class="section">

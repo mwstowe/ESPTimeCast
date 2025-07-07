@@ -53,31 +53,51 @@ void createDefaultConfig() {
     return;
   }
   
-  // Create a minimal config first
-  DynamicJsonDocument doc(512);
+  // Create a complete default config
+  DynamicJsonDocument doc(1024);
   doc[F("ssid")] = "";
   doc[F("password")] = "";
+  doc[F("netatmoClientId")] = "";
+  doc[F("netatmoClientSecret")] = "";
+  doc[F("netatmoDeviceId")] = "";
+  doc[F("netatmoModuleId")] = "";
+  doc[F("netatmoIndoorModuleId")] = "";
+  doc[F("netatmoAccessToken")] = "";
+  doc[F("netatmoRefreshToken")] = "";
   doc[F("mdnsHostname")] = "esptime";
   doc[F("weatherUnits")] = "metric";
+  doc[F("clockDuration")] = 10000;
+  doc[F("weatherDuration")] = 5000;
   doc[F("timeZone")] = "";
   doc[F("brightness")] = brightness;
+  doc[F("tempAdjust")] = tempAdjust;
   doc[F("flipDisplay")] = flipDisplay;
+  doc[F("twelveHourToggle")] = twelveHourToggle;
+  doc[F("showDayOfWeek")] = showDayOfWeek;
+  doc[F("showIndoorTemp")] = showIndoorTemp;
+  doc[F("showOutdoorTemp")] = showOutdoorTemp;
+  doc[F("useNetatmoOutdoor")] = useNetatmoOutdoor;
+  doc[F("prioritizeNetatmoIndoor")] = prioritizeNetatmoIndoor;
+  doc[F("ntpServer1")] = ntpServer1;
+  doc[F("ntpServer2")] = ntpServer2;
   
-  // Write the minimal config
+  // Write the config
   File f = LittleFS.open("/config.json", "w");
   if (!f) {
     Serial.println(F("[CONFIG] ERROR: Failed to open config.json for writing"));
     return;
   }
   
-  if (serializeJsonPretty(doc, f) == 0) {
+  size_t bytesWritten = serializeJsonPretty(doc, f);
+  if (bytesWritten == 0) {
     Serial.println(F("[CONFIG] ERROR: Failed to write to config.json"));
     f.close();
     return;
   }
   
+  Serial.print(F("[CONFIG] Default config.json created successfully, bytes written: "));
+  Serial.println(bytesWritten);
   f.close();
-  Serial.println(F("[CONFIG] Default config.json created successfully"));
   
   // Verify the file was created correctly
   f = LittleFS.open("/config.json", "r");
@@ -95,6 +115,13 @@ void createDefaultConfig() {
     f.close();
     return;
   }
+  
+  // Read and print the first 100 bytes of the file
+  Serial.print(F("[CONFIG] First 100 bytes of config.json: "));
+  for (int i = 0; i < min(100, (int)fileSize); i++) {
+    Serial.print((char)f.read());
+  }
+  Serial.println();
   
   f.close();
 }
@@ -612,31 +639,6 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
-  });
-  
-  // Add a route to reset the configuration
-  server.on("/reset_config", HTTP_POST, [](AsyncWebServerRequest *request){
-    Serial.println(F("[WEBSERVER] Request: /reset_config"));
-    
-    // Format the file system
-    bool success = formatLittleFS();
-    
-    if (success) {
-      // Try to mount and create default config
-      if (LittleFS.begin()) {
-        createDefaultConfig();
-      }
-      
-      // Send success response
-      request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration reset successfully\"}");
-      
-      // Schedule a restart
-      delay(1000);
-      ESP.restart();
-    } else {
-      // Send error response
-      request->send(500, "application/json", "{\"success\":false,\"message\":\"Failed to reset configuration\"}");
-    }
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

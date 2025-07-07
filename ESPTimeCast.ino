@@ -46,39 +46,57 @@ void createDefaultConfig() {
   extern char ntpServer2[64];
   
   Serial.println(F("[CONFIG] Creating default config.json"));
+  
+  // Make sure LittleFS is mounted
+  if (!LittleFS.begin()) {
+    Serial.println(F("[CONFIG] ERROR: LittleFS not mounted, cannot create config"));
+    return;
+  }
+  
+  // Create a minimal config first
   DynamicJsonDocument doc(512);
   doc[F("ssid")] = "";
   doc[F("password")] = "";
-  doc[F("netatmoClientId")] = "";
-  doc[F("netatmoClientSecret")] = "";
-  doc[F("netatmoDeviceId")] = "";
-  doc[F("netatmoModuleId")] = "";
-  doc[F("netatmoIndoorModuleId")] = "";
   doc[F("mdnsHostname")] = "esptime";
   doc[F("weatherUnits")] = "metric";
-  doc[F("clockDuration")] = 10000;
-  doc[F("weatherDuration")] = 5000;
   doc[F("timeZone")] = "";
   doc[F("brightness")] = brightness;
-  doc[F("tempAdjust")] = tempAdjust;
   doc[F("flipDisplay")] = flipDisplay;
-  doc[F("twelveHourToggle")] = twelveHourToggle;
-  doc[F("showDayOfWeek")] = showDayOfWeek;
-  doc[F("showIndoorTemp")] = showIndoorTemp;
-  doc[F("showOutdoorTemp")] = showOutdoorTemp;
-  doc[F("useNetatmoOutdoor")] = useNetatmoOutdoor;
-  doc[F("prioritizeNetatmoIndoor")] = prioritizeNetatmoIndoor;
-  doc[F("ntpServer1")] = ntpServer1;
-  doc[F("ntpServer2")] = ntpServer2;
   
+  // Write the minimal config
   File f = LittleFS.open("/config.json", "w");
-  if (f) {
-    serializeJsonPretty(doc, f);
-    f.close();
-    Serial.println(F("[CONFIG] Default config.json created"));
-  } else {
-    Serial.println(F("[CONFIG] ERROR: Failed to create default config.json"));
+  if (!f) {
+    Serial.println(F("[CONFIG] ERROR: Failed to open config.json for writing"));
+    return;
   }
+  
+  if (serializeJsonPretty(doc, f) == 0) {
+    Serial.println(F("[CONFIG] ERROR: Failed to write to config.json"));
+    f.close();
+    return;
+  }
+  
+  f.close();
+  Serial.println(F("[CONFIG] Default config.json created successfully"));
+  
+  // Verify the file was created correctly
+  f = LittleFS.open("/config.json", "r");
+  if (!f) {
+    Serial.println(F("[CONFIG] ERROR: Failed to open config.json for verification"));
+    return;
+  }
+  
+  size_t fileSize = f.size();
+  Serial.print(F("[CONFIG] config.json size: "));
+  Serial.println(fileSize);
+  
+  if (fileSize == 0) {
+    Serial.println(F("[CONFIG] ERROR: config.json is empty after creation"));
+    f.close();
+    return;
+  }
+  
+  f.close();
 }
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
@@ -194,11 +212,36 @@ void printConfigToSerial() {
   Serial.println();
 }
 
+// Function to format LittleFS if needed
+bool formatLittleFS() {
+  Serial.println(F("[CONFIG] Formatting LittleFS..."));
+  bool success = LittleFS.format();
+  if (success) {
+    Serial.println(F("[CONFIG] LittleFS formatted successfully"));
+  } else {
+    Serial.println(F("[CONFIG] ERROR: Failed to format LittleFS"));
+  }
+  return success;
+}
+
 void loadConfig() {
   Serial.println(F("[CONFIG] Loading configuration..."));
+  
+  // Try to mount LittleFS
   if (!LittleFS.begin()) {
-    Serial.println(F("[ERROR] LittleFS mount failed"));
-    return;
+    Serial.println(F("[CONFIG] ERROR: LittleFS mount failed, trying to format"));
+    
+    // Try to format the file system
+    if (formatLittleFS()) {
+      // Try to mount again
+      if (!LittleFS.begin()) {
+        Serial.println(F("[CONFIG] ERROR: LittleFS mount failed even after formatting"));
+        return;
+      }
+    } else {
+      Serial.println(F("[CONFIG] ERROR: LittleFS format failed"));
+      return;
+    }
   }
 
   if (!LittleFS.exists("/config.json")) {
@@ -208,7 +251,19 @@ void loadConfig() {
   
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
-    Serial.println(F("[ERROR] Failed to open config.json"));
+    Serial.println(F("[CONFIG] ERROR: Failed to open config.json"));
+    
+    // Try to recreate the config file
+    Serial.println(F("[CONFIG] Trying to recreate config.json"));
+    createDefaultConfig();
+    
+    // Try to open again
+    configFile = LittleFS.open("/config.json", "r");
+    if (!configFile) {
+      Serial.println(F("[CONFIG] ERROR: Failed to open config.json after recreation"));
+      return;
+    }
+  }
     return;
   }
   size_t size = configFile.size();
@@ -348,6 +403,21 @@ void setupWebServer() {
     if (!LittleFS.exists("/config.json")) {
       Serial.println(F("[WEBSERVER] config.json not found, creating default"));
       createDefaultConfig();
+      
+      // Verify the file was created
+      if (!LittleFS.exists("/config.json")) {
+        Serial.println(F("[WEBSERVER] ERROR: Failed to create config.json"));
+        request->send(500, "application/json", "{\"error\":\"Failed to create config.json\"}");
+        return;
+      }
+    }
+    
+    // Print file info
+    File infoFile = LittleFS.open("/config.json", "r");
+    if (infoFile) {
+      Serial.print(F("[WEBSERVER] config.json size: "));
+      Serial.println(infoFile.size());
+      infoFile.close();
     }
     
     File f = LittleFS.open("/config.json", "r");
@@ -357,12 +427,51 @@ void setupWebServer() {
       return;
     }
     
+    // Check file size
+    size_t fileSize = f.size();
+    if (fileSize == 0) {
+      Serial.println(F("[WEBSERVER] ERROR: config.json is empty"));
+      f.close();
+      
+      // Try to recreate the file
+      Serial.println(F("[WEBSERVER] Attempting to recreate config.json"));
+      createDefaultConfig();
+      
+      // Try to open again
+      f = LittleFS.open("/config.json", "r");
+      if (!f || f.size() == 0) {
+        Serial.println(F("[WEBSERVER] ERROR: Failed to recreate config.json"));
+        request->send(500, "application/json", "{\"error\":\"config.json is empty\"}");
+        return;
+      }
+    }
+    
+    // Read the first few bytes to check content
+    Serial.print(F("[WEBSERVER] First bytes of config.json: "));
+    for (int i = 0; i < min(20, (int)fileSize); i++) {
+      Serial.print((char)f.read());
+    }
+    Serial.println();
+    
+    // Reset file position
+    f.seek(0);
+    
     DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, f);
     f.close();
     if (err) {
       Serial.print(F("[WEBSERVER] Error parsing /config.json: "));
       Serial.println(err.f_str());
+      
+      // Try to read the file content for debugging
+      File debugFile = LittleFS.open("/config.json", "r");
+      if (debugFile) {
+        String content = debugFile.readString();
+        Serial.print(F("[WEBSERVER] config.json content: "));
+        Serial.println(content);
+        debugFile.close();
+      }
+      
       request->send(500, "application/json", "{\"error\":\"Failed to parse config.json\"}");
       return;
     }
@@ -500,6 +609,20 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
+  });
+  
+  // Add a route to format the file system if needed
+  server.on("/format", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /format"));
+    bool success = formatLittleFS();
+    if (success) {
+      // Try to mount and create default config
+      if (LittleFS.begin()) {
+        createDefaultConfig();
+      }
+    }
+    String response = "{\"success\":" + String(success ? "true" : "false") + "}";
+    request->send(200, "application/json", response);
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

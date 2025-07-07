@@ -121,6 +121,8 @@ bool twelveHourToggle = false;
 bool showDayOfWeek = true;
 bool showIndoorTemp = true;
 bool showOutdoorTemp = true;
+bool useNetatmoOutdoor = false;
+bool prioritizeNetatmoIndoor = false;
 char ntpServer1[64] = "pool.ntp.org";
 char ntpServer2[64] = "time.nist.gov";
 

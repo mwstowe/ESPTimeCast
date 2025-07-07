@@ -27,6 +27,7 @@ void forceNetatmoTokenRefresh();
 bool parseNetatmoJson(String &payload, JsonDocument &doc);
 void handleNetatmoAuth(AsyncWebServerRequest *request);
 void handleNetatmoCallback(AsyncWebServerRequest *request);
+String fetchNetatmoDevices();
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4

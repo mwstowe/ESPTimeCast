@@ -52,7 +52,64 @@
       padding-bottom: 20px;
       border-bottom: 1px solid #eee;
     }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #dff0d8;
+      color: #3c763d;
+    }
+    .error {
+      background-color: #f2dede;
+      color: #a94442;
+    }
   </style>
+  <script>
+    // Simple function to load configuration
+    window.onload = function() {
+      // Show loading message
+      const statusDiv = document.createElement('div');
+      statusDiv.id = 'statusMessage';
+      statusDiv.className = 'status';
+      statusDiv.textContent = 'Loading configuration...';
+      document.querySelector('.container').insertBefore(statusDiv, document.querySelector('form'));
+      
+      // Fetch configuration
+      fetch('/config.json')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Update status
+          statusDiv.className = 'status success';
+          statusDiv.textContent = 'Configuration loaded successfully!';
+          
+          // Update form fields with configuration values
+          if (data.ssid) document.getElementById('ssid').value = data.ssid;
+          if (data.password) document.getElementById('password').value = data.password;
+          if (data.mdnsHostname) document.getElementById('mdnsHostname').value = data.mdnsHostname;
+          if (data.weatherUnits) document.getElementById('weatherUnits').value = data.weatherUnits;
+          if (data.timeZone) document.getElementById('timeZone').value = data.timeZone;
+          if (data.brightness !== undefined) document.getElementById('brightnessSlider').value = data.brightness;
+          if (data.flipDisplay !== undefined) document.getElementById('flipDisplay').checked = data.flipDisplay;
+          if (data.twelveHourToggle !== undefined) document.getElementById('twelveHourToggle').checked = data.twelveHourToggle;
+          if (data.showDayOfWeek !== undefined) document.getElementById('showDayOfWeek').checked = data.showDayOfWeek;
+          if (data.showIndoorTemp !== undefined) document.getElementById('showIndoorTemp').checked = data.showIndoorTemp;
+          if (data.showOutdoorTemp !== undefined) document.getElementById('showOutdoorTemp').checked = data.showOutdoorTemp;
+        })
+        .catch(error => {
+          // Update status with error
+          statusDiv.className = 'status error';
+          statusDiv.textContent = 'Failed to load configuration: ' + error.message;
+          console.error('Error loading configuration:', error);
+        });
+    };
+  </script>
 </head>
 <body>
   <div class="container">

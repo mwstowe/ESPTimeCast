@@ -28,6 +28,45 @@ bool parseNetatmoJson(String &payload, JsonDocument &doc);
 void handleNetatmoAuth(AsyncWebServerRequest *request);
 void handleNetatmoCallback(AsyncWebServerRequest *request);
 String fetchNetatmoDevices();
+void createDefaultConfig();
+
+// Function to create default config.json
+void createDefaultConfig() {
+  Serial.println(F("[CONFIG] Creating default config.json"));
+  DynamicJsonDocument doc(512);
+  doc[F("ssid")] = "";
+  doc[F("password")] = "";
+  doc[F("netatmoClientId")] = "";
+  doc[F("netatmoClientSecret")] = "";
+  doc[F("netatmoDeviceId")] = "";
+  doc[F("netatmoModuleId")] = "";
+  doc[F("netatmoIndoorModuleId")] = "";
+  doc[F("mdnsHostname")] = "esptime";
+  doc[F("weatherUnits")] = "metric";
+  doc[F("clockDuration")] = 10000;
+  doc[F("weatherDuration")] = 5000;
+  doc[F("timeZone")] = "";
+  doc[F("brightness")] = brightness;
+  doc[F("tempAdjust")] = tempAdjust;
+  doc[F("flipDisplay")] = flipDisplay;
+  doc[F("twelveHourToggle")] = twelveHourToggle;
+  doc[F("showDayOfWeek")] = showDayOfWeek;
+  doc[F("showIndoorTemp")] = showIndoorTemp;
+  doc[F("showOutdoorTemp")] = showOutdoorTemp;
+  doc[F("useNetatmoOutdoor")] = useNetatmoOutdoor;
+  doc[F("prioritizeNetatmoIndoor")] = prioritizeNetatmoIndoor;
+  doc[F("ntpServer1")] = ntpServer1;
+  doc[F("ntpServer2")] = ntpServer2;
+  
+  File f = LittleFS.open("/config.json", "w");
+  if (f) {
+    serializeJsonPretty(doc, f);
+    f.close();
+    Serial.println(F("[CONFIG] Default config.json created"));
+  } else {
+    Serial.println(F("[CONFIG] ERROR: Failed to create default config.json"));
+  }
+}
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4
@@ -149,42 +188,9 @@ void loadConfig() {
 
   if (!LittleFS.exists("/config.json")) {
     Serial.println(F("[CONFIG] config.json not found, creating with defaults..."));
-    DynamicJsonDocument doc(512);
-    doc[F("ssid")] = "";
-    doc[F("password")] = "";
-    doc[F("netatmoClientId")] = "";
-    doc[F("netatmoClientSecret")] = "";
-    doc[F("netatmoUsername")] = "";
-    doc[F("netatmoPassword")] = "";
-    doc[F("netatmoAccessToken")] = "";
-    doc[F("netatmoRefreshToken")] = "";
-    doc[F("netatmoDeviceId")] = "";
-    doc[F("netatmoModuleId")] = "";
-    doc[F("netatmoIndoorModuleId")] = "";
-    doc[F("tempSource")] = 0;
-    doc[F("mdnsHostname")] = "esptime";
-    doc[F("weatherUnits")] = "metric";
-    doc[F("clockDuration")] = 10000;
-    doc[F("weatherDuration")] = 5000;
-    doc[F("timeZone")] = "";
-    doc[F("brightness")] = brightness;
-    doc[F("tempAdjust")] = tempAdjust;
-    doc[F("flipDisplay")] = flipDisplay;
-    doc[F("twelveHourToggle")] = twelveHourToggle;
-    doc[F("showDayOfWeek")] = showDayOfWeek;
-    doc[F("showIndoorTemp")] = showIndoorTemp;
-    doc[F("showOutdoorTemp")] = showOutdoorTemp;
-    doc[F("ntpServer1")] = ntpServer1;
-    doc[F("ntpServer2")] = ntpServer2;
-    File f = LittleFS.open("/config.json", "w");
-    if (f) {
-      serializeJsonPretty(doc, f);
-      f.close();
-      Serial.println(F("[CONFIG] Default config.json created."));
-    } else {
-      Serial.println(F("[ERROR] Failed to create default config.json"));
-    }
+    createDefaultConfig();
   }
+  
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
     Serial.println(F("[ERROR] Failed to open config.json"));
@@ -315,12 +321,27 @@ void setupWebServer() {
   });
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /config.json"));
+    
+    // Ensure LittleFS is mounted
+    if (!LittleFS.begin()) {
+      Serial.println(F("[WEBSERVER] ERROR: LittleFS not mounted"));
+      request->send(500, "application/json", "{\"error\":\"LittleFS not mounted\"}");
+      return;
+    }
+    
+    // Check if config.json exists, create if not
+    if (!LittleFS.exists("/config.json")) {
+      Serial.println(F("[WEBSERVER] config.json not found, creating default"));
+      createDefaultConfig();
+    }
+    
     File f = LittleFS.open("/config.json", "r");
     if (!f) {
       Serial.println(F("[WEBSERVER] Error opening /config.json"));
       request->send(500, "application/json", "{\"error\":\"Failed to open config.json\"}");
       return;
     }
+    
     DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, f);
     f.close();
@@ -330,6 +351,7 @@ void setupWebServer() {
       request->send(500, "application/json", "{\"error\":\"Failed to parse config.json\"}");
       return;
     }
+    
     doc[F("mode")] = isAPMode ? "ap" : "sta";
     String response;
     serializeJson(doc, response);
@@ -463,6 +485,104 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
+  });
+  
+  server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /debug"));
+    
+    DynamicJsonDocument doc(1024);
+    doc[F("heap")] = ESP.getFreeHeap();
+    doc[F("sketch_size")] = ESP.getSketchSize();
+    doc[F("free_sketch_space")] = ESP.getFreeSketchSpace();
+    doc[F("flash_chip_size")] = ESP.getFlashChipSize();
+    doc[F("flash_chip_real_size")] = ESP.getFlashChipRealSize();
+    
+    // Check LittleFS
+    bool fsOK = LittleFS.begin();
+    doc[F("littlefs_mounted")] = fsOK;
+    
+    if (fsOK) {
+      FSInfo fs_info;
+      LittleFS.info(fs_info);
+      doc[F("fs_total_bytes")] = fs_info.totalBytes;
+      doc[F("fs_used_bytes")] = fs_info.usedBytes;
+      doc[F("fs_block_size")] = fs_info.blockSize;
+      doc[F("fs_page_size")] = fs_info.pageSize;
+      
+      // List files
+      Dir dir = LittleFS.openDir("/");
+      JsonArray files = doc.createNestedArray("files");
+      while (dir.next()) {
+        JsonObject file = files.createNestedObject();
+        file["name"] = dir.fileName();
+        file["size"] = dir.fileSize();
+      }
+      
+      // Check config.json
+      bool configExists = LittleFS.exists("/config.json");
+      doc[F("config_exists")] = configExists;
+      
+      if (configExists) {
+        File f = LittleFS.open("/config.json", "r");
+        if (f) {
+          doc[F("config_size")] = f.size();
+          
+          if (f.size() > 0) {
+            String configContent = f.readString();
+            doc[F("config_content")] = configContent.substring(0, 100) + "..."; // First 100 chars
+          } else {
+            doc[F("config_content")] = "Empty file";
+          }
+          
+          f.close();
+        } else {
+          doc[F("config_open_error")] = true;
+        }
+      }
+    }
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+  });
+  
+  server.on("/format", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /format"));
+    
+    bool success = LittleFS.format();
+    
+    DynamicJsonDocument doc(128);
+    doc[F("format_success")] = success;
+    
+    if (success) {
+      Serial.println(F("[WEBSERVER] LittleFS formatted successfully"));
+      
+      // Create default config
+      if (LittleFS.begin()) {
+        DynamicJsonDocument configDoc(512);
+        configDoc[F("ssid")] = "";
+        configDoc[F("password")] = "";
+        configDoc[F("mdnsHostname")] = "esptime";
+        configDoc[F("weatherUnits")] = "metric";
+        
+        File f = LittleFS.open("/config.json", "w");
+        if (f) {
+          serializeJsonPretty(configDoc, f);
+          f.close();
+          doc[F("config_created")] = true;
+        } else {
+          doc[F("config_created")] = false;
+        }
+      } else {
+        doc[F("mount_after_format")] = false;
+      }
+    } else {
+      Serial.println(F("[WEBSERVER] LittleFS format failed"));
+    }
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
   });
   
   // Add OAuth2 endpoints

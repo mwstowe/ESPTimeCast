@@ -590,6 +590,26 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
   
+  // Handle Netatmo token refresh button
+  const refreshTokenBtn = document.getElementById("refreshNetatmoToken");
+  if (refreshTokenBtn) {
+    refreshTokenBtn.addEventListener("click", function() {
+      fetch('/refresh_netatmo_token', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert("Netatmo token refresh initiated. The device will try to get a new token on the next temperature update.");
+          } else {
+            alert("Error: " + data.message);
+          }
+        })
+        .catch(err => {
+          alert("Failed to refresh token. Please try again.");
+          console.error(err);
+        });
+    });
+  }
+  
   // Handle Netatmo device selection
   const netatmoDeviceSelect = document.getElementById("netatmoDeviceId");
   const netatmoModuleSelect = document.getElementById("netatmoModuleId");
@@ -752,21 +772,14 @@ window.onload = function () {
       document.getElementById('password').value = data.password || '';
       document.getElementById('netatmoClientId').value = data.netatmoClientId || '';
       document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret || '';
-      // Username and password fields removed - using OAuth2 flow instead
+      document.getElementById('netatmoUsername').value = data.netatmoUsername || '';
+      document.getElementById('netatmoPassword').value = data.netatmoPassword || '';
       document.getElementById('netatmoAccessToken').value = data.netatmoAccessToken || '';
       document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken || '';
       document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
       document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
       document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId || '';
-      
-      // Set the toggle values for Netatmo temperature sources
-      if (document.getElementById('useNetatmoOutdoor')) {
-        document.getElementById('useNetatmoOutdoor').checked = !!data.useNetatmoOutdoor;
-      }
-      if (document.getElementById('prioritizeNetatmoIndoor')) {
-        document.getElementById('prioritizeNetatmoIndoor').checked = !!data.prioritizeNetatmoIndoor;
-      }
-      
+      document.getElementById('tempSource').value = data.tempSource || '0';
       document.getElementById('mdnsHostname').value = data.mdnsHostname || 'esptime';
       document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';
       document.getElementById('clockDuration').value = (data.clockDuration || 10000) / 1000;

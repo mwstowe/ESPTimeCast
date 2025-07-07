@@ -1,5 +1,5 @@
 // Helper function to format temperature based on units
-String formatTemperature(float temperature, bool roundToInteger = false) {
+String formatTemperature(float temperature, bool roundToInteger) {
   String result;
   
   // Apply temperature adjustment if needed

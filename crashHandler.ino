@@ -78,7 +78,7 @@ String getExceptionDetails(rst_info *resetInfo) {
   }
   
   // Exception address
-  details += " at 0x" + String(resetInfo->epc, HEX);
+  details += " at 0x" + String(resetInfo->epc1, HEX);
   
   return details;
 }

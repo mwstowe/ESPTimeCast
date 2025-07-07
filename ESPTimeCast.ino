@@ -21,6 +21,7 @@
 
 // Function prototypes
 String formatTemperature(float temperature, bool roundToInteger = false);
+void fetchNetatmoIndoorTemperature();
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4

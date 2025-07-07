@@ -457,6 +457,17 @@ void setupWebServer() {
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
   });
+  
+  // Add OAuth2 endpoints
+  server.on("/api/netatmo/auth", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /api/netatmo/auth"));
+    handleNetatmoAuth(request);
+  });
+  
+  server.on("/oauth2/callback", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /oauth2/callback"));
+    handleNetatmoCallback(request);
+  });
 
   server.begin();
   Serial.println(F("[WEBSERVER] Web server started"));
@@ -744,9 +755,9 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
     return;
   }
   
-  String token = getNetatmoToken();
-  if (token.length() == 0) {
-    Serial.println(F("[NETATMO] Failed to get token"));
+  // Check if we have an access token
+  if (strlen(netatmoAccessToken) == 0) {
+    Serial.println(F("[NETATMO] No access token available"));
     outdoorTempAvailable = false;
     return;
   }
@@ -762,10 +773,10 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   Serial.print(F("[NETATMO] Requesting URL: "));
   Serial.println(url);
   Serial.print(F("[NETATMO] Using token: "));
-  Serial.println(token.substring(0, 10) + "...");
+  Serial.println(String(netatmoAccessToken).substring(0, 10) + "...");
   
   if (https.begin(*client, url)) {
-    https.addHeader("Authorization", "Bearer " + token);
+    https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");
     

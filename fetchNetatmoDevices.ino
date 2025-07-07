@@ -7,16 +7,10 @@ String fetchNetatmoDevices() {
     return "{\"error\":\"WiFi not connected\"}";
   }
   
-  // Force token refresh if needed
+  // Check if we have an access token
   if (strlen(netatmoAccessToken) == 0) {
-    Serial.println(F("[NETATMO] No access token, getting a new one..."));
-    forceNetatmoTokenRefresh();
-  }
-  
-  String token = getNetatmoToken();
-  if (token.length() == 0) {
-    Serial.println(F("[NETATMO] Failed to get token"));
-    return "{\"error\":\"Failed to get authentication token\"}";
+    Serial.println(F("[NETATMO] No access token available"));
+    return "{\"error\":\"No access token available. Please authorize with Netatmo first.\"}";
   }
   
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
@@ -30,7 +24,7 @@ String fetchNetatmoDevices() {
   Serial.println(url);
   
   if (https.begin(*client, url)) {
-    https.addHeader("Authorization", "Bearer " + token);
+    https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");
     
@@ -99,6 +93,13 @@ String fetchNetatmoDevices() {
       String errorPayload = https.getString();
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
+      
+      // If unauthorized, clear the token
+      if (httpCode == 401 || httpCode == 403) {
+        Serial.println(F("[NETATMO] Token expired or invalid, clearing token"));
+        netatmoAccessToken[0] = '\0';
+        saveTokensToConfig();
+      }
       
       https.end();
       return "{\"error\":\"HTTP error " + String(httpCode) + "\"}";

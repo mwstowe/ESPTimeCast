@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const moduleIdActual = document.getElementById('netatmoModuleIdActual');
   const indoorModuleIdActual = document.getElementById('netatmoIndoorModuleIdActual');
   
+  // Get the authorize button
+  const authorizeBtn = document.getElementById('authorizeNetatmo');
+  
   // Function to update hidden fields
   function updateHiddenFields() {
     if (deviceIdActual) {
@@ -69,6 +72,66 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
+  // Add event listener to authorize button
+  if (authorizeBtn) {
+    authorizeBtn.addEventListener('click', function() {
+      const clientId = document.getElementById('netatmoClientId').value;
+      const clientSecret = document.getElementById('netatmoClientSecret').value;
+      
+      if (!clientId || !clientSecret) {
+        alert("Please enter your Netatmo Client ID and Client Secret first.");
+        return;
+      }
+      
+      // Save the client ID and secret first
+      const formData = new FormData();
+      formData.append('netatmoClientId', clientId);
+      formData.append('netatmoClientSecret', clientSecret);
+      
+      fetch('/save', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          console.log("Credentials saved, initiating OAuth flow");
+          
+          // Now initiate the OAuth flow
+          fetch('/api/netatmo/auth')
+            .then(response => response.json())
+            .then(data => {
+              if (data.auth_url) {
+                // Open the authorization URL in a new window
+                window.open(data.auth_url, '_blank');
+              } else if (data.error) {
+                alert("Error: " + data.error);
+              }
+            })
+            .catch(error => {
+              console.error('Error initiating OAuth flow:', error);
+              alert("Error initiating OAuth flow. Check console for details.");
+            });
+        } else {
+          alert("Error saving credentials: " + (data.message || "Unknown error"));
+        }
+      })
+      .catch(error => {
+        console.error('Error saving credentials:', error);
+        alert("Error saving credentials. Check console for details.");
+      });
+    });
+  }
+  
+  // Check for OAuth callback parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('oauth_success')) {
+    alert("Successfully authorized with Netatmo! You can now select your devices.");
+    fetchNetatmoDevices();
+  } else if (urlParams.has('oauth_error')) {
+    alert("Error during Netatmo authorization: " + urlParams.get('oauth_error'));
+  }
+  
   // Load config and populate fields immediately
   fetch('/config.json')
     .then(response => response.json())
@@ -88,13 +151,12 @@ document.addEventListener('DOMContentLoaded', function() {
                   moduleIdManual ? moduleIdManual.value : 'N/A',
                   indoorModuleIdManual ? indoorModuleIdManual.value : 'N/A');
       
-      // Try to fetch devices if we have credentials
-      if (data.netatmoClientId && data.netatmoClientSecret && 
-          data.netatmoUsername && data.netatmoPassword) {
-        console.log("Credentials found, fetching devices");
+      // If we have an access token, try to fetch devices
+      if (data.netatmoAccessToken) {
+        console.log("Access token found, fetching devices");
         fetchNetatmoDevices();
       } else {
-        console.log("No credentials found, skipping device fetch");
+        console.log("No access token found, skipping device fetch");
       }
     })
     .catch(err => {

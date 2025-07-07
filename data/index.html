@@ -740,9 +740,17 @@ window.onbeforeunload = function () {
 };
 
 window.onload = function () {
+  console.log("Loading configuration...");
   fetch('/config.json')
-    .then(response => response.json())
+    .then(response => {
+      console.log("Config response status:", response.status);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
     .then(data => {
+      console.log("Config loaded successfully");
       isAPMode = (data.mode === "ap");
       if (isAPMode) {
         document.querySelector('.footer').style.display = 'none';
@@ -804,22 +812,30 @@ window.onload = function () {
     })
     .catch(err => {
       console.error('Failed to load config:', err);
+      
+      // Create an error message element
+      const errorDiv = document.createElement('div');
+      errorDiv.style.backgroundColor = '#ff5555';
+      errorDiv.style.color = 'white';
+      errorDiv.style.padding = '20px';
+      errorDiv.style.margin = '20px 0';
+      errorDiv.style.borderRadius = '5px';
+      errorDiv.innerHTML = `
+        <h3>Configuration Error</h3>
+        <p>Failed to load configuration: ${err.message}</p>
+        <p>Please check the serial console for more details.</p>
+      `;
+      
+      // Insert at the top of the body
+      document.body.insertBefore(errorDiv, document.body.firstChild);
+      
       showSavingModal("");
       updateSavingModal("⚠️ Failed to load configuration.", false);
 
       // Show appropriate button for load error
       removeReloadButton();
       removeRestoreButton();
-      const errorMsg = (err.message || "").toLowerCase();
-      if (
-        errorMsg.includes("config corrupted") ||
-        errorMsg.includes("failed to write config") ||
-        errorMsg.includes("restore")
-      ) {
-        ensureRestoreButton();
-      } else {
-        ensureReloadButton();
-      }
+      ensureReloadButton();
     });
   document.querySelector('html').style.height = 'unset';       
   document.body.classList.add('loaded');     

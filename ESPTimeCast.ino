@@ -497,7 +497,14 @@ void setupWebServer() {
     doc[F("mode")] = isAPMode ? "ap" : "sta";
     String response;
     serializeJson(doc, response);
-    request->send(200, "application/json", response);
+    
+    // Add CORS headers to allow cross-origin requests
+    AsyncWebServerResponse *resp = request->beginResponse(200, "application/json", response);
+    resp->addHeader("Access-Control-Allow-Origin", "*");
+    resp->addHeader("Access-Control-Allow-Methods", "GET");
+    resp->addHeader("Access-Control-Allow-Headers", "Content-Type");
+    resp->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    request->send(resp);
   });
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /save"));    

@@ -25,6 +25,7 @@ void fetchNetatmoIndoorTemperature();
 String getNetatmoToken();
 void forceNetatmoTokenRefresh();
 bool parseNetatmoJson(String &payload, JsonDocument &doc);
+void handleNetatmoAuth(AsyncWebServerRequest *request);
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 4

@@ -1,263 +1,109 @@
-// Function to handle Netatmo device selection
-document.addEventListener('DOMContentLoaded', function() {
-  // Get form elements
-  const configForm = document.getElementById('configForm');
+// Global variable to store Netatmo devices
+window.netatmoDevices = [];
+
+// Function to fetch Netatmo devices
+function fetchNetatmoDevices() {
+  const deviceSelect = document.getElementById('netatmoDeviceId');
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
   
-  // Get the input fields
-  const deviceIdManual = document.getElementById('netatmoDeviceIdManual');
-  const moduleIdManual = document.getElementById('netatmoModuleIdManual');
-  const indoorModuleIdManual = document.getElementById('netatmoIndoorModuleIdManual');
+  // Store current selections
+  const currentDeviceId = deviceSelect.value;
+  const currentModuleId = moduleSelect.value;
+  const currentIndoorModuleId = indoorModuleSelect.value;
   
-  // Get the select elements
-  const deviceIdSelect = document.getElementById('netatmoDeviceId');
-  const moduleIdSelect = document.getElementById('netatmoModuleId');
-  const indoorModuleIdSelect = document.getElementById('netatmoIndoorModuleId');
+  // Clear existing options
+  deviceSelect.innerHTML = '<option value="">Select Device...</option>';
+  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
+  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
   
-  // Get the hidden fields
-  const deviceIdActual = document.getElementById('netatmoDeviceIdActual');
-  const moduleIdActual = document.getElementById('netatmoModuleIdActual');
-  const indoorModuleIdActual = document.getElementById('netatmoIndoorModuleIdActual');
+  // Show loading message
+  showSavingModal("Fetching Netatmo devices...");
   
-  // Get the authorize button
-  const authorizeBtn = document.getElementById('authorizeNetatmo');
-  
-  // Function to update hidden fields
-  function updateHiddenFields() {
-    if (deviceIdActual) {
-      deviceIdActual.value = deviceIdManual.value || deviceIdSelect.value;
-    }
-    if (moduleIdActual) {
-      moduleIdActual.value = moduleIdManual.value || moduleIdSelect.value;
-    }
-    if (indoorModuleIdActual) {
-      indoorModuleIdActual.value = indoorModuleIdManual.value || indoorModuleIdSelect.value;
-    }
-    
-    console.log("Updated hidden fields:", 
-                deviceIdActual ? deviceIdActual.value : 'N/A',
-                moduleIdActual ? moduleIdActual.value : 'N/A',
-                indoorModuleIdActual ? indoorModuleIdActual.value : 'N/A');
-  }
-  
-  // Add event listeners to update hidden fields
-  if (deviceIdSelect) {
-    deviceIdSelect.addEventListener('change', function() {
-      deviceIdManual.value = this.value;
-      updateHiddenFields();
-    });
-  }
-  
-  if (deviceIdManual) {
-    deviceIdManual.addEventListener('input', updateHiddenFields);
-  }
-  
-  if (moduleIdSelect) {
-    moduleIdSelect.addEventListener('change', function() {
-      moduleIdManual.value = this.value;
-      updateHiddenFields();
-    });
-  }
-  
-  if (moduleIdManual) {
-    moduleIdManual.addEventListener('input', updateHiddenFields);
-  }
-  
-  if (indoorModuleIdSelect) {
-    indoorModuleIdSelect.addEventListener('change', function() {
-      indoorModuleIdManual.value = this.value;
-      updateHiddenFields();
-    });
-  }
-  
-  if (indoorModuleIdManual) {
-    indoorModuleIdManual.addEventListener('input', updateHiddenFields);
-  }
-  
-  // Handle form submission
-  if (configForm) {
-    configForm.addEventListener('submit', function() {
-      updateHiddenFields();
-    });
-  }
-  
-  // Handle authorize button click
-  if (authorizeBtn) {
-    authorizeBtn.addEventListener('click', function() {
-      console.log("Authorize button clicked");
-      const clientId = document.getElementById('netatmoClientId').value;
-      const clientSecret = document.getElementById('netatmoClientSecret').value;
-      
-      console.log("Client ID:", clientId ? "provided" : "missing");
-      console.log("Client Secret:", clientSecret ? "provided" : "missing");
-      
-      if (!clientId || !clientSecret) {
-        alert("Please enter your Netatmo Client ID and Client Secret first.");
-        return;
+  fetch('/api/netatmo/devices')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.error) {
+        throw new Error(data.error);
       }
       
-      // Save the client ID and secret first
-      const formData = new FormData();
-      formData.append('netatmoClientId', clientId);
-      formData.append('netatmoClientSecret', clientSecret);
+      // Hide loading message
+      document.getElementById('savingModal').style.display = 'none';
+      document.body.classList.remove('modal-open');
       
-      console.log("Saving credentials...");
-      fetch('/save', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log("Save response:", data);
-        if (data.success) {
-          console.log("Credentials saved, initiating OAuth flow");
-          
-          // Now initiate the OAuth flow
-          console.log("Fetching auth URL...");
-          fetch('/api/netatmo/auth')
-            .then(response => {
-              console.log("Auth response status:", response.status);
-              return response.json();
-            })
-            .then(data => {
-              console.log("Auth response data:", data);
-              if (data.auth_url) {
-                // Open the authorization URL in a new window
-                console.log("Opening auth URL:", data.auth_url);
-                window.open(data.auth_url, '_blank');
-              } else if (data.error) {
-                console.error("Auth error:", data.error);
-                alert("Error: " + data.error);
-              }
-            })
-            .catch(error => {
-              console.error('Error initiating OAuth flow:', error);
-              alert("Error initiating OAuth flow. Check console for details.");
-            });
-        } else {
-          alert("Error saving credentials: " + (data.message || "Unknown error"));
-        }
-      })
-      .catch(error => {
-        console.error('Error saving credentials:', error);
-        alert("Error saving credentials. Check console for details.");
-      });
-    });
-  }
-  
-  // Handle device selection change
-  if (deviceIdSelect) {
-    deviceIdSelect.addEventListener('change', function() {
-      // Clear module dropdowns
-      moduleIdSelect.innerHTML = '<option value="">Select a module...</option>';
-      indoorModuleIdSelect.innerHTML = '<option value="">Select a module...</option>';
+      // Store devices globally
+      window.netatmoDevices = data.devices || [];
       
-      // Get selected device
-      const selectedOption = this.options[this.selectedIndex];
-      if (selectedOption && selectedOption.dataset.modules) {
-        const modules = JSON.parse(selectedOption.dataset.modules);
-        
-        // Add modules to the dropdowns
-        modules.forEach(module => {
-          // Add to outdoor module dropdown
-          const outdoorOption = document.createElement('option');
-          outdoorOption.value = module.id;
-          outdoorOption.textContent = `${module.name} (${module.type})`;
-          moduleIdSelect.appendChild(outdoorOption);
-          
-          // Add to indoor module dropdown
-          const indoorOption = document.createElement('option');
-          indoorOption.value = module.id;
-          indoorOption.textContent = `${module.name} (${module.type})`;
-          indoorModuleIdSelect.appendChild(indoorOption);
+      // Populate device dropdown
+      if (data.devices && data.devices.length > 0) {
+        data.devices.forEach(device => {
+          const option = document.createElement('option');
+          option.value = device.id;
+          option.textContent = device.name || device.id;
+          deviceSelect.appendChild(option);
         });
         
-        // If we have saved module IDs, select them
-        const savedModuleId = moduleIdManual.value;
-        if (savedModuleId) {
-          moduleIdSelect.value = savedModuleId;
-        }
-        
-        const savedIndoorModuleId = indoorModuleIdManual.value;
-        if (savedIndoorModuleId) {
-          indoorModuleIdSelect.value = savedIndoorModuleId;
-        }
-      }
-      
-      // Update the manual input field
-      deviceIdManual.value = this.value;
-      updateHiddenFields();
-    });
-  }
-  
-  // Handle module selection changes
-  if (moduleIdSelect) {
-    moduleIdSelect.addEventListener('change', function() {
-      moduleIdManual.value = this.value;
-      updateHiddenFields();
-    });
-  }
-  
-  if (indoorModuleIdSelect) {
-    indoorModuleIdSelect.addEventListener('change', function() {
-      indoorModuleIdManual.value = this.value;
-      updateHiddenFields();
-    });
-  }
-  
-  // Function to fetch Netatmo devices
-  function fetchNetatmoDevices() {
-    // Check if we have client ID and secret
-    const clientId = document.getElementById("netatmoClientId").value;
-    const clientSecret = document.getElementById("netatmoClientSecret").value;
-    
-    if (!clientId || !clientSecret) {
-      console.log("Missing Netatmo credentials, skipping device fetch");
-      return;
-    }
-    
-    console.log("Fetching Netatmo devices...");
-    fetch('/api/netatmo/devices')
-      .then(response => response.json())
-      .then(data => {
-        if (data.error) {
-          console.error("Error fetching Netatmo devices:", data.error);
-          return;
-        }
-        
-        // Clear existing options
-        deviceIdSelect.innerHTML = '<option value="">Select a device...</option>';
-        moduleIdSelect.innerHTML = '<option value="">Select a module...</option>';
-        indoorModuleIdSelect.innerHTML = '<option value="">Select a module...</option>';
-        
-        // Add devices to the dropdown
-        if (data.devices && data.devices.length > 0) {
-          data.devices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.id;
-            option.textContent = device.name;
-            option.dataset.modules = JSON.stringify(device.modules);
-            deviceIdSelect.appendChild(option);
-          });
+        // Restore previous selection if possible
+        if (currentDeviceId) {
+          deviceSelect.value = currentDeviceId;
+          // Trigger change to load modules
+          loadModules();
           
-          // If we have a saved device ID, select it
-          const savedDeviceId = deviceIdManual.value;
-          if (savedDeviceId) {
-            deviceIdSelect.value = savedDeviceId;
-            // Trigger change event to populate modules
-            const event = new Event('change');
-            deviceIdSelect.dispatchEvent(event);
+          // Restore module selections
+          if (currentModuleId) {
+            moduleSelect.value = currentModuleId;
+          }
+          if (currentIndoorModuleId) {
+            indoorModuleSelect.value = currentIndoorModuleId;
           }
         }
-      })
-      .catch(error => {
-        console.error('Error fetching Netatmo devices:', error);
-      });
-  }
+      } else {
+        alert('No Netatmo devices found');
+      }
+    })
+    .catch(error => {
+      // Hide loading message
+      document.getElementById('savingModal').style.display = 'none';
+      document.body.classList.remove('modal-open');
+      
+      // Show error
+      alert('Error fetching Netatmo devices: ' + error.message);
+    });
+}
+
+// Function to load modules for selected device
+function loadModules() {
+  const deviceId = document.getElementById('netatmoDeviceId').value;
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
   
-  // Fetch Netatmo devices when credentials are entered
-  document.getElementById("netatmoClientId").addEventListener('change', fetchNetatmoDevices);
-  document.getElementById("netatmoClientSecret").addEventListener('change', fetchNetatmoDevices);
+  // Clear existing options
+  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
+  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
   
-  // Initialize hidden fields
-  updateHiddenFields();
-});
+  if (!deviceId) return;
+  
+  // Get the device data from the previously loaded devices
+  const deviceData = window.netatmoDevices.find(d => d.id === deviceId);
+  if (!deviceData || !deviceData.modules) return;
+  
+  // Populate outdoor modules
+  deviceData.modules.forEach(module => {
+    if (module.type === 'NAModule1') { // Outdoor module
+      const option = document.createElement('option');
+      option.value = module.id;
+      option.textContent = module.name || module.id;
+      moduleSelect.appendChild(option);
+    } else if (module.type === 'NAModule4') { // Indoor module
+      const option = document.createElement('option');
+      option.value = module.id;
+      option.textContent = module.name || module.id;
+      indoorModuleSelect.appendChild(option);
+    }
+  });
+}

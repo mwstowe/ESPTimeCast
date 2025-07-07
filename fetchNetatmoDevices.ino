@@ -7,6 +7,12 @@ String fetchNetatmoDevices() {
     return "{\"error\":\"WiFi not connected\"}";
   }
   
+  // Force token refresh if needed
+  if (strlen(netatmoAccessToken) == 0) {
+    Serial.println(F("[NETATMO] No access token, getting a new one..."));
+    forceNetatmoTokenRefresh();
+  }
+  
   String token = getNetatmoToken();
   if (token.length() == 0) {
     Serial.println(F("[NETATMO] Failed to get token"));

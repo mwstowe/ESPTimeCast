@@ -670,6 +670,13 @@ void readIndoorTemperature(bool roundToInteger = false) {
   }
 }
 
+// Function to force Netatmo token refresh
+void forceNetatmoTokenRefresh() {
+  Serial.println(F("[NETATMO] Forcing token refresh"));
+  netatmoAccessToken[0] = '\0';  // Clear access token
+  needTokenRefresh = true;       // Set flag to refresh token
+}
+
 // Function to save tokens to config.json
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));

@@ -192,39 +192,11 @@ button:hover {
 }
 
 /* Netatmo OAuth section */
-.oauth-section {
-  text-align: center;
-  margin: 2rem 0;
-}
 
-.oauth-button {
-  background-color: #2ecc71;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  color: white;
-  text-decoration: none;
-  display: inline-block;
-  margin-top: 1rem;
-  font-weight: 500;
-}
 
-.oauth-button:hover {
-  background-color: #27ae60;
-}
 
-.token-status {
-  margin-top: 1rem;
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.7);
-}
 
-.token-valid {
-  color: #2ecc71;
-}
 
-.token-expired {
-  color: #e74c3c;
-}
 
 .footer {
   text-align: center;
@@ -306,22 +278,12 @@ window.onload = function() {
       if (data.showIndoorTemp !== undefined) document.getElementById('showIndoorTemp').checked = data.showIndoorTemp;
       if (data.showOutdoorTemp !== undefined) document.getElementById('showOutdoorTemp').checked = data.showOutdoorTemp;
       
-      // Netatmo fields
-      if (data.netatmoClientId) document.getElementById('netatmoClientId').value = data.netatmoClientId;
-      if (data.netatmoClientSecret) document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret;
-      if (data.netatmoAccessToken) document.getElementById('netatmoAccessToken').value = data.netatmoAccessToken;
-      if (data.netatmoRefreshToken) document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken;
-      if (data.netatmoDeviceId) document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId;
-      if (data.netatmoModuleId) document.getElementById('netatmoModuleId').value = data.netatmoModuleId;
-      if (data.netatmoIndoorModuleId) document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId;
-      
-      // Set the toggle values for Netatmo temperature sources
-      if (document.getElementById('useNetatmoOutdoor')) {
-        document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor === true;
-      }
-      if (document.getElementById('prioritizeNetatmoIndoor')) {
-        document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor === true;
-      }
+      // Weather fields
+      if (data.weatherCity) document.getElementById('weatherCity').value = data.weatherCity;
+      if (data.weatherApiKey) document.getElementById('weatherApiKey').value = data.weatherApiKey;
+      // Weather fields
+      if (data.weatherCity) document.getElementById('weatherCity').value = data.weatherCity;
+      if (data.weatherApiKey) document.getElementById('weatherApiKey').value = data.weatherApiKey;
       
       // Auto-detect browser's timezone if not set in config
       if (!data.timeZone) {
@@ -368,20 +330,6 @@ window.onload = function() {
 };
 
 // Function to update token status
-function updateTokenStatus() {
-  const accessToken = document.getElementById('netatmoAccessToken').value;
-  const refreshToken = document.getElementById('netatmoRefreshToken').value;
-  const tokenStatus = document.getElementById('tokenStatus');
-  
-  if (accessToken && refreshToken) {
-    tokenStatus.textContent = 'OAuth tokens are set';
-    tokenStatus.className = 'token-status token-valid';
-    document.getElementById('authorizeBtn').textContent = 'Re-authorize Netatmo';
-  } else {
-    tokenStatus.textContent = 'No OAuth tokens set';
-    tokenStatus.className = 'token-status token-expired';
-  }
-}
 
 // Function to save configuration using AJAX
 function saveConfig() {
@@ -479,134 +427,10 @@ function updateSavingModal(message, showSpinner = true) {
 }
 
 // Function to initiate Netatmo OAuth flow
-function authorizeNetatmo() {
-  const clientId = document.getElementById('netatmoClientId').value;
-  if (!clientId) {
-    alert('Please enter your Netatmo Client ID first');
-    return;
-  }
-  
-  // Save the client ID and secret first
-  const formData = new FormData();
-  formData.append('netatmoClientId', document.getElementById('netatmoClientId').value);
-  formData.append('netatmoClientSecret', document.getElementById('netatmoClientSecret').value);
-  
-  fetch('/save', {
-    method: 'POST',
-    body: new URLSearchParams(formData)
-  })
-  .then(response => response.json())
-  .then(() => {
-    // Redirect to Netatmo authorization page
-    window.location.href = '/api/netatmo/auth';
-  })
-  .catch(error => {
-    alert('Error saving Netatmo credentials: ' + error.message);
-  });
-}
 
 // Function to fetch Netatmo devices
-function fetchNetatmoDevices() {
-  const deviceSelect = document.getElementById('netatmoDeviceId');
-  const moduleSelect = document.getElementById('netatmoModuleId');
-  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
-  
-  // Clear existing options
-  deviceSelect.innerHTML = '<option value="">Select Device...</option>';
-  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
-  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
-  
-  // Show loading message
-  showSavingModal("Fetching Netatmo devices...");
-  
-  fetch('/api/netatmo/devices')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Hide loading message
-      document.getElementById('savingModal').style.display = 'none';
-      document.body.classList.remove('modal-open');
-      
-      // Populate device dropdown
-      if (data.devices && data.devices.length > 0) {
-        data.devices.forEach(device => {
-          const option = document.createElement('option');
-          option.value = device.id;
-          option.textContent = device.name || device.id;
-          deviceSelect.appendChild(option);
-        });
-        
-        // Select the current device if set
-        const currentDeviceId = document.getElementById('netatmoDeviceId').getAttribute('data-current');
-        if (currentDeviceId) {
-          deviceSelect.value = currentDeviceId;
-          // Trigger change to load modules
-          deviceSelect.dispatchEvent(new Event('change'));
-        }
-      }
-    })
-    .catch(error => {
-      // Hide loading message
-      document.getElementById('savingModal').style.display = 'none';
-      document.body.classList.remove('modal-open');
-      
-      // Show error
-      alert('Error fetching Netatmo devices: ' + error.message);
-    });
-}
 
 // Function to load modules for selected device
-function loadModules() {
-  const deviceId = document.getElementById('netatmoDeviceId').value;
-  const moduleSelect = document.getElementById('netatmoModuleId');
-  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
-  
-  // Clear existing options
-  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
-  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
-  
-  if (!deviceId) return;
-  
-  // Get the device data from the previously loaded devices
-  const deviceData = window.netatmoDevices.find(d => d.id === deviceId);
-  if (!deviceData) return;
-  
-  // Populate outdoor modules
-  if (deviceData.modules && deviceData.modules.length > 0) {
-    deviceData.modules.forEach(module => {
-      if (module.type === 'NAModule1') { // Outdoor module
-        const option = document.createElement('option');
-        option.value = module.id;
-        option.textContent = module.name || module.id;
-        moduleSelect.appendChild(option);
-      } else if (module.type === 'NAModule4') { // Indoor module
-        const option = document.createElement('option');
-        option.value = module.id;
-        option.textContent = module.name || module.id;
-        indoorModuleSelect.appendChild(option);
-      }
-    });
-    
-    // Select the current modules if set
-    const currentModuleId = document.getElementById('netatmoModuleId').getAttribute('data-current');
-    if (currentModuleId) {
-      moduleSelect.value = currentModuleId;
-    }
-    
-    const currentIndoorModuleId = document.getElementById('netatmoIndoorModuleId').getAttribute('data-current');
-    if (currentIndoorModuleId) {
-      indoorModuleSelect.value = currentIndoorModuleId;
-    }
-  }
-}
 </script>
 </head>
 <body>
@@ -630,66 +454,6 @@ function loadModules() {
         <div class="form-group">
           <label for="password">WiFi Password:</label>
           <input type="password" id="password" name="password">
-        </div>
-      </div>
-      
-      <div class="section">
-        <h2>Netatmo Integration</h2>
-        <div class="form-group">
-          <label for="netatmoClientId">Netatmo Client ID:</label>
-          <input type="text" id="netatmoClientId" name="netatmoClientId">
-        </div>
-        
-        <div class="form-group">
-          <label for="netatmoClientSecret">Netatmo Client Secret:</label>
-          <input type="text" id="netatmoClientSecret" name="netatmoClientSecret">
-        </div>
-        
-        <div class="oauth-section">
-          <p>Enter your Netatmo OAuth credentials manually:</p>
-          <p><small>Due to memory constraints, automatic OAuth flow is not possible on this device.</small></p>
-          <p><small>Please generate tokens using the <a href="https://dev.netatmo.com/" target="_blank">Netatmo Developer Portal</a>.</small></p>
-          <div class="form-group">
-            <label for="netatmoAccessToken">Access Token:</label>
-            <input type="text" id="netatmoAccessToken" name="netatmoAccessToken">
-          </div>
-          
-          <div class="form-group">
-            <label for="netatmoRefreshToken">Refresh Token:</label>
-            <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken">
-          </div>
-        </div>
-        
-        <div class="form-group">
-          <label for="netatmoDeviceId">Netatmo Device:</label>
-          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()">
-            <option value="">Select Device...</option>
-          </select>
-          <button type="button" onclick="fetchNetatmoDevices()" style="margin-top: 0.5rem;">Fetch Devices</button>
-        </div>
-        
-        <div class="form-group">
-          <label for="netatmoModuleId">Outdoor Module:</label>
-          <select id="netatmoModuleId" name="netatmoModuleId">
-            <option value="">Select Module...</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label for="netatmoIndoorModuleId">Indoor Module:</label>
-          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
-            <option value="">Select Module...</option>
-          </select>
-        </div>
-        
-        <div class="checkbox-group">
-          <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
-          <label for="useNetatmoOutdoor">Use Netatmo for outdoor temperature</label>
-        </div>
-        
-        <div class="checkbox-group">
-          <input type="checkbox" id="prioritizeNetatmoIndoor" name="prioritizeNetatmoIndoor">
-          <label for="prioritizeNetatmoIndoor">Prioritize Netatmo for indoor temperature</label>
         </div>
       </div>
       

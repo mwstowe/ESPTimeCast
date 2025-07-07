@@ -20,19 +20,8 @@ body {
   padding: 2rem 1rem;
   color: #FFFFFF;
   background-repeat: no-repeat, repeat, repeat; 
-  opacity: 0;
-  transition: opacity 0.6s cubic-bezier(.4,0,.2,1);
-  visibility: 0;
 }
 
-body.loaded {
-  visibility: visible;
-  opacity: 1;
-}
-
-body.modal-open {
-  overflow: hidden;
-}
 h1 { 
   text-align: center; 
   font-size: 1.5rem; 
@@ -40,12 +29,8 @@ h1 {
   color: #ffffff; 
 }
 h2{
-  margin-top: 3rem;
-  margin-bottom: 0;
-}
-
-h2:first-of-type{
-  margin-top: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
 }
 
 .container {
@@ -122,51 +107,6 @@ button:hover {
   border-bottom: none;
 }
 
-.modal {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
-}
-
-.modal-content {
-  background-color: #2b425a;
-  margin: 15% auto;
-  padding: 2rem;
-  border-radius: 8px;
-  width: 80%;
-  max-width: 500px;
-  text-align: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.spinner {
-  border: 4px solid rgba(255, 255, 255, 0.2);
-  border-top: 4px solid var(--accent-color);
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-  margin: 20px auto;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.modal-buttons {
-  margin-top: 1.5rem;
-}
-
-.modal-buttons button {
-  margin: 0 0.5rem;
-}
-
 .status {
   padding: 1rem;
   margin: 1rem 0;
@@ -195,137 +135,124 @@ button:hover {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.nav-links {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.nav-links a {
-  color: #ffffff;
-  text-decoration: none;
-  margin: 0 1rem;
+.back-button {
+  display: inline-block;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
   padding: 0.5rem 1rem;
   border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+  margin-bottom: 1rem;
   transition: background-color 0.2s;
 }
 
-.nav-links a:hover {
+.back-button:hover {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
-.nav-links a.active {
-  background-color: var(--accent-color);
+.connect-button {
+  display: inline-block;
+  background-color: #2ecc71;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 500;
+  margin-top: 1rem;
+  transition: background-color 0.2s;
+}
+
+.connect-button:hover {
+  background-color: #27ae60;
 }
 
 .token-status {
   margin-top: 1rem;
-  padding: 0.5rem;
+  padding: 0.75rem;
   border-radius: 4px;
   background-color: rgba(255, 255, 255, 0.1);
   text-align: center;
 }
+
+.token-valid {
+  background-color: rgba(46, 204, 113, 0.2);
+}
+
+.token-expired {
+  background-color: rgba(231, 76, 60, 0.2);
+}
+
+.center {
+  text-align: center;
+}
+
+.device-section {
+  margin-top: 2rem;
+}
+
+.fetch-button {
+  margin-top: 0.5rem;
+  background-color: #3498db;
+}
+
+.fetch-button:hover {
+  background-color: #2980b9;
+}
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  try {
-    // Show the body once everything is loaded
-    document.body.classList.add('loaded');
-    
-    // Set up form submission
-    const form = document.getElementById('netatmoForm');
-    if (form) {
-      form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        saveConfig();
-      });
-    } else {
-      console.warn('Netatmo form not found');
-    }
-    
-    // Load configuration
-    loadConfig();
-  } catch (e) {
-    console.error('Error in DOMContentLoaded:', e);
-    alert('Error initializing page: ' + e.message);
+  // Load configuration
+  loadConfig();
+  
+  // Set up form submission
+  const form = document.getElementById('netatmoForm');
+  if (form) {
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+      saveConfig();
+    });
   }
 });
 
 // Function to load configuration
 function loadConfig() {
-  console.log('Loading configuration...');
+  showStatus('Loading configuration...', 'loading');
   
   fetch('/config.json')
     .then(response => {
-      console.log('Config response status:', response.status);
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
       return response.json();
     })
     .then(data => {
-      console.log('Configuration loaded');
-      debugObject(data, 'config');
+      hideStatus();
       
       // Update form fields with configuration values
-      try {
-        const setFieldValue = (id, value) => {
-          const element = document.getElementById(id);
-          if (element && value !== undefined) {
-            element.value = value;
-          }
-        };
-        
-        setFieldValue('netatmoClientId', data.netatmoClientId);
-        setFieldValue('netatmoClientSecret', data.netatmoClientSecret);
-        setFieldValue('netatmoUsername', data.netatmoUsername);
-        setFieldValue('netatmoPassword', data.netatmoPassword);
-        setFieldValue('netatmoDeviceId', data.netatmoDeviceId);
-        setFieldValue('netatmoModuleId', data.netatmoModuleId);
-        setFieldValue('netatmoIndoorModuleId', data.netatmoIndoorModuleId);
-        
-        // Set checkbox values
-        const setCheckboxValue = (id, value) => {
-          const element = document.getElementById(id);
-          if (element && value !== undefined) {
-            element.checked = value;
-          }
-        };
-        
-        setCheckboxValue('useNetatmoOutdoor', data.useNetatmoOutdoor);
-        setCheckboxValue('prioritizeNetatmoIndoor', data.prioritizeNetatmoIndoor);
-      } catch (e) {
-        console.error('Error updating form fields:', e);
-        showMessage('Error updating form fields: ' + e.message, true);
-      }
+      setFieldValue('netatmoClientId', data.netatmoClientId);
+      setFieldValue('netatmoClientSecret', data.netatmoClientSecret);
+      setFieldValue('netatmoUsername', data.netatmoUsername);
+      setFieldValue('netatmoPassword', data.netatmoPassword);
+      setFieldValue('netatmoDeviceId', data.netatmoDeviceId);
+      setFieldValue('netatmoModuleId', data.netatmoModuleId);
+      setFieldValue('netatmoIndoorModuleId', data.netatmoIndoorModuleId);
       
-      // Check if tokens are set
-      const tokenStatus = document.getElementById('tokenStatus');
-      if (tokenStatus) {
-        try {
-          if (data.netatmoAccessToken && data.netatmoAccessToken.length > 0) {
-            tokenStatus.textContent = 'OAuth tokens are set';
-            tokenStatus.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
-          } else {
-            tokenStatus.textContent = 'No OAuth tokens set';
-            tokenStatus.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
-          }
-        } catch (e) {
-          console.error('Error updating token status:', e);
-          tokenStatus.textContent = 'No OAuth tokens set';
-          tokenStatus.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
-        }
-      }
+      // Set checkbox values
+      setCheckboxValue('useNetatmoOutdoor', data.useNetatmoOutdoor);
+      setCheckboxValue('prioritizeNetatmoIndoor', data.prioritizeNetatmoIndoor);
+      
+      // Update token status
+      updateTokenStatus(data.netatmoAccessToken);
     })
     .catch(error => {
       console.error('Error loading configuration:', error);
-      showMessage('Failed to load configuration: ' + error.message, true);
+      showStatus('Failed to load configuration: ' + error.message, 'error');
     });
 }
 
 // Function to save configuration
 function saveConfig() {
-  showModal('Saving configuration...');
+  showStatus('Saving configuration...', 'loading');
   
   // Get form data
   const form = document.getElementById('netatmoForm');
@@ -349,154 +276,276 @@ function saveConfig() {
     return response.json();
   })
   .then(data => {
-    showModalWithButton('Configuration saved successfully!');
+    showStatus('Configuration saved successfully!', 'success');
+    setTimeout(hideStatus, 3000);
   })
   .catch(error => {
-    showModalWithButton('Error saving configuration: ' + error.message);
+    console.error('Error saving configuration:', error);
+    showStatus('Error saving configuration: ' + error.message, 'error');
   });
 }
 
-// Function to show a modal with a message
-function showModal(message) {
-  const modal = document.getElementById('savingModal');
-  const modalText = document.getElementById('savingModalText');
+// Function to connect to Netatmo
+function connectNetatmo() {
+  const clientId = document.getElementById('netatmoClientId').value;
+  const clientSecret = document.getElementById('netatmoClientSecret').value;
   
-  if (modal && modalText) {
-    modalText.textContent = message;
-    modal.style.display = 'block';
-    document.body.classList.add('modal-open');
+  if (!clientId || !clientSecret) {
+    showStatus('Please enter Client ID and Client Secret', 'error');
+    return;
   }
+  
+  showStatus('Connecting to Netatmo...', 'loading');
+  
+  // Save the client ID and secret first
+  const formData = new FormData();
+  formData.append('netatmoClientId', clientId);
+  formData.append('netatmoClientSecret', clientSecret);
+  
+  fetch('/save', {
+    method: 'POST',
+    body: new URLSearchParams(formData)
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+    return response.json();
+  })
+  .then(data => {
+    // Redirect to Netatmo authorization page
+    window.location.href = '/api/netatmo/auth';
+  })
+  .catch(error => {
+    console.error('Error connecting to Netatmo:', error);
+    showStatus('Error connecting to Netatmo: ' + error.message, 'error');
+  });
 }
 
-// Function to show a modal with a message and a close button
-function showModalWithButton(message) {
-  showModal(message);
+// Function to fetch Netatmo devices
+function fetchNetatmoDevices() {
+  showStatus('Fetching Netatmo devices...', 'loading');
   
-  const modalButtons = document.getElementById('modalButtons');
-  if (modalButtons) {
-    // Clear existing buttons
-    modalButtons.innerHTML = '';
-    
-    // Add close button
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Close';
-    closeBtn.onclick = function() {
-      const modal = document.getElementById('savingModal');
-      if (modal) {
-        modal.style.display = 'none';
-        document.body.classList.remove('modal-open');
+  fetch('/api/netatmo/devices')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
       }
-    };
-    modalButtons.appendChild(closeBtn);
+      return response.json();
+    })
+    .then(data => {
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Clear existing options
+      const deviceSelect = document.getElementById('netatmoDeviceId');
+      deviceSelect.innerHTML = '<option value="">Select Device...</option>';
+      
+      // Add devices to select
+      if (data.devices && data.devices.length > 0) {
+        data.devices.forEach(device => {
+          const option = document.createElement('option');
+          option.value = device.id;
+          option.textContent = device.name || device.id;
+          deviceSelect.appendChild(option);
+        });
+        
+        showStatus('Devices fetched successfully!', 'success');
+        setTimeout(hideStatus, 3000);
+      } else {
+        showStatus('No devices found', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching devices:', error);
+      showStatus('Error fetching devices: ' + error.message, 'error');
+    });
+}
+
+// Function to load modules for selected device
+function loadModules() {
+  const deviceId = document.getElementById('netatmoDeviceId').value;
+  if (!deviceId) return;
+  
+  showStatus('Loading modules...', 'loading');
+  
+  fetch('/api/netatmo/modules?device_id=' + deviceId)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Clear existing options
+      const moduleSelect = document.getElementById('netatmoModuleId');
+      const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+      
+      moduleSelect.innerHTML = '<option value="">Select Module...</option>';
+      indoorModuleSelect.innerHTML = '<option value="">Select Module...</option>';
+      
+      // Add modules to select
+      if (data.modules && data.modules.length > 0) {
+        data.modules.forEach(module => {
+          // Add outdoor modules to the outdoor module select
+          if (module.type === 'NAModule1') {
+            const option = document.createElement('option');
+            option.value = module.id;
+            option.textContent = module.name || module.id;
+            moduleSelect.appendChild(option);
+          }
+          
+          // Add indoor modules to the indoor module select
+          if (module.type === 'NAModule4' || module.type === 'NAMain') {
+            const option = document.createElement('option');
+            option.value = module.id;
+            option.textContent = module.name || module.id;
+            indoorModuleSelect.appendChild(option);
+          }
+        });
+        
+        showStatus('Modules loaded successfully!', 'success');
+        setTimeout(hideStatus, 3000);
+      } else {
+        showStatus('No modules found', 'error');
+      }
+    })
+    .catch(error => {
+      console.error('Error loading modules:', error);
+      showStatus('Error loading modules: ' + error.message, 'error');
+    });
+}
+
+// Helper function to set field value
+function setFieldValue(id, value) {
+  const element = document.getElementById(id);
+  if (element && value !== undefined) {
+    element.value = value;
   }
 }
 
-// Function to show a message
-function showMessage(message, isError = false) {
-  console.log(message); // Add console logging
+// Helper function to set checkbox value
+function setCheckboxValue(id, value) {
+  const element = document.getElementById(id);
+  if (element && value !== undefined) {
+    element.checked = value;
+  }
+}
+
+// Function to update token status
+function updateTokenStatus(accessToken) {
+  const tokenStatus = document.getElementById('tokenStatus');
+  if (!tokenStatus) return;
   
-  // Check if status message element exists
+  if (accessToken && accessToken.length > 0) {
+    tokenStatus.textContent = 'Connected to Netatmo';
+    tokenStatus.className = 'token-status token-valid';
+    document.getElementById('connectButton').textContent = 'Reconnect to Netatmo';
+  } else {
+    tokenStatus.textContent = 'Not connected to Netatmo';
+    tokenStatus.className = 'token-status token-expired';
+  }
+}
+
+// Function to show status message
+function showStatus(message, type) {
   let statusDiv = document.getElementById('statusMessage');
   
-  // If not, create it
   if (!statusDiv) {
     statusDiv = document.createElement('div');
     statusDiv.id = 'statusMessage';
-    
-    // Insert at the beginning of the container
-    const container = document.querySelector('.container');
-    if (container) {
-      container.insertBefore(statusDiv, container.firstChild);
-    }
+    document.querySelector('.container').insertBefore(statusDiv, document.querySelector('h1').nextSibling);
   }
   
-  // Update the message
   statusDiv.textContent = message;
-  statusDiv.className = isError ? 'status error' : 'status success';
-  statusDiv.style.display = 'block'; // Make sure it's visible
-  
-  // Hide success messages after a delay
-  if (!isError) {
-    setTimeout(() => {
-      statusDiv.style.display = 'none';
-    }, 3000);
-  }
+  statusDiv.className = 'status ' + type;
+  statusDiv.style.display = 'block';
 }
 
-// Debug function to help identify issues
-function debugObject(obj, name = 'Object') {
-  try {
-    console.log(`Debug ${name}:`, obj);
-    if (obj === null) {
-      console.log(`${name} is null`);
-      return;
-    }
-    if (obj === undefined) {
-      console.log(`${name} is undefined`);
-      return;
-    }
-    console.log(`${name} type:`, typeof obj);
-    if (typeof obj === 'object') {
-      console.log(`${name} keys:`, Object.keys(obj));
-    }
-  } catch (e) {
-    console.error(`Error debugging ${name}:`, e);
+// Function to hide status message
+function hideStatus() {
+  const statusDiv = document.getElementById('statusMessage');
+  if (statusDiv) {
+    statusDiv.style.display = 'none';
   }
 }
 </script>
 </head>
 <body>
   <div class="container">
-    <h1>ESPTimeCast Netatmo Settings</h1>
+    <a href="/" class="back-button">← Back to Main Settings</a>
     
-    <div class="nav-links">
-      <a href="/">General Settings</a>
-      <a href="/netatmo.html" class="active">Netatmo Settings</a>
-    </div>
+    <h1>Netatmo Settings</h1>
     
     <form id="netatmoForm">
       <div class="section">
         <h2>Netatmo API Credentials</h2>
+        <p>Enter your Netatmo API credentials to connect your weather station.</p>
+        
         <div class="form-group">
           <label for="netatmoClientId">Client ID:</label>
-          <input type="text" id="netatmoClientId" name="netatmoClientId">
+          <input type="text" id="netatmoClientId" name="netatmoClientId" placeholder="Your Netatmo Client ID">
         </div>
         
         <div class="form-group">
           <label for="netatmoClientSecret">Client Secret:</label>
-          <input type="text" id="netatmoClientSecret" name="netatmoClientSecret">
+          <input type="text" id="netatmoClientSecret" name="netatmoClientSecret" placeholder="Your Netatmo Client Secret">
         </div>
+        
+        <div class="center">
+          <div id="tokenStatus" class="token-status">Not connected to Netatmo</div>
+          <a href="javascript:void(0)" id="connectButton" onclick="connectNetatmo()" class="connect-button">Connect to Netatmo</a>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Netatmo Account Credentials</h2>
+        <p>These credentials are used for authentication if OAuth is not available.</p>
         
         <div class="form-group">
           <label for="netatmoUsername">Username:</label>
-          <input type="text" id="netatmoUsername" name="netatmoUsername">
+          <input type="text" id="netatmoUsername" name="netatmoUsername" placeholder="Your Netatmo email">
         </div>
         
         <div class="form-group">
           <label for="netatmoPassword">Password:</label>
-          <input type="password" id="netatmoPassword" name="netatmoPassword">
+          <input type="password" id="netatmoPassword" name="netatmoPassword" placeholder="Your Netatmo password">
         </div>
-        
-        <div id="tokenStatus" class="token-status">Loading token status...</div>
       </div>
       
-      <div class="section">
+      <div class="section device-section">
         <h2>Netatmo Devices</h2>
         
         <div class="form-group">
-          <label for="netatmoDeviceId">Device ID:</label>
-          <input type="text" id="netatmoDeviceId" name="netatmoDeviceId">
+          <label for="netatmoDeviceId">Weather Station:</label>
+          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()">
+            <option value="">Select Device...</option>
+          </select>
+          <button type="button" onclick="fetchNetatmoDevices()" class="fetch-button">Fetch Devices</button>
         </div>
         
         <div class="form-group">
-          <label for="netatmoModuleId">Outdoor Module ID:</label>
-          <input type="text" id="netatmoModuleId" name="netatmoModuleId">
+          <label for="netatmoModuleId">Outdoor Module:</label>
+          <select id="netatmoModuleId" name="netatmoModuleId">
+            <option value="">Select Module...</option>
+          </select>
         </div>
         
         <div class="form-group">
-          <label for="netatmoIndoorModuleId">Indoor Module ID:</label>
-          <input type="text" id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
+          <label for="netatmoIndoorModuleId">Indoor Module:</label>
+          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
+            <option value="">Select Module...</option>
+          </select>
         </div>
+      </div>
+      
+      <div class="section">
+        <h2>Temperature Settings</h2>
         
         <div class="checkbox-group">
           <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
@@ -509,21 +558,12 @@ function debugObject(obj, name = 'Object') {
         </div>
       </div>
       
-      <button type="submit">Save Configuration</button>
+      <button type="submit">Save Settings</button>
     </form>
   </div>
   
   <div class="footer">
     ESPTimeCast v1.0 | <a href="https://github.com/mwstowe/ESPTimeCast" style="color: rgba(255, 255, 255, 0.7);">GitHub</a>
-  </div>
-  
-  <!-- Saving Modal -->
-  <div id="savingModal" class="modal">
-    <div class="modal-content">
-      <div class="spinner"></div>
-      <p id="savingModalText">Saving configuration...</p>
-      <div id="modalButtons"></div>
-    </div>
   </div>
 </body>
 </html>

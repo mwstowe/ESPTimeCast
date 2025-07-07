@@ -460,6 +460,20 @@ void setupWebServer() {
     // Reset file position
     f.seek(0);
     
+    // Read the file content for debugging
+    String fileContent = f.readString();
+    Serial.print(F("[WEBSERVER] config.json content: "));
+    Serial.println(fileContent);
+    
+    // Reset file position again
+    f.close();
+    f = LittleFS.open("/config.json", "r");
+    if (!f) {
+      Serial.println(F("[WEBSERVER] Error reopening /config.json"));
+      request->send(500, "application/json", "{\"error\":\"Failed to reopen config.json\"}");
+      return;
+    }
+    
     DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, f);
     f.close();

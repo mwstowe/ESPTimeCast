@@ -740,33 +740,29 @@ window.onbeforeunload = function () {
 };
 
 window.onload = function () {
-  console.log("Loading configuration...");
+  console.log("[DEBUG] Window onload triggered");
   fetch('/config.json')
     .then(response => {
-      console.log("Config response status:", response.status);
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.text(); // Get the raw text first
-    })
-    .then(text => {
-      console.log("Raw config response:", text);
-      try {
-        return JSON.parse(text); // Then parse it as JSON
-      } catch (e) {
-        console.error("JSON parse error:", e);
-        throw new Error(`Failed to parse JSON: ${e.message}`);
-      }
+      console.log("[DEBUG] Config fetch response status:", response.status);
+      return response.json();
     })
     .then(data => {
-      console.log("Config loaded successfully:", data);
-      isAPMode = (data.mode === "ap");
-      if (isAPMode) {
-        document.querySelector('.footer').style.display = 'none';
-      }
+      console.log("[DEBUG] Config data received:", data);
+      try {
+        console.log("[DEBUG] Setting isAPMode");
+        isAPMode = (data.mode === "ap");
+        console.log("[DEBUG] isAPMode set to:", isAPMode);
+        
+        if (isAPMode) {
+          console.log("[DEBUG] Hiding footer");
+          document.querySelector('.footer').style.display = 'none';
+        }
 
-      document.getElementById('ssid').value = data.ssid || '';
-      document.getElementById('password').value = data.password || '';
+        console.log("[DEBUG] Setting form values");
+        document.getElementById('ssid').value = data.ssid || '';
+        console.log("[DEBUG] SSID set");
+        document.getElementById('password').value = data.password || '';
+        console.log("[DEBUG] Password set");
       document.getElementById('netatmoClientId').value = data.netatmoClientId || '';
       document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret || '';
       // Username and password fields removed - using OAuth2 flow instead
@@ -822,23 +818,10 @@ window.onload = function () {
       }
     })
     .catch(err => {
-      console.error('Failed to load config:', err);
-      
-      // Show error message on the page
-      const errorDiv = document.createElement('div');
-      errorDiv.style.backgroundColor = '#ff5555';
-      errorDiv.style.color = 'white';
-      errorDiv.style.padding = '20px';
-      errorDiv.style.margin = '20px 0';
-      errorDiv.style.borderRadius = '5px';
-      errorDiv.innerHTML = `
-        <h3>Configuration Error</h3>
-        <p>Failed to load configuration: ${err.message}</p>
-        <p>Please check the serial console for more details.</p>
-      `;
-      
-      // Insert at the top of the body
-      document.body.insertBefore(errorDiv, document.body.firstChild);
+      console.error('[DEBUG] Error loading config:', err);
+      console.error('[DEBUG] Error name:', err.name);
+      console.error('[DEBUG] Error message:', err.message);
+      console.error('[DEBUG] Error stack:', err.stack);
       
       showSavingModal("");
       updateSavingModal("⚠️ Failed to load configuration.", false);

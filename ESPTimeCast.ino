@@ -484,16 +484,12 @@ void setupWebServer() {
     
     // Reset file position
     f.close();
-    f = LittleFS.open("/config.json", "r");
-    if (!f) {
-      Serial.println(F("[WEBSERVER] Error reopening /config.json"));
-      request->send(500, "application/json", "{\"error\":\"Failed to reopen config.json\"}");
-      return;
-    }
     
+    // Create a new JSON document with the required fields
     DynamicJsonDocument doc(2048);
-    DeserializationError err = deserializeJson(doc, f);
-    f.close();
+    
+    // Parse the file content
+    DeserializationError err = deserializeJson(doc, fileContent);
     if (err) {
       Serial.print(F("[WEBSERVER] Error parsing /config.json: "));
       Serial.println(err.f_str());
@@ -517,9 +513,17 @@ void setupWebServer() {
       doc["netatmoIndoorModuleId"] = "";
     }
     
-    doc[F("mode")] = isAPMode ? "ap" : "sta";
+    doc["mode"] = isAPMode ? "ap" : "sta";
+    
+    // Serialize to a string
     String response;
     serializeJson(doc, response);
+    
+    // Log the response for debugging
+    Serial.print(F("[WEBSERVER] Response: "));
+    Serial.println(response);
+    
+    // Send the response
     request->send(200, "application/json", response);
   });
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
@@ -654,6 +658,12 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
+  });
+  
+  // Add a simple test endpoint
+  server.on("/test", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /test"));
+    request->send(200, "application/json", "{\"test\":\"ok\",\"time\":\"" + String(millis()) + "\"}");
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

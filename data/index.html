@@ -747,7 +747,16 @@ window.onload = function () {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
-      return response.json();
+      return response.text(); // Get the raw text first
+    })
+    .then(text => {
+      console.log("Raw config response:", text);
+      try {
+        return JSON.parse(text); // Then parse it as JSON
+      } catch (e) {
+        console.error("JSON parse error:", e);
+        throw new Error(`Failed to parse JSON: ${e.message}`);
+      }
     })
     .then(data => {
       console.log("Config loaded successfully:", data);

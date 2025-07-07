@@ -155,28 +155,6 @@ button:hover {
   height: 40px;
   animation: spin 1s linear infinite;
   margin: 20px auto;
-  .nav-links {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .nav-links a {
-    color: #ffffff;
-    text-decoration: none;
-    margin: 0 1rem;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    background-color: rgba(255, 255, 255, 0.1);
-    transition: background-color 0.2s;
-  }
-
-  .nav-links a:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-  }
-
-  .nav-links a.active {
-    background-color: var(--accent-color);
-  }
 }
 
 @keyframes spin {
@@ -234,6 +212,574 @@ button:hover {
   background-color: #27ae60;
 }
 
+.token-status {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.token-valid {
+  color: #2ecc71;
+}
+
+.token-expired {
+  color: #e74c3c;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 2rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+  .nav-links {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .nav-links a {
+    color: #ffffff;
+    text-decoration: none;
+    margin: 0 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    transition: background-color 0.2s;
+  }
+
+  .nav-links a:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
   .nav-links a.active {
     background-color: var(--accent-color);
   }
+</style>
+<script>
+let isAPMode = false;
+let isSaving = false;
+
+// Simple function to load configuration
+window.onload = function() {
+  // Show loading message
+  const statusDiv = document.createElement('div');
+  statusDiv.id = 'statusMessage';
+  statusDiv.className = 'status loading';
+  statusDiv.textContent = 'Loading configuration...';
+  document.querySelector('.container').insertBefore(statusDiv, document.querySelector('form'));
+  
+  // Fetch configuration
+  fetch('/config.json')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      // Update status
+      statusDiv.className = 'status success';
+      statusDiv.textContent = 'Configuration loaded successfully!';
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 3000);
+      
+      // Set AP mode flag
+      isAPMode = (data.mode === "ap");
+      if (isAPMode) {
+        document.querySelector('.footer').style.display = 'none';
+      }
+      
+      // Update form fields with configuration values
+      if (data.ssid) document.getElementById('ssid').value = data.ssid;
+      if (data.password) document.getElementById('password').value = data.password;
+      if (data.mdnsHostname) document.getElementById('mdnsHostname').value = data.mdnsHostname;
+      if (data.weatherUnits) document.getElementById('weatherUnits').value = data.weatherUnits;
+      if (data.timeZone) document.getElementById('timeZone').value = data.timeZone;
+      if (data.brightness !== undefined) document.getElementById('brightnessSlider').value = data.brightness;
+      document.getElementById('brightnessValue').textContent = document.getElementById('brightnessSlider').value;
+      if (data.tempAdjust !== undefined) document.getElementById('tempAdjustSlider').value = data.tempAdjust;
+      document.getElementById('tempAdjustValue').textContent = document.getElementById('tempAdjustSlider').value;
+      if (data.flipDisplay !== undefined) document.getElementById('flipDisplay').checked = data.flipDisplay;
+      if (data.twelveHourToggle !== undefined) document.getElementById('twelveHourToggle').checked = data.twelveHourToggle;
+      if (data.showDayOfWeek !== undefined) document.getElementById('showDayOfWeek').checked = data.showDayOfWeek;
+      if (data.showIndoorTemp !== undefined) document.getElementById('showIndoorTemp').checked = data.showIndoorTemp;
+      if (data.showOutdoorTemp !== undefined) document.getElementById('showOutdoorTemp').checked = data.showOutdoorTemp;
+      
+      // Netatmo fields
+      if (data.netatmoClientId) document.getElementById('netatmoClientId').value = data.netatmoClientId;
+      if (data.netatmoClientSecret) document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret;
+      if (data.netatmoAccessToken) document.getElementById('netatmoAccessToken').value = data.netatmoAccessToken;
+      if (data.netatmoRefreshToken) document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken;
+      if (data.netatmoDeviceId) document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId;
+      if (data.netatmoModuleId) document.getElementById('netatmoModuleId').value = data.netatmoModuleId;
+      if (data.netatmoIndoorModuleId) document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId;
+      
+      // Set the toggle values for Netatmo temperature sources
+      if (document.getElementById('useNetatmoOutdoor')) {
+        document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor === true;
+      }
+      if (document.getElementById('prioritizeNetatmoIndoor')) {
+        document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor === true;
+      }
+      
+      // Auto-detect browser's timezone if not set in config
+      if (!data.timeZone) {
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          if (tz && document.getElementById('timeZone').querySelector(`[value="${tz}"]`)) {
+            document.getElementById('timeZone').value = tz;
+          }
+        } catch (e) {
+          console.error('Error detecting timezone:', e);
+        }
+      }
+      
+      // Update token status
+      updateTokenStatus();
+      
+      // Show the body now that everything is loaded
+      document.body.classList.add('loaded');
+    })
+    .catch(error => {
+      // Update status with error
+      statusDiv.className = 'status error';
+      statusDiv.textContent = 'Failed to load configuration: ' + error.message;
+      console.error('Error loading configuration:', error);
+      
+      // Show the body anyway
+      document.body.classList.add('loaded');
+    });
+    
+  // Set up form submission
+  document.getElementById('configForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    saveConfig();
+  });
+  
+  // Set up slider value display
+  document.getElementById('brightnessSlider').addEventListener('input', function() {
+    document.getElementById('brightnessValue').textContent = this.value;
+  });
+  
+  document.getElementById('tempAdjustSlider').addEventListener('input', function() {
+    document.getElementById('tempAdjustValue').textContent = this.value;
+  });
+};
+
+// Function to update token status
+function updateTokenStatus() {
+  const accessToken = document.getElementById('netatmoAccessToken').value;
+  const refreshToken = document.getElementById('netatmoRefreshToken').value;
+  const tokenStatus = document.getElementById('tokenStatus');
+  
+  if (accessToken && refreshToken) {
+    tokenStatus.textContent = 'OAuth tokens are set';
+    tokenStatus.className = 'token-status token-valid';
+    document.getElementById('authorizeBtn').textContent = 'Re-authorize Netatmo';
+  } else {
+    tokenStatus.textContent = 'No OAuth tokens set';
+    tokenStatus.className = 'token-status token-expired';
+  }
+}
+
+// Function to save configuration using AJAX
+function saveConfig() {
+  if (isSaving) return;
+  isSaving = true;
+  
+  // Show saving modal
+  showSavingModal("Saving configuration...");
+  
+  // Get form data
+  const form = document.getElementById('configForm');
+  const formData = new FormData(form);
+  
+  // Convert FormData to URL-encoded string
+  const urlEncodedData = new URLSearchParams(formData).toString();
+  
+  // Send AJAX request
+  fetch('/save', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: urlEncodedData
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+    return response.json();
+  })
+  .then(data => {
+    // Show success message
+    updateSavingModal('Configuration saved successfully!', false);
+    
+    // Add restart button if needed
+    if (data.restart_required) {
+      const restartBtn = document.createElement('button');
+      restartBtn.textContent = 'Restart Device';
+      restartBtn.onclick = function() {
+        updateSavingModal('Restarting device...', true);
+        fetch('/restart', { method: 'POST' })
+          .then(() => {
+            updateSavingModal('Device is restarting. Please wait...', true);
+            setTimeout(() => {
+              window.location.reload();
+            }, 10000);
+          })
+          .catch(error => {
+            updateSavingModal('Error restarting device: ' + error.message, false);
+          });
+      };
+      document.getElementById('modalButtons').appendChild(restartBtn);
+    }
+    
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = function() {
+      document.getElementById('savingModal').style.display = 'none';
+      document.getElementById('modalButtons').innerHTML = '';
+      isSaving = false;
+    };
+    document.getElementById('modalButtons').appendChild(closeBtn);
+  })
+  .catch(error => {
+    // Show error message
+    updateSavingModal('Error saving configuration: ' + error.message, false);
+    
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = function() {
+      document.getElementById('savingModal').style.display = 'none';
+      document.getElementById('modalButtons').innerHTML = '';
+      isSaving = false;
+    };
+    document.getElementById('modalButtons').appendChild(closeBtn);
+  });
+}
+
+// Function to show saving modal
+function showSavingModal(message) {
+  const modal = document.getElementById('savingModal');
+  const modalText = document.getElementById('savingModalText');
+  modal.style.display = 'block';
+  modalText.textContent = message;
+  document.body.classList.add('modal-open');
+}
+
+// Function to update saving modal
+function updateSavingModal(message, showSpinner = true) {
+  let modalText = document.getElementById('savingModalText');
+  modalText.innerHTML = message;
+  document.querySelector('#savingModal .spinner').style.display = showSpinner ? 'block' : 'none';
+}
+
+// Function to initiate Netatmo OAuth flow
+function authorizeNetatmo() {
+  const clientId = document.getElementById('netatmoClientId').value;
+  if (!clientId) {
+    alert('Please enter your Netatmo Client ID first');
+    return;
+  }
+  
+  // Save the client ID and secret first
+  const formData = new FormData();
+  formData.append('netatmoClientId', document.getElementById('netatmoClientId').value);
+  formData.append('netatmoClientSecret', document.getElementById('netatmoClientSecret').value);
+  
+  fetch('/save', {
+    method: 'POST',
+    body: new URLSearchParams(formData)
+  })
+  .then(response => response.json())
+  .then(() => {
+    // Redirect to Netatmo authorization page
+    window.location.href = '/api/netatmo/auth';
+  })
+  .catch(error => {
+    alert('Error saving Netatmo credentials: ' + error.message);
+  });
+}
+
+// Function to fetch Netatmo devices
+function fetchNetatmoDevices() {
+  const deviceSelect = document.getElementById('netatmoDeviceId');
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+  
+  // Clear existing options
+  deviceSelect.innerHTML = '<option value="">Select Device...</option>';
+  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
+  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
+  
+  // Show loading message
+  showSavingModal("Fetching Netatmo devices...");
+  
+  fetch('/api/netatmo/devices')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Hide loading message
+      document.getElementById('savingModal').style.display = 'none';
+      document.body.classList.remove('modal-open');
+      
+      // Populate device dropdown
+      if (data.devices && data.devices.length > 0) {
+        data.devices.forEach(device => {
+          const option = document.createElement('option');
+          option.value = device.id;
+          option.textContent = device.name || device.id;
+          deviceSelect.appendChild(option);
+        });
+        
+        // Select the current device if set
+        const currentDeviceId = document.getElementById('netatmoDeviceId').getAttribute('data-current');
+        if (currentDeviceId) {
+          deviceSelect.value = currentDeviceId;
+          // Trigger change to load modules
+          deviceSelect.dispatchEvent(new Event('change'));
+        }
+      }
+    })
+    .catch(error => {
+      // Hide loading message
+      document.getElementById('savingModal').style.display = 'none';
+      document.body.classList.remove('modal-open');
+      
+      // Show error
+      alert('Error fetching Netatmo devices: ' + error.message);
+    });
+}
+
+// Function to load modules for selected device
+function loadModules() {
+  const deviceId = document.getElementById('netatmoDeviceId').value;
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+  
+  // Clear existing options
+  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
+  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
+  
+  if (!deviceId) return;
+  
+  // Get the device data from the previously loaded devices
+  const deviceData = window.netatmoDevices.find(d => d.id === deviceId);
+  if (!deviceData) return;
+  
+  // Populate outdoor modules
+  if (deviceData.modules && deviceData.modules.length > 0) {
+    deviceData.modules.forEach(module => {
+      if (module.type === 'NAModule1') { // Outdoor module
+        const option = document.createElement('option');
+        option.value = module.id;
+        option.textContent = module.name || module.id;
+        moduleSelect.appendChild(option);
+      } else if (module.type === 'NAModule4') { // Indoor module
+        const option = document.createElement('option');
+        option.value = module.id;
+        option.textContent = module.name || module.id;
+        indoorModuleSelect.appendChild(option);
+      }
+    });
+    
+    // Select the current modules if set
+    const currentModuleId = document.getElementById('netatmoModuleId').getAttribute('data-current');
+    if (currentModuleId) {
+      moduleSelect.value = currentModuleId;
+    }
+    
+    const currentIndoorModuleId = document.getElementById('netatmoIndoorModuleId').getAttribute('data-current');
+    if (currentIndoorModuleId) {
+      indoorModuleSelect.value = currentIndoorModuleId;
+    }
+  }
+}
+</script>
+</head>
+<body>
+  <div class="container">
+    <h1>ESPTimeCast Settings</h1>
+    
+    <div class="nav-links">
+      <a href="/" class="active">General Settings</a>
+      <a href="/netatmo.html">Netatmo Settings</a>
+    </div>
+    
+    <form id="configForm">
+      <div class="section">
+        <h2>WiFi Settings</h2>
+        <div class="form-group">
+          <label for="ssid">WiFi SSID:</label>
+          <input type="text" id="ssid" name="ssid">
+        </div>
+        
+        <div class="form-group">
+          <label for="password">WiFi Password:</label>
+          <input type="password" id="password" name="password">
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Netatmo Integration</h2>
+        <div class="form-group">
+          <label for="netatmoClientId">Netatmo Client ID:</label>
+          <input type="text" id="netatmoClientId" name="netatmoClientId">
+        </div>
+        
+        <div class="form-group">
+          <label for="netatmoClientSecret">Netatmo Client Secret:</label>
+          <input type="text" id="netatmoClientSecret" name="netatmoClientSecret">
+        </div>
+        
+        <div class="oauth-section">
+          <p>Enter your Netatmo OAuth credentials manually:</p>
+          <p><small>Due to memory constraints, automatic OAuth flow is not possible on this device.</small></p>
+          <p><small>Please generate tokens using the <a href="https://dev.netatmo.com/" target="_blank">Netatmo Developer Portal</a>.</small></p>
+          <div class="form-group">
+            <label for="netatmoAccessToken">Access Token:</label>
+            <input type="text" id="netatmoAccessToken" name="netatmoAccessToken">
+          </div>
+          
+          <div class="form-group">
+            <label for="netatmoRefreshToken">Refresh Token:</label>
+            <input type="text" id="netatmoRefreshToken" name="netatmoRefreshToken">
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="netatmoDeviceId">Netatmo Device:</label>
+          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()">
+            <option value="">Select Device...</option>
+          </select>
+          <button type="button" onclick="fetchNetatmoDevices()" style="margin-top: 0.5rem;">Fetch Devices</button>
+        </div>
+        
+        <div class="form-group">
+          <label for="netatmoModuleId">Outdoor Module:</label>
+          <select id="netatmoModuleId" name="netatmoModuleId">
+            <option value="">Select Module...</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="netatmoIndoorModuleId">Indoor Module:</label>
+          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
+            <option value="">Select Module...</option>
+          </select>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
+          <label for="useNetatmoOutdoor">Use Netatmo for outdoor temperature</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="prioritizeNetatmoIndoor" name="prioritizeNetatmoIndoor">
+          <label for="prioritizeNetatmoIndoor">Prioritize Netatmo for indoor temperature</label>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Device Settings</h2>
+        <div class="form-group">
+          <label for="mdnsHostname">mDNS Hostname:</label>
+          <input type="text" id="mdnsHostname" name="mdnsHostname" value="esptime">
+        </div>
+        
+        <div class="form-group">
+          <label for="weatherUnits">Weather Units:</label>
+          <select id="weatherUnits" name="weatherUnits">
+            <option value="metric">Metric (°C)</option>
+            <option value="imperial">Imperial (°F)</option>
+            <option value="standard">Standard (K)</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="timeZone">Time Zone:</label>
+          <select id="timeZone" name="timeZone">
+            <option value="">Select Time Zone...</option>
+            <option value="America/New_York">Eastern Time (US & Canada)</option>
+            <option value="America/Chicago">Central Time (US & Canada)</option>
+            <option value="America/Denver">Mountain Time (US & Canada)</option>
+            <option value="America/Los_Angeles">Pacific Time (US & Canada)</option>
+            <option value="America/Anchorage">Alaska</option>
+            <option value="Pacific/Honolulu">Hawaii</option>
+            <option value="Europe/London">London</option>
+            <option value="Europe/Paris">Paris</option>
+            <option value="Europe/Berlin">Berlin</option>
+            <option value="Asia/Tokyo">Tokyo</option>
+            <option value="Australia/Sydney">Sydney</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Display Settings</h2>
+        <div class="form-group">
+          <label for="brightnessSlider">Brightness: <span id="brightnessValue">10</span></label>
+          <input type="range" id="brightnessSlider" name="brightness" min="0" max="15" value="10">
+        </div>
+        
+        <div class="form-group">
+          <label for="tempAdjustSlider">Temperature Adjustment: <span id="tempAdjustValue">0</span>°C</label>
+          <input type="range" id="tempAdjustSlider" name="tempAdjust" min="-5" max="5" step="0.5" value="0">
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="flipDisplay" name="flipDisplay">
+          <label for="flipDisplay">Flip Display</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="twelveHourToggle" name="twelveHourToggle">
+          <label for="twelveHourToggle">Use 12-hour Format</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="showDayOfWeek" name="showDayOfWeek" checked>
+          <label for="showDayOfWeek">Show Day of Week</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="showIndoorTemp" name="showIndoorTemp" checked>
+          <label for="showIndoorTemp">Show Indoor Temperature</label>
+        </div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="showOutdoorTemp" name="showOutdoorTemp" checked>
+          <label for="showOutdoorTemp">Show Outdoor Temperature</label>
+        </div>
+      </div>
+      
+      <button type="submit">Save Configuration</button>
+    </form>
+  </div>
+  
+  <div class="footer">
+    ESPTimeCast v1.0 | <a href="https://github.com/mwstowe/ESPTimeCast" style="color: rgba(255, 255, 255, 0.7);">GitHub</a>
+  </div>
+  
+  <!-- Saving Modal -->
+  <div id="savingModal" class="modal">
+    <div class="modal-content">
+      <div class="spinner"></div>
+      <p id="savingModalText">Saving configuration...</p>
+      <div id="modalButtons"></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -225,43 +225,27 @@ button:hover {
   background-color: rgba(255, 255, 255, 0.1);
   text-align: center;
 }
-
-.oauth-button {
-  display: inline-block;
-  margin-top: 1rem;
-  padding: 0.75rem 1.5rem;
-  background-color: var(--accent-color);
-  color: white;
-  text-decoration: none;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.oauth-button:hover {
-  background-color: #0062d6;
-}
-
-.oauth-section {
-  margin-top: 1.5rem;
-  text-align: center;
-}
 </style>
 <script>
-// Simple function to load configuration
-window.onload = function() {
-  // Show loading message
-  const statusDiv = document.createElement('div');
-  statusDiv.id = 'statusMessage';
-  statusDiv.className = 'status loading';
-  statusDiv.textContent = 'Loading configuration...';
+document.addEventListener('DOMContentLoaded', function() {
+  // Show the body once everything is loaded
+  document.body.classList.add('loaded');
   
-  const container = document.querySelector('.container');
-  if (container) {
-    // Insert at the beginning of the container
-    container.insertBefore(statusDiv, container.firstChild);
+  // Set up form submission
+  const form = document.getElementById('netatmoForm');
+  if (form) {
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+      saveConfig();
+    });
   }
   
-  // Fetch configuration
+  // Load configuration
+  loadConfig();
+});
+
+// Function to load configuration
+function loadConfig() {
   fetch('/config.json')
     .then(response => {
       if (!response.ok) {
@@ -270,13 +254,6 @@ window.onload = function() {
       return response.json();
     })
     .then(data => {
-      // Update status
-      statusDiv.className = 'status success';
-      statusDiv.textContent = 'Configuration loaded successfully!';
-      setTimeout(() => {
-        statusDiv.style.display = 'none';
-      }, 3000);
-      
       // Update form fields with configuration values
       if (data.netatmoClientId) document.getElementById('netatmoClientId').value = data.netatmoClientId;
       if (data.netatmoClientSecret) document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret;
@@ -285,47 +262,36 @@ window.onload = function() {
       if (data.netatmoDeviceId) document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId;
       if (data.netatmoModuleId) document.getElementById('netatmoModuleId').value = data.netatmoModuleId;
       if (data.netatmoIndoorModuleId) document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId;
-      if (data.useNetatmoOutdoor !== undefined) document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor;
-      if (data.prioritizeNetatmoIndoor !== undefined) document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor;
+      
+      // Set checkbox values
+      if (data.useNetatmoOutdoor !== undefined) {
+        document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor;
+      }
+      if (data.prioritizeNetatmoIndoor !== undefined) {
+        document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor;
+      }
       
       // Check if tokens are set
       const tokenStatus = document.getElementById('tokenStatus');
-      if (data.netatmoAccessToken && data.netatmoAccessToken.length > 0) {
-        tokenStatus.textContent = 'OAuth tokens are set';
-        tokenStatus.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
-      } else {
-        tokenStatus.textContent = 'No OAuth tokens set';
-        tokenStatus.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+      if (tokenStatus) {
+        if (data.netatmoAccessToken && data.netatmoAccessToken.length > 0) {
+          tokenStatus.textContent = 'OAuth tokens are set';
+          tokenStatus.style.backgroundColor = 'rgba(76, 175, 80, 0.2)';
+        } else {
+          tokenStatus.textContent = 'No OAuth tokens set';
+          tokenStatus.style.backgroundColor = 'rgba(244, 67, 54, 0.2)';
+        }
       }
-      
-      // Show the body now that everything is loaded
-      document.body.classList.add('loaded');
     })
     .catch(error => {
-      // Update status with error
-      statusDiv.className = 'status error';
-      statusDiv.textContent = 'Failed to load configuration: ' + error.message;
       console.error('Error loading configuration:', error);
-      
-      // Show the body anyway
-      document.body.classList.add('loaded');
+      showMessage('Failed to load configuration: ' + error.message, true);
     });
-    
-  // Set up form submission
-  document.getElementById('netatmoForm').addEventListener('submit', function(event) {
-    event.preventDefault();
-    saveConfig();
-  });
-};
+}
 
-// Function to save configuration using AJAX
+// Function to save configuration
 function saveConfig() {
-  // Show saving modal
-  const modal = document.getElementById('savingModal');
-  const modalText = document.getElementById('savingModalText');
-  modal.style.display = 'block';
-  modalText.textContent = 'Saving configuration...';
-  document.body.classList.add('modal-open');
+  showModal('Saving configuration...');
   
   // Get form data
   const form = document.getElementById('netatmoForm');
@@ -349,183 +315,75 @@ function saveConfig() {
     return response.json();
   })
   .then(data => {
-    // Show success message
-    modalText.textContent = 'Configuration saved successfully!';
-    
-    // Add close button
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Close';
-    closeBtn.onclick = function() {
-      modal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      document.getElementById('modalButtons').innerHTML = '';
-    };
-    document.getElementById('modalButtons').appendChild(closeBtn);
+    showModalWithButton('Configuration saved successfully!');
   })
   .catch(error => {
-    // Show error message
-    modalText.textContent = 'Error saving configuration: ' + error.message;
-    
-    // Add close button
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = 'Close';
-    closeBtn.onclick = function() {
-      modal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      document.getElementById('modalButtons').innerHTML = '';
-    };
-    document.getElementById('modalButtons').appendChild(closeBtn);
+    showModalWithButton('Error saving configuration: ' + error.message);
   });
 }
 
-// Function to authorize Netatmo
-function authorizeNetatmo() {
-  window.location.href = '/netatmo/auth';
-}
-
-// Function to fetch Netatmo devices
-function fetchNetatmoDevices() {
-  // Show loading modal
+// Function to show a modal with a message
+function showModal(message) {
   const modal = document.getElementById('savingModal');
   const modalText = document.getElementById('savingModalText');
-  modal.style.display = 'block';
-  modalText.textContent = 'Fetching Netatmo devices...';
-  document.body.classList.add('modal-open');
   
-  // Send request to fetch devices
-  fetch('/api/netatmo/devices')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(data => {
-      // Check for error
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Clear existing options
-      const deviceSelect = document.getElementById('netatmoDeviceId');
-      deviceSelect.innerHTML = '<option value="">Select Device...</option>';
-      
-      // Add devices to select
-      if (data.devices && data.devices.length > 0) {
-        data.devices.forEach(device => {
-          const option = document.createElement('option');
-          option.value = device.id;
-          option.textContent = device.name || device.id;
-          deviceSelect.appendChild(option);
-        });
-      } else {
-        throw new Error('No devices found');
-      }
-      
-      // Show success message
-      modalText.textContent = 'Devices fetched successfully!';
-      
-      // Add close button
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = 'Close';
-      closeBtn.onclick = function() {
-        modal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        document.getElementById('modalButtons').innerHTML = '';
-      };
-      document.getElementById('modalButtons').appendChild(closeBtn);
-    })
-    .catch(error => {
-      // Show error message
-      modalText.textContent = 'Error fetching devices: ' + error.message;
-      
-      // Add close button
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = 'Close';
-      closeBtn.onclick = function() {
-        modal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-        document.getElementById('modalButtons').innerHTML = '';
-      };
-      document.getElementById('modalButtons').appendChild(closeBtn);
-    });
+  if (modal && modalText) {
+    modalText.textContent = message;
+    modal.style.display = 'block';
+    document.body.classList.add('modal-open');
+  }
 }
 
-// Function to load modules for selected device
-function loadModules() {
-  const deviceId = document.getElementById('netatmoDeviceId').value;
-  const moduleSelect = document.getElementById('netatmoModuleId');
-  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+// Function to show a modal with a message and a close button
+function showModalWithButton(message) {
+  showModal(message);
   
-  // Clear existing options
-  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
-  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
-  
-  if (!deviceId) return;
-  
-  // Show loading modal
-  const modal = document.getElementById('savingModal');
-  const modalText = document.getElementById('savingModalText');
-  modal.style.display = 'block';
-  modalText.textContent = 'Loading modules...';
-  document.body.classList.add('modal-open');
-  
-  // Send request to fetch modules
-  fetch('/api/netatmo/modules?device_id=' + deviceId)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(data => {
-      // Check for error
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Add modules to select
-      if (data.modules && data.modules.length > 0) {
-        data.modules.forEach(module => {
-          // Add outdoor modules to the outdoor module select
-          if (module.type === 'NAModule1') {
-            const option = document.createElement('option');
-            option.value = module.id;
-            option.textContent = module.name || module.id;
-            moduleSelect.appendChild(option);
-          }
-          
-          // Add indoor modules to the indoor module select
-          if (module.type === 'NAModule4' || module.type === 'NAMain') {
-            const option = document.createElement('option');
-            option.value = module.id;
-            option.textContent = module.name || module.id;
-            indoorModuleSelect.appendChild(option);
-          }
-        });
-      } else {
-        throw new Error('No modules found');
-      }
-      
-      // Hide modal
-      modal.style.display = 'none';
-      document.body.classList.remove('modal-open');
-      document.getElementById('modalButtons').innerHTML = '';
-    })
-    .catch(error => {
-      // Show error message
-      modalText.textContent = 'Error loading modules: ' + error.message;
-      
-      // Add close button
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = 'Close';
-      closeBtn.onclick = function() {
+  const modalButtons = document.getElementById('modalButtons');
+  if (modalButtons) {
+    // Clear existing buttons
+    modalButtons.innerHTML = '';
+    
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = function() {
+      const modal = document.getElementById('savingModal');
+      if (modal) {
         modal.style.display = 'none';
         document.body.classList.remove('modal-open');
-        document.getElementById('modalButtons').innerHTML = '';
-      };
-      document.getElementById('modalButtons').appendChild(closeBtn);
-    });
+      }
+    };
+    modalButtons.appendChild(closeBtn);
+  }
+}
+
+// Function to show a message
+function showMessage(message, isError = false) {
+  // Check if status message element exists
+  let statusDiv = document.getElementById('statusMessage');
+  
+  // If not, create it
+  if (!statusDiv) {
+    statusDiv = document.createElement('div');
+    statusDiv.id = 'statusMessage';
+    
+    // Insert at the beginning of the container
+    const container = document.querySelector('.container');
+    if (container) {
+      container.insertBefore(statusDiv, container.firstChild);
+    }
+  }
+  
+  // Update the message
+  statusDiv.textContent = message;
+  statusDiv.className = isError ? 'status error' : 'status success';
+  
+  // Hide success messages after a delay
+  if (!isError) {
+    setTimeout(() => {
+      statusDiv.style.display = 'none';
+    }, 3000);
+  }
 }
 </script>
 </head>
@@ -561,36 +419,25 @@ function loadModules() {
           <input type="password" id="netatmoPassword" name="netatmoPassword">
         </div>
         
-        <div class="oauth-section">
-          <p>Authorize ESPTimeCast to access your Netatmo account:</p>
-          <a href="javascript:authorizeNetatmo()" id="authorizeBtn" class="oauth-button">Authorize Netatmo</a>
-          <div id="tokenStatus" class="token-status">No OAuth tokens set</div>
-        </div>
+        <div id="tokenStatus" class="token-status">Loading token status...</div>
       </div>
       
       <div class="section">
         <h2>Netatmo Devices</h2>
-        <button type="button" onclick="fetchNetatmoDevices()">Fetch Devices</button>
         
         <div class="form-group">
-          <label for="netatmoDeviceId">Device:</label>
-          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()">
-            <option value="">Select Device...</option>
-          </select>
+          <label for="netatmoDeviceId">Device ID:</label>
+          <input type="text" id="netatmoDeviceId" name="netatmoDeviceId">
         </div>
         
         <div class="form-group">
-          <label for="netatmoModuleId">Outdoor Module:</label>
-          <select id="netatmoModuleId" name="netatmoModuleId">
-            <option value="">Select Module...</option>
-          </select>
+          <label for="netatmoModuleId">Outdoor Module ID:</label>
+          <input type="text" id="netatmoModuleId" name="netatmoModuleId">
         </div>
         
         <div class="form-group">
-          <label for="netatmoIndoorModuleId">Indoor Module:</label>
-          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
-            <option value="">Select Module...</option>
-          </select>
+          <label for="netatmoIndoorModuleId">Indoor Module ID:</label>
+          <input type="text" id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
         </div>
         
         <div class="checkbox-group">

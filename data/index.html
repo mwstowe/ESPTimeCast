@@ -740,88 +740,165 @@ window.onbeforeunload = function () {
 };
 
 window.onload = function () {
-  console.log("[DEBUG] Window onload triggered");
+  // Create a debug div to show errors on the page
+  const debugDiv = document.createElement('div');
+  debugDiv.id = 'debugInfo';
+  debugDiv.style.backgroundColor = '#333';
+  debugDiv.style.color = '#fff';
+  debugDiv.style.padding = '10px';
+  debugDiv.style.margin = '10px 0';
+  debugDiv.style.borderRadius = '5px';
+  debugDiv.style.fontFamily = 'monospace';
+  debugDiv.style.whiteSpace = 'pre-wrap';
+  debugDiv.style.overflow = 'auto';
+  debugDiv.style.maxHeight = '200px';
+  debugDiv.innerHTML = 'Debug Info:<br>';
+  document.body.insertBefore(debugDiv, document.body.firstChild);
+  
+  // Function to log to both console and debug div
+  function logDebug(message) {
+    console.log(message);
+    const debugDiv = document.getElementById('debugInfo');
+    if (debugDiv) {
+      debugDiv.innerHTML += message + '<br>';
+    }
+  }
+  
+  logDebug("Window onload triggered");
   fetch('/config.json')
     .then(response => {
-      console.log("[DEBUG] Config fetch response status:", response.status);
+      logDebug("Config fetch response status: " + response.status);
       return response.json();
     })
     .then(data => {
-      console.log("[DEBUG] Config data received:", data);
+      logDebug("Config data received");
       try {
-        console.log("[DEBUG] Setting isAPMode");
+        logDebug("Setting isAPMode");
         isAPMode = (data.mode === "ap");
-        console.log("[DEBUG] isAPMode set to:", isAPMode);
+        logDebug("isAPMode set to: " + isAPMode);
         
         if (isAPMode) {
-          console.log("[DEBUG] Hiding footer");
+          logDebug("Hiding footer");
           document.querySelector('.footer').style.display = 'none';
         }
 
-        console.log("[DEBUG] Setting form values");
-        document.getElementById('ssid').value = data.ssid || '';
-        console.log("[DEBUG] SSID set");
-        document.getElementById('password').value = data.password || '';
-        console.log("[DEBUG] Password set");
-      document.getElementById('netatmoClientId').value = data.netatmoClientId || '';
-      document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret || '';
-      // Username and password fields removed - using OAuth2 flow instead
-      document.getElementById('netatmoAccessToken').value = data.netatmoAccessToken || '';
-      document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken || '';
-      document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
-      document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
-      document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId || '';
-      
-      // Set the toggle values for Netatmo temperature sources
-      if (document.getElementById('useNetatmoOutdoor')) {
-        // Check if the field exists in the config, if not, default to false
-        document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor === true;
-      }
-      if (document.getElementById('prioritizeNetatmoIndoor')) {
-        // Check if the field exists in the config, if not, default to false
-        document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor === true;
-      }
-      
-      document.getElementById('mdnsHostname').value = data.mdnsHostname || 'esptime';
-      document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';
-      document.getElementById('clockDuration').value = (data.clockDuration || 10000) / 1000;
-      document.getElementById('weatherDuration').value = (data.weatherDuration || 5000) / 1000;
-      // Advanced:
-      document.getElementById('brightnessSlider').value = typeof data.brightness !== "undefined" ? data.brightness : 10;
-      document.getElementById('brightnessValue').textContent = document.getElementById('brightnessSlider').value;
-      document.getElementById('tempAdjustSlider').value = typeof data.tempAdjust !== "undefined" ? data.tempAdjust : 0;
-      document.getElementById('tempAdjustValue').textContent = document.getElementById('tempAdjustSlider').value;
-      document.getElementById('flipDisplay').checked = !!data.flipDisplay;
-      document.getElementById('ntpServer1').value = data.ntpServer1 || "";
-      document.getElementById('ntpServer2').value = data.ntpServer2 || "";
-      document.getElementById('twelveHourToggle').checked = !!data.twelveHourToggle;
-      document.getElementById('showDayOfWeek').checked = !!data.showDayOfWeek;
-      document.getElementById('showIndoorTemp').checked = typeof data.showIndoorTemp !== "undefined" ? !!data.showIndoorTemp : true;
-      document.getElementById('showOutdoorTemp').checked = typeof data.showOutdoorTemp !== "undefined" ? !!data.showOutdoorTemp : true;
-      // Auto-detect browser's timezone if not set in config
-      if (!data.timeZone) {
+        logDebug("Setting form values");
         try {
-          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-          if (
-            tz &&
-            document.getElementById('timeZone').querySelector(`[value="${tz}"]`)
-          ) {
-            document.getElementById('timeZone').value = tz;
-          } else {
-            document.getElementById('timeZone').value = '';
+          document.getElementById('ssid').value = data.ssid || '';
+          logDebug("SSID set");
+          document.getElementById('password').value = data.password || '';
+          logDebug("Password set");
+          document.getElementById('netatmoClientId').value = data.netatmoClientId || '';
+          logDebug("netatmoClientId set");
+          document.getElementById('netatmoClientSecret').value = data.netatmoClientSecret || '';
+          logDebug("netatmoClientSecret set");
+          // Username and password fields removed - using OAuth2 flow instead
+          document.getElementById('netatmoAccessToken').value = data.netatmoAccessToken || '';
+          logDebug("netatmoAccessToken set");
+          document.getElementById('netatmoRefreshToken').value = data.netatmoRefreshToken || '';
+          logDebug("netatmoRefreshToken set");
+          document.getElementById('netatmoDeviceId').value = data.netatmoDeviceId || '';
+          logDebug("netatmoDeviceId set");
+          document.getElementById('netatmoModuleId').value = data.netatmoModuleId || '';
+          logDebug("netatmoModuleId set");
+          document.getElementById('netatmoIndoorModuleId').value = data.netatmoIndoorModuleId || '';
+          logDebug("netatmoIndoorModuleId set");
+        } catch (e) {
+          logDebug("ERROR setting Netatmo fields: " + e.message);
+        }
+        
+        // Set the toggle values for Netatmo temperature sources
+        try {
+        try {
+          if (document.getElementById('useNetatmoOutdoor')) {
+            // Check if the field exists in the config, if not, default to false
+            document.getElementById('useNetatmoOutdoor').checked = data.useNetatmoOutdoor === true;
+            logDebug("useNetatmoOutdoor set");
+          }
+          if (document.getElementById('prioritizeNetatmoIndoor')) {
+            // Check if the field exists in the config, if not, default to false
+            document.getElementById('prioritizeNetatmoIndoor').checked = data.prioritizeNetatmoIndoor === true;
+            logDebug("prioritizeNetatmoIndoor set");
           }
         } catch (e) {
-          document.getElementById('timeZone').value = '';
+          logDebug("ERROR setting Netatmo toggles: " + e.message);
         }
-      } else {
-        document.getElementById('timeZone').value = data.timeZone;
+        try {
+          document.getElementById('mdnsHostname').value = data.mdnsHostname || 'esptime';
+          logDebug("mdnsHostname set");
+          document.getElementById('weatherUnits').value = data.weatherUnits || 'metric';
+          logDebug("weatherUnits set");
+          document.getElementById('clockDuration').value = (data.clockDuration || 10000) / 1000;
+          logDebug("clockDuration set");
+          document.getElementById('weatherDuration').value = (data.weatherDuration || 5000) / 1000;
+          logDebug("weatherDuration set");
+          
+          // Advanced:
+          document.getElementById('brightnessSlider').value = typeof data.brightness !== "undefined" ? data.brightness : 10;
+          document.getElementById('brightnessValue').textContent = document.getElementById('brightnessSlider').value;
+          logDebug("brightness set");
+          
+          document.getElementById('tempAdjustSlider').value = typeof data.tempAdjust !== "undefined" ? data.tempAdjust : 0;
+          document.getElementById('tempAdjustValue').textContent = document.getElementById('tempAdjustSlider').value;
+          logDebug("tempAdjust set");
+          
+          document.getElementById('flipDisplay').checked = !!data.flipDisplay;
+          logDebug("flipDisplay set");
+          
+          document.getElementById('ntpServer1').value = data.ntpServer1 || "";
+          document.getElementById('ntpServer2').value = data.ntpServer2 || "";
+          logDebug("NTP servers set");
+          
+          document.getElementById('twelveHourToggle').checked = !!data.twelveHourToggle;
+          document.getElementById('showDayOfWeek').checked = !!data.showDayOfWeek;
+          logDebug("Display toggles set");
+        } catch (e) {
+          logDebug("ERROR setting general fields: " + e.message);
+        }
+        try {
+          document.getElementById('showIndoorTemp').checked = typeof data.showIndoorTemp !== "undefined" ? !!data.showIndoorTemp : true;
+          document.getElementById('showOutdoorTemp').checked = typeof data.showOutdoorTemp !== "undefined" ? !!data.showOutdoorTemp : true;
+          logDebug("Temperature display toggles set");
+          
+          // Auto-detect browser's timezone if not set in config
+          if (!data.timeZone) {
+            try {
+              const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+              if (
+                tz &&
+                document.getElementById('timeZone').querySelector(`[value="${tz}"]`)
+              ) {
+                document.getElementById('timeZone').value = tz;
+              } else {
+                document.getElementById('timeZone').value = '';
+              }
+              logDebug("Auto-detected timezone: " + tz);
+            } catch (e) {
+              document.getElementById('timeZone').value = '';
+              logDebug("ERROR auto-detecting timezone: " + e.message);
+            }
+          } else {
+            document.getElementById('timeZone').value = data.timeZone;
+            logDebug("Using configured timezone: " + data.timeZone);
+          }
+        } catch (e) {
+          logDebug("ERROR setting temperature toggles or timezone: " + e.message);
+        }
+        
+        logDebug("All form values set successfully");
+      } catch (e) {
+        logDebug("ERROR in main try block: " + e.message);
       }
     })
     .catch(err => {
-      console.error('[DEBUG] Error loading config:', err);
-      console.error('[DEBUG] Error name:', err.name);
-      console.error('[DEBUG] Error message:', err.message);
-      console.error('[DEBUG] Error stack:', err.stack);
+      const errorMsg = "Error loading config: " + err.message;
+      console.error(errorMsg);
+      
+      // Add error to debug div
+      const debugDiv = document.getElementById('debugInfo');
+      if (debugDiv) {
+        debugDiv.innerHTML += '<span style="color: red; font-weight: bold;">' + errorMsg + '</span><br>';
+      }
       
       showSavingModal("");
       updateSavingModal("⚠️ Failed to load configuration.", false);
@@ -829,11 +906,11 @@ window.onload = function () {
       // Show appropriate button for load error
       removeReloadButton();
       removeRestoreButton();
-      const errorMsg = (err.message || "").toLowerCase();
+      const errMsgLower = (err.message || "").toLowerCase();
       if (
-        errorMsg.includes("config corrupted") ||
-        errorMsg.includes("failed to write config") ||
-        errorMsg.includes("restore")
+        errMsgLower.includes("config corrupted") ||
+        errMsgLower.includes("failed to write config") ||
+        errMsgLower.includes("restore")
       ) {
         ensureRestoreButton();
       } else {

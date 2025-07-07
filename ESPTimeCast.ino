@@ -53,51 +53,31 @@ void createDefaultConfig() {
     return;
   }
   
-  // Create a complete default config
-  DynamicJsonDocument doc(1024);
+  // Create a minimal config first
+  DynamicJsonDocument doc(512);
   doc[F("ssid")] = "";
   doc[F("password")] = "";
-  doc[F("netatmoClientId")] = "";
-  doc[F("netatmoClientSecret")] = "";
-  doc[F("netatmoDeviceId")] = "";
-  doc[F("netatmoModuleId")] = "";
-  doc[F("netatmoIndoorModuleId")] = "";
-  doc[F("netatmoAccessToken")] = "";
-  doc[F("netatmoRefreshToken")] = "";
   doc[F("mdnsHostname")] = "esptime";
   doc[F("weatherUnits")] = "metric";
-  doc[F("clockDuration")] = 10000;
-  doc[F("weatherDuration")] = 5000;
   doc[F("timeZone")] = "";
   doc[F("brightness")] = brightness;
-  doc[F("tempAdjust")] = tempAdjust;
   doc[F("flipDisplay")] = flipDisplay;
-  doc[F("twelveHourToggle")] = twelveHourToggle;
-  doc[F("showDayOfWeek")] = showDayOfWeek;
-  doc[F("showIndoorTemp")] = showIndoorTemp;
-  doc[F("showOutdoorTemp")] = showOutdoorTemp;
-  doc[F("useNetatmoOutdoor")] = useNetatmoOutdoor;
-  doc[F("prioritizeNetatmoIndoor")] = prioritizeNetatmoIndoor;
-  doc[F("ntpServer1")] = ntpServer1;
-  doc[F("ntpServer2")] = ntpServer2;
   
-  // Write the config
+  // Write the minimal config
   File f = LittleFS.open("/config.json", "w");
   if (!f) {
     Serial.println(F("[CONFIG] ERROR: Failed to open config.json for writing"));
     return;
   }
   
-  size_t bytesWritten = serializeJsonPretty(doc, f);
-  if (bytesWritten == 0) {
+  if (serializeJsonPretty(doc, f) == 0) {
     Serial.println(F("[CONFIG] ERROR: Failed to write to config.json"));
     f.close();
     return;
   }
   
-  Serial.print(F("[CONFIG] Default config.json created successfully, bytes written: "));
-  Serial.println(bytesWritten);
   f.close();
+  Serial.println(F("[CONFIG] Default config.json created successfully"));
   
   // Verify the file was created correctly
   f = LittleFS.open("/config.json", "r");
@@ -115,13 +95,6 @@ void createDefaultConfig() {
     f.close();
     return;
   }
-  
-  // Read and print the first 100 bytes of the file
-  Serial.print(F("[CONFIG] First 100 bytes of config.json: "));
-  for (int i = 0; i < min(100, (int)fileSize); i++) {
-    Serial.print((char)f.read());
-  }
-  Serial.println();
   
   f.close();
 }
@@ -434,6 +407,21 @@ void setupWebServer() {
     if (!LittleFS.exists("/config.json")) {
       Serial.println(F("[WEBSERVER] config.json not found, creating default"));
       createDefaultConfig();
+      
+      // Verify the file was created
+      if (!LittleFS.exists("/config.json")) {
+        Serial.println(F("[WEBSERVER] ERROR: Failed to create config.json"));
+        request->send(500, "application/json", "{\"error\":\"Failed to create config.json\"}");
+        return;
+      }
+    }
+    
+    // Print file info
+    File infoFile = LittleFS.open("/config.json", "r");
+    if (infoFile) {
+      Serial.print(F("[WEBSERVER] config.json size: "));
+      Serial.println(infoFile.size());
+      infoFile.close();
     }
     
     File f = LittleFS.open("/config.json", "r");
@@ -443,19 +431,34 @@ void setupWebServer() {
       return;
     }
     
-    // Read the file content for debugging
-    String fileContent = f.readString();
-    Serial.print(F("[WEBSERVER] config.json content: "));
-    Serial.println(fileContent);
+    // Check file size
+    size_t fileSize = f.size();
+    if (fileSize == 0) {
+      Serial.println(F("[WEBSERVER] ERROR: config.json is empty"));
+      f.close();
+      
+      // Try to recreate the file
+      Serial.println(F("[WEBSERVER] Attempting to recreate config.json"));
+      createDefaultConfig();
+      
+      // Try to open again
+      f = LittleFS.open("/config.json", "r");
+      if (!f || f.size() == 0) {
+        Serial.println(F("[WEBSERVER] ERROR: Failed to recreate config.json"));
+        request->send(500, "application/json", "{\"error\":\"config.json is empty\"}");
+        return;
+      }
+    }
+    
+    // Read the first few bytes to check content
+    Serial.print(F("[WEBSERVER] First bytes of config.json: "));
+    for (int i = 0; i < min(20, (int)fileSize); i++) {
+      Serial.print((char)f.read());
+    }
+    Serial.println();
     
     // Reset file position
-    f.close();
-    f = LittleFS.open("/config.json", "r");
-    if (!f) {
-      Serial.println(F("[WEBSERVER] Error reopening /config.json"));
-      request->send(500, "application/json", "{\"error\":\"Failed to reopen config.json\"}");
-      return;
-    }
+    f.seek(0);
     
     DynamicJsonDocument doc(2048);
     DeserializationError err = deserializeJson(doc, f);
@@ -463,6 +466,16 @@ void setupWebServer() {
     if (err) {
       Serial.print(F("[WEBSERVER] Error parsing /config.json: "));
       Serial.println(err.f_str());
+      
+      // Try to read the file content for debugging
+      File debugFile = LittleFS.open("/config.json", "r");
+      if (debugFile) {
+        String content = debugFile.readString();
+        Serial.print(F("[WEBSERVER] config.json content: "));
+        Serial.println(content);
+        debugFile.close();
+      }
+      
       request->send(500, "application/json", "{\"error\":\"Failed to parse config.json\"}");
       return;
     }
@@ -471,7 +484,6 @@ void setupWebServer() {
     String response;
     serializeJson(doc, response);
     request->send(200, "application/json", response);
-  });
   });
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /save"));    
@@ -483,11 +495,7 @@ void setupWebServer() {
       if (n == "brightness") doc[n] = v.toInt();
       else if (n == "flipDisplay") doc[n] = (v == "true" || v == "on" || v == "1");
       else if (n == "twelveHourToggle") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "showIndoorTemp") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "showOutdoorTemp") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "useNetatmoOutdoor") doc[n] = (v == "true" || v == "on" || v == "1");
-      else if (n == "prioritizeNetatmoIndoor") doc[n] = (v == "true" || v == "on" || v == "1"); 
+      else if (n == "showDayOfWeek") doc[n] = (v == "true" || v == "on" || v == "1"); 
       else if (n == "showHumidity") doc[n] = (v == "true" || v == "on" || v == "1");
       else if (n == "tempSource") doc[n] = v.toInt();
       else doc[n] = v;

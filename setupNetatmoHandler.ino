@@ -12,7 +12,7 @@ void setupNetatmoHandler() {
   // Instead of creating new objects, use simpler approach
   Serial.println(F("[NETATMO] Setting up API endpoints"));
   
-  // Endpoint to save Netatmo credentials
+  // Endpoint to save Netatmo credentials without rebooting
   server.on("/api/netatmo/save-credentials", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling save credentials request"));
     
@@ -90,6 +90,51 @@ void setupNetatmoHandler() {
     
     // Redirect back to Netatmo page
     request->redirect("/netatmo.html");
+  });
+  
+  // Endpoint to save Netatmo settings without rebooting
+  server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling save settings request"));
+    
+    // Process all parameters
+    for (int i = 0; i < request->params(); i++) {
+      AsyncWebParameter* p = request->getParam(i);
+      String name = p->name();
+      String value = p->value();
+      
+      Serial.print(F("[NETATMO] Parameter: "));
+      Serial.print(name);
+      Serial.print(F(" = "));
+      Serial.println(value);
+      
+      if (name == "netatmoDeviceId") {
+        strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
+      }
+      else if (name == "netatmoModuleId") {
+        strlcpy(netatmoModuleId, value.c_str(), sizeof(netatmoModuleId));
+      }
+      else if (name == "netatmoIndoorModuleId") {
+        strlcpy(netatmoIndoorModuleId, value.c_str(), sizeof(netatmoIndoorModuleId));
+      }
+      else if (name == "useNetatmoOutdoor") {
+        useNetatmoOutdoor = (value == "true" || value == "on" || value == "1");
+      }
+      else if (name == "prioritizeNetatmoIndoor") {
+        prioritizeNetatmoIndoor = (value == "true" || value == "on" || value == "1");
+      }
+    }
+    
+    // Save to config file
+    saveTokensToConfig();
+    
+    // Send success response
+    DynamicJsonDocument doc(128);
+    doc["success"] = true;
+    doc["message"] = "Netatmo settings saved successfully";
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
   });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));

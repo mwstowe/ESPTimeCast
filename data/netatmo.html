@@ -263,7 +263,7 @@ function saveConfig() {
   const urlEncodedData = new URLSearchParams(formData).toString();
   
   // Send AJAX request
-  fetch('/save', {
+  fetch('/api/netatmo/save-settings', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -300,21 +300,18 @@ function connectNetatmo() {
   
   // Save the client ID and secret first
   const formData = new FormData();
-  formData.append('netatmoClientId', clientId);
-  formData.append('netatmoClientSecret', clientSecret);
+  formData.append('clientId', clientId);
+  formData.append('clientSecret', clientSecret);
   
-  fetch('/save', {
+  fetch('/api/netatmo/save-credentials', {
     method: 'POST',
-    body: new URLSearchParams(formData)
+    body: formData
   })
   .then(response => {
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }
-    return response.json();
-  })
-  .then(data => {
-    // Redirect to Netatmo authorization page
+    // The server will redirect to Netatmo authorization page
     window.location.href = '/api/netatmo/auth';
   })
   .catch(error => {

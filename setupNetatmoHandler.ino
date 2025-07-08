@@ -156,8 +156,14 @@ void setupNetatmoHandler() {
       return;
     }
     
-    // If we already have device data, return it immediately
-    if (deviceData.length() > 0) {
+    // Check if we should force a refresh
+    bool forceRefresh = false;
+    if (request->hasParam("refresh")) {
+      forceRefresh = request->getParam("refresh")->value() == "true";
+    }
+    
+    // If we already have device data and no refresh is requested, return it immediately
+    if (deviceData.length() > 0 && !forceRefresh) {
       request->send(200, "application/json", deviceData);
       return;
     }
@@ -326,12 +332,14 @@ void processFetchDevices() {
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
+  // Use the correct API endpoint
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
-  if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata")) {
+  if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata?get_favorites=false")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
   }
   
+  // Set the authorization header correctly
   String authHeader = "Bearer ";
   authHeader += netatmoAccessToken;
   https.addHeader("Authorization", authHeader);
@@ -362,9 +370,71 @@ void processFetchDevices() {
   Serial.println(response.length());
   
   if (response.length() > 0) {
-    // Store the response for future requests
-    deviceData = response;
-    Serial.println(F("[NETATMO] Device data cached"));
+    // Create a simple response format that matches what the JavaScript expects
+    String formattedResponse = "{\"body\":{\"devices\":";
+    
+    // Parse the response to extract just the devices array
+    DynamicJsonDocument doc(4096);
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (error) {
+      Serial.print(F("[NETATMO] JSON parse error: "));
+      Serial.println(error.c_str());
+      return;
+    }
+    
+    // Check if we have a valid response with devices
+    if (doc.containsKey("body") && doc["body"].containsKey("devices")) {
+      // Extract just the devices array
+      JsonArray devices = doc["body"]["devices"];
+      
+      // Create a new document for the devices array
+      DynamicJsonDocument devicesDoc(3072);
+      JsonArray devicesArray = devicesDoc.to<JsonArray>();
+      
+      // Copy each device to the new array
+      for (JsonObject device : devices) {
+        JsonObject newDevice = devicesArray.createNestedObject();
+        
+        // Copy essential fields
+        if (device.containsKey("_id")) newDevice["_id"] = device["_id"].as<const char*>();
+        if (device.containsKey("station_name")) newDevice["station_name"] = device["station_name"].as<const char*>();
+        if (device.containsKey("type")) newDevice["type"] = device["type"].as<const char*>();
+        
+        // Copy modules if they exist
+        if (device.containsKey("modules")) {
+          JsonArray modules = device["modules"];
+          JsonArray newModules = newDevice.createNestedArray("modules");
+          
+          for (JsonObject module : modules) {
+            JsonObject newModule = newModules.createNestedObject();
+            
+            // Copy essential module fields
+            if (module.containsKey("_id")) newModule["_id"] = module["_id"].as<const char*>();
+            if (module.containsKey("module_name")) newModule["module_name"] = module["module_name"].as<const char*>();
+            if (module.containsKey("type")) newModule["type"] = module["type"].as<const char*>();
+          }
+        }
+      }
+      
+      // Serialize the devices array
+      String devicesJson;
+      serializeJson(devicesArray, devicesJson);
+      
+      // Complete the response
+      formattedResponse += devicesJson;
+      formattedResponse += "}}";
+      
+      // Store the formatted response
+      deviceData = formattedResponse;
+      
+      Serial.println(F("[NETATMO] Device data processed and cached"));
+      Serial.print(F("[NETATMO] Formatted response size: "));
+      Serial.println(deviceData.length());
+    } else {
+      Serial.println(F("[NETATMO] Error - Invalid response format"));
+      Serial.println(response);
+    }
   } else {
     Serial.println(F("[NETATMO] Error - Empty response"));
   }

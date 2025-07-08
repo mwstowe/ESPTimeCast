@@ -27,8 +27,8 @@ function fetchNetatmoDevices() {
   // Show loading message
   showStatus("Fetching Netatmo devices...", "loading");
   
-  // Fetch devices from the API
-  fetch('/api/netatmo/devices')
+  // Fetch devices from the API with refresh=true to force a new fetch
+  fetch('/api/netatmo/devices?refresh=true')
     .then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);

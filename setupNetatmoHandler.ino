@@ -99,9 +99,6 @@ bool refreshNetatmoToken() {
   saveTokensToConfig();
   return true;
 }
-  }
-  return result;
-}
 
 // Function to trigger Netatmo device fetch from external files
 void triggerNetatmoDevicesFetch() {

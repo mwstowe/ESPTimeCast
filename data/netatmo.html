@@ -47,7 +47,51 @@ h2{
   margin-bottom: 1.5rem;
 }
 
-label {
+.status {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.status.loading {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.status.success {
+  background-color: rgba(76, 175, 80, 0.7);
+  color: white;
+}
+
+.status.error {
+  background-color: rgba(244, 67, 54, 0.7);
+  color: white;
+}
+
+.status.warning {
+  background-color: rgba(255, 152, 0, 0.7);
+  color: white;
+}
+
+.token-status {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  margin-right: 1rem;
+  font-weight: 500;
+}
+
+.token-status.token-valid {
+  background-color: rgba(76, 175, 80, 0.7);
+  color: white;
+}
+
+.token-status.token-expired {
+  background-color: rgba(244, 67, 54, 0.7);
+  color: white;
+}
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;

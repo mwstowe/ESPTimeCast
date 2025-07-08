@@ -1,3 +1,36 @@
+// Global variables for token exchange
+static String pendingCode = "";
+static bool tokenExchangePending = false;
+
+// Helper function to URL encode a string (memory-efficient version)
+String urlEncode(const char* input) {
+  const char *hex = "0123456789ABCDEF";
+  String result = "";
+  
+  while (*input) {
+    char c = *input++;
+    if (isAlphaNumeric(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      result += c;
+    } else {
+      result += '%';
+      result += hex[c >> 4];
+      result += hex[c & 0xF];
+    }
+  }
+  return result;
+}
+
+// Function to exchange authorization code for tokens
+void exchangeAuthCode(const String &code) {
+  Serial.println(F("[NETATMO] Starting token exchange process"));
+  
+  // This will be called in the next loop iteration
+  pendingCode = code;
+  
+  // Set a flag to process this in the main loop
+  tokenExchangePending = true;
+}
+
 // Function to setup Netatmo OAuth handler
 void setupNetatmoHandler() {
   Serial.println(F("[NETATMO] Setting up Netatmo OAuth handler..."));
@@ -146,39 +179,6 @@ void setupNetatmoHandler() {
   });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
-}
-
-// Helper function to URL encode a string (memory-efficient version)
-String urlEncode(const char* input) {
-  const char *hex = "0123456789ABCDEF";
-  String result = "";
-  
-  while (*input) {
-    char c = *input++;
-    if (isAlphaNumeric(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-      result += c;
-    } else {
-      result += '%';
-      result += hex[c >> 4];
-      result += hex[c & 0xF];
-    }
-  }
-  return result;
-}
-
-// Global variables for token exchange
-static String pendingCode = "";
-static bool tokenExchangePending = false;
-
-// Function to exchange authorization code for tokens
-void exchangeAuthCode(const String &code) {
-  Serial.println(F("[NETATMO] Starting token exchange process"));
-  
-  // This will be called in the next loop iteration
-  pendingCode = code;
-  
-  // Set a flag to process this in the main loop
-  tokenExchangePending = true;
 }
 
 // Function to be called from loop() to process pending token exchange

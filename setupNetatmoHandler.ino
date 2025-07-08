@@ -414,6 +414,19 @@ void processFetchDevices() {
       // Store the response for future requests
       deviceData = response;
       Serial.println(F("[NETATMO] Device data cached from homesdata endpoint"));
+      
+      // Check if the response is in the expected format
+      StaticJsonDocument<256> doc;
+      DeserializationError error = deserializeJson(doc, response);
+      
+      if (!error) {
+        if (doc.containsKey("body") && doc["body"].containsKey("homes")) {
+          Serial.println(F("[NETATMO] Found homes data in response"));
+        } else {
+          Serial.println(F("[NETATMO] Response does not contain homes data"));
+        }
+      }
+      
       return;
     }
   }

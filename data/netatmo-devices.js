@@ -48,28 +48,81 @@ function fetchNetatmoDevices() {
         return;
       }
       
+      // Add more detailed logging
+      console.log("Response data type:", typeof data);
+      if (typeof data === 'object') {
+        console.log("Response keys:", Object.keys(data));
+        if (data.body) {
+          console.log("Body keys:", Object.keys(data.body));
+          if (data.body.homes) {
+            console.log("Found homes data:", data.body.homes);
+          }
+        }
+      }
+      
       // Handle different response formats
       let devices = [];
       
       if (data.body && data.body.devices) {
         // Standard format
+        console.log("Using standard format (body.devices)");
         devices = data.body.devices;
       } else if (data.devices) {
         // Alternative format
+        console.log("Using alternative format (devices)");
         devices = data.devices;
+      } else if (data.body && data.body.homes) {
+        // Homes format (from homesdata endpoint)
+        console.log("Using homes format (body.homes)");
+        // Extract devices from homes
+        const homes = data.body.homes;
+        homes.forEach(home => {
+          if (home.modules) {
+            // Convert modules to devices format
+            home.modules.forEach(module => {
+              devices.push({
+                _id: module.id,
+                station_name: module.name,
+                type: module.type,
+                modules: module.modules || []
+              });
+            });
+          }
+        });
       } else {
         // Try to parse the response as a Netatmo API response
+        console.log("Trying to parse response as Netatmo API response");
         try {
           const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+          console.log("Parsed data:", parsedData);
+          
           if (parsedData.body && parsedData.body.devices) {
             devices = parsedData.body.devices;
+          } else if (parsedData.body && parsedData.body.homes) {
+            // Extract devices from homes
+            const homes = parsedData.body.homes;
+            homes.forEach(home => {
+              if (home.modules) {
+                // Convert modules to devices format
+                home.modules.forEach(module => {
+                  devices.push({
+                    _id: module.id,
+                    station_name: module.name,
+                    type: module.type,
+                    modules: module.modules || []
+                  });
+                });
+              }
+            });
           }
         } catch (e) {
           console.error("Error parsing device data:", e);
         }
       }
       
-      if (devices.length === 0) {
+      console.log("Extracted devices:", devices);
+      
+      if (!devices || devices.length === 0) {
         console.log("No devices found in response");
         showStatus("No Netatmo devices found", "error");
         return;
@@ -80,6 +133,7 @@ function fetchNetatmoDevices() {
       
       // Populate device dropdown
       devices.forEach(device => {
+        console.log("Adding device to dropdown:", device);
         const option = document.createElement('option');
         option.value = device._id || device.id;
         option.textContent = device.station_name || device.name || device._id || device.id;
@@ -140,13 +194,35 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
   // Add the main device as an option for indoor module
   const mainOption = document.createElement('option');
   mainOption.value = device._id || device.id;
-  mainOption.textContent = "Main Station" + (device.module_name ? ` (${device.module_name})` : "");
+  mainOption.textContent = "Main Station" + (device.module_name ? ` (${device.module_name})` : (device.name ? ` (${device.name})` : ""));
   indoorModuleSelect.appendChild(mainOption);
   
   // Check if device has modules
   if (!device.modules || device.modules.length === 0) {
     console.log("No modules found for this device");
-    showStatus("No modules found for this device", "error");
+    
+    // Check if this is a module itself (from homesdata endpoint)
+    if (device.type) {
+      console.log("Device is a module itself, type:", device.type);
+      
+      // If it's an outdoor module, add it to the outdoor module select
+      if (device.type === 'NAModule1' || device.type.includes('outdoor')) {
+        const option = document.createElement('option');
+        option.value = device._id || device.id;
+        option.textContent = device.station_name || device.name || device._id || device.id;
+        moduleSelect.appendChild(option);
+      }
+      
+      // If it's an indoor module, add it to the indoor module select
+      if (device.type === 'NAModule4' || device.type === 'NAMain' || device.type.includes('indoor')) {
+        const option = document.createElement('option');
+        option.value = device._id || device.id;
+        option.textContent = device.station_name || device.name || device._id || device.id;
+        indoorModuleSelect.appendChild(option);
+      }
+    } else {
+      showStatus("No modules found for this device", "error");
+    }
     return;
   }
   
@@ -155,7 +231,7 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
     console.log("Processing module:", module);
     
     // For outdoor modules (typically type NAModule1)
-    if (module.type === 'NAModule1') {
+    if (module.type === 'NAModule1' || (module.type && module.type.includes('outdoor'))) {
       const option = document.createElement('option');
       option.value = module._id || module.id;
       option.textContent = module.module_name || module.name || module._id || module.id;
@@ -163,7 +239,7 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
     }
     
     // For indoor modules (typically type NAModule4 or NAMain)
-    if (module.type === 'NAModule4' || module.type === 'NAMain') {
+    if (module.type === 'NAModule4' || module.type === 'NAMain' || (module.type && module.type.includes('indoor'))) {
       const option = document.createElement('option');
       option.value = module._id || module.id;
       option.textContent = module.module_name || module.name || module._id || module.id;

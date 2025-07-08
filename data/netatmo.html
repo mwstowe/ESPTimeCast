@@ -199,6 +199,76 @@ button:hover {
 .fetch-button:hover {
   background-color: #2980b9;
 }
+
+/* Toggle switch styles */
+.toggle-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--accent-color);
+}
+
+input:focus + .toggle-slider {
+  box-shadow: 0 0 1px var(--accent-color);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(26px);
+}
+
+/* Improved select styles */
+.select-styled {
+  appearance: none;
+  background-color: rgba(255, 255, 255, 0.1);
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7em top 50%;
+  background-size: 0.65em auto;
+  padding-right: 2em;
+  color: white;
+  font-size: 1rem;
+}
 </style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -528,7 +598,7 @@ function hideStatus() {
         
         <div class="form-group">
           <label for="netatmoDeviceId">Weather Station:</label>
-          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()">
+          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()" class="select-styled">
             <option value="">Select Device...</option>
           </select>
           <button type="button" onclick="fetchNetatmoDevices()" class="fetch-button">Fetch Devices</button>
@@ -536,16 +606,32 @@ function hideStatus() {
         
         <div class="form-group">
           <label for="netatmoModuleId">Outdoor Module:</label>
-          <select id="netatmoModuleId" name="netatmoModuleId">
+          <select id="netatmoModuleId" name="netatmoModuleId" class="select-styled">
             <option value="">Select Module...</option>
           </select>
         </div>
         
         <div class="form-group">
           <label for="netatmoIndoorModuleId">Indoor Module:</label>
-          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId">
+          <select id="netatmoIndoorModuleId" name="netatmoIndoorModuleId" class="select-styled">
             <option value="">Select Module...</option>
           </select>
+        </div>
+        
+        <div class="form-group toggle-container">
+          <label>Use Netatmo for outdoor temperature:</label>
+          <label class="toggle">
+            <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        
+        <div class="form-group toggle-container">
+          <label>Prioritize Netatmo for indoor temperature:</label>
+          <label class="toggle">
+            <input type="checkbox" id="prioritizeNetatmoIndoor" name="prioritizeNetatmoIndoor">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
       

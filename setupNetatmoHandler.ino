@@ -349,6 +349,8 @@ void processFetchDevices() {
   https.end();
   
   Serial.println(F("[NETATMO] Received device data"));
+  Serial.print(F("[NETATMO] Response size: "));
+  Serial.println(response.length());
   
   // Store the response for future requests
   deviceData = response;

@@ -33,6 +33,7 @@ String fetchNetatmoDevices();
 void createDefaultConfig();
 void setupNetatmoHandler();
 void processTokenExchange();
+void processFetchDevices();
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
 
@@ -1382,6 +1383,9 @@ void loop() {
   
   // Process any pending Netatmo token exchanges
   processTokenExchange();
+  
+  // Process any pending Netatmo device fetches
+  processFetchDevices();
 
   // --- AP Mode Animation ---
   static unsigned long apAnimTimer = 0;

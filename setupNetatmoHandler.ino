@@ -1,6 +1,8 @@
 // Global variables for token exchange
 static String pendingCode = "";
 static bool tokenExchangePending = false;
+static bool fetchDevicesPending = false;
+static String deviceData = "";
 
 // Helper function to URL encode a string (memory-efficient version)
 String urlEncode(const char* input) {
@@ -144,6 +146,29 @@ void setupNetatmoHandler() {
     request->send(200, "text/html", html);
   });
   
+  // Endpoint to get Netatmo devices
+  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get devices request"));
+    
+    if (strlen(netatmoAccessToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
+      return;
+    }
+    
+    // If we already have device data, return it immediately
+    if (deviceData.length() > 0) {
+      request->send(200, "application/json", deviceData);
+      return;
+    }
+    
+    // Otherwise, fetch it asynchronously
+    fetchDevicesPending = true;
+    
+    // Send a simple response
+    request->send(200, "application/json", "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}");
+  });
+  
   // Endpoint to save Netatmo settings without rebooting
   server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling save settings request"));
@@ -268,4 +293,63 @@ void processTokenExchange() {
   
   saveTokensToConfig();
   Serial.println(F("[NETATMO] Token exchange complete"));
+  
+  // Trigger a device fetch after successful token exchange
+  fetchDevicesPending = true;
+}
+
+// Function to be called from loop() to fetch Netatmo devices
+void processFetchDevices() {
+  if (!fetchDevicesPending) {
+    return;
+  }
+  
+  Serial.println(F("[NETATMO] Fetching Netatmo devices"));
+  
+  // Clear the flag immediately to prevent repeated attempts if this fails
+  fetchDevicesPending = false;
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    return;
+  }
+  
+  if (strlen(netatmoAccessToken) == 0) {
+    Serial.println(F("[NETATMO] Error - No access token"));
+    return;
+  }
+  
+  // Set up the HTTPS client with minimal memory usage
+  BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
+  
+  HTTPClient https;
+  https.setTimeout(10000); // 10 second timeout
+  
+  Serial.println(F("[NETATMO] Connecting to Netatmo API"));
+  if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata")) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    return;
+  }
+  
+  https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
+  
+  Serial.println(F("[NETATMO] Sending request"));
+  int httpCode = https.GET();
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
+    https.end();
+    return;
+  }
+  
+  // Get the response
+  String response = https.getString();
+  https.end();
+  
+  Serial.println(F("[NETATMO] Received device data"));
+  
+  // Store the response for future requests
+  deviceData = response;
 }

@@ -44,6 +44,10 @@ String getCrashInfoHtml();
 bool checkAndRepairConfig();
 void checkNetatmoConfig();
 String getExceptionDetails(rst_info *resetInfo);
+void printMemoryStats();
+void defragmentHeap();
+void forceGarbageCollection();
+bool shouldDefragment();
 
 // Function to create default config.json
 void createDefaultConfig() {
@@ -1076,6 +1080,15 @@ void forceNetatmoTokenRefresh() {
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));
   
+  // Check memory status and defragment if needed
+  Serial.println(F("[CONFIG] Checking memory before saving tokens"));
+  printMemoryStats();
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[CONFIG] Memory fragmentation detected, defragmenting heap"));
+    defragmentHeap();
+  }
+  
   if (!LittleFS.begin()) {
     Serial.println(F("[CONFIG] Failed to mount file system"));
     return;
@@ -1117,8 +1130,16 @@ void saveTokensToConfig() {
   String jsonStr = configFile.readString();
   configFile.close();
   
-  // Create a new JSON document with minimal size
-  StaticJsonDocument<512> doc;
+  // Create a new JSON document with minimal size - reduced from 512 to 384 bytes
+  StaticJsonDocument<384> doc;
+  
+  // Force garbage collection before JSON parsing
+  forceGarbageCollection();
+  
+  // Print memory stats before parsing
+  Serial.println(F("[CONFIG] Memory status before JSON parsing:"));
+  printMemoryStats();
+  
   DeserializationError error = deserializeJson(doc, jsonStr);
   
   if (error) {

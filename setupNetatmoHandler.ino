@@ -268,6 +268,15 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Processing token exchange"));
   
+  // Defragment heap before token exchange to ensure enough contiguous memory
+  Serial.println(F("[NETATMO] Checking memory before token exchange"));
+  printMemoryStats();
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting heap"));
+    defragmentHeap();
+  }
+  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;

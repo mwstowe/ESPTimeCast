@@ -1084,9 +1084,15 @@ void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Checking memory before saving tokens"));
   printMemoryStats();
   
+  // Add a small delay before checking fragmentation
+  delay(100);
+  
   if (shouldDefragment()) {
     Serial.println(F("[CONFIG] Memory fragmentation detected, defragmenting heap"));
     defragmentHeap();
+    
+    // Add another delay after defragmentation
+    delay(100);
   }
   
   if (!LittleFS.begin()) {
@@ -1130,15 +1136,21 @@ void saveTokensToConfig() {
   String jsonStr = configFile.readString();
   configFile.close();
   
-  // Create a new JSON document with minimal size - reduced from 512 to 384 bytes
-  StaticJsonDocument<384> doc;
+  // Add a small delay after file operations
+  delay(10);
   
-  // Force garbage collection before JSON parsing
-  forceGarbageCollection();
+  // Create a new JSON document with minimal size - reduced from 512 to 256 bytes
+  StaticJsonDocument<256> doc;
+  
+  // Force garbage collection before JSON parsing with safer approach
+  safeGarbageCollection();
   
   // Print memory stats before parsing
   Serial.println(F("[CONFIG] Memory status before JSON parsing:"));
   printMemoryStats();
+  
+  // Add another small delay before parsing
+  delay(10);
   
   DeserializationError error = deserializeJson(doc, jsonStr);
   

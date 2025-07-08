@@ -272,15 +272,21 @@ void processTokenExchange() {
   Serial.println(F("[NETATMO] Checking memory before token exchange"));
   printMemoryStats();
   
-  if (shouldDefragment()) {
-    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting heap"));
-    defragmentHeap();
-  }
-  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;
   pendingCode = "";
+  
+  // Add a small delay before proceeding to allow system to stabilize
+  delay(100);
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting heap"));
+    defragmentHeap();
+    
+    // Add another delay after defragmentation
+    delay(100);
+  }
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));

@@ -13,9 +13,14 @@ void printMemoryStats() {
   Serial.print(F("[MEMORY] Largest free block: "));
   Serial.print(ESP.getMaxFreeBlockSize());
   Serial.println(F(" bytes"));
+  
+  // Add stack information
+  Serial.print(F("[MEMORY] Free stack: "));
+  Serial.print(ESP.getFreeContStack());
+  Serial.println(F(" bytes"));
 }
 
-// Function to defragment the heap
+// Function to defragment the heap with safer yield handling
 void defragmentHeap() {
   Serial.println(F("[MEMORY] Starting heap defragmentation"));
   printMemoryStats();
@@ -23,8 +28,8 @@ void defragmentHeap() {
   // Get current free heap
   uint32_t freeHeap = ESP.getFreeHeap();
   
-  // Try to allocate a large block (80% of free heap)
-  uint32_t blockSize = (freeHeap * 80) / 100;
+  // Try to allocate a large block (70% of free heap) - reduced from 80% to be safer
+  uint32_t blockSize = (freeHeap * 70) / 100;
   char* block = nullptr;
   
   // Try to allocate with decreasing sizes
@@ -33,12 +38,24 @@ void defragmentHeap() {
     if (block == nullptr) {
       blockSize = (blockSize * 90) / 100; // Reduce by 10%
     }
+    
+    // Use delay instead of yield to avoid potential yield-related crashes
+    delay(1);
   }
   
   // If allocation succeeded, fill with pattern and free
   if (block != nullptr) {
     // Fill with pattern to ensure physical allocation
-    memset(block, 0xAA, blockSize);
+    // Use smaller chunks to avoid blocking for too long
+    const size_t chunkSize = 1024;
+    for (size_t i = 0; i < blockSize; i += chunkSize) {
+      size_t fillSize = min(chunkSize, blockSize - i);
+      memset(block + i, 0xAA, fillSize);
+      
+      // Use delay instead of yield
+      delay(1);
+    }
+    
     free(block);
     Serial.print(F("[MEMORY] Defragmented "));
     Serial.print(blockSize);
@@ -47,26 +64,43 @@ void defragmentHeap() {
     Serial.println(F("[MEMORY] Failed to allocate block for defragmentation"));
   }
   
-  // Force garbage collection
-  forceGarbageCollection();
+  // Force garbage collection with safer approach
+  safeGarbageCollection();
   
   Serial.println(F("[MEMORY] Heap defragmentation complete"));
   printMemoryStats();
 }
 
-// Function to force garbage collection
+// Function to force garbage collection with safer yield handling
 void forceGarbageCollection() {
+  safeGarbageCollection();
+}
+
+// Safer implementation of garbage collection that avoids excessive yields
+void safeGarbageCollection() {
   Serial.println(F("[MEMORY] Forcing garbage collection"));
   
-  for (int i = 0; i < 10; i++) {
+  // Allocate and free small blocks with delays instead of yields
+  for (int i = 0; i < 5; i++) {
     void* p = malloc(128);
-    if (p) free(p);
-    yield(); // Allow system tasks to run
+    if (p) {
+      // Touch the memory to ensure it's physically allocated
+      memset(p, 0, 128);
+      free(p);
+    }
+    // Use delay instead of yield
+    delay(5);
   }
+  
+  // One final delay to allow system tasks
+  delay(10);
 }
 
 // Function to check if defragmentation is needed
 bool shouldDefragment() {
   int fragmentation = ESP.getHeapFragmentation();
-  return (fragmentation > 50); // Defragment if fragmentation exceeds 50%
+  int freeStack = ESP.getFreeContStack();
+  
+  // Check both fragmentation and stack space
+  return (fragmentation > 50 || freeStack < 2048);
 }

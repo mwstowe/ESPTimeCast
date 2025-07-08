@@ -138,11 +138,8 @@ bool NetatmoOAuth::parseTokenResponse(const String &response) {
   logger.log("Parsing token response");
   
   // Use ArduinoJson to parse the response
-  // Calculate the capacity based on expected response size
-  const size_t capacity = JSON_OBJECT_SIZE(6) + 500;
-  
-  // Use DynamicJsonDocument for parsing
-  DynamicJsonDocument doc(capacity);
+  // Use a reasonably sized buffer for the response
+  DynamicJsonDocument doc(1024);
   
   DeserializationError error = deserializeJson(doc, response);
   if (error) {

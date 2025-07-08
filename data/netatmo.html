@@ -441,47 +441,6 @@ function connectNetatmo() {
   });
 }
 
-// Function to fetch Netatmo devices
-function fetchNetatmoDevices() {
-  showStatus('Fetching Netatmo devices...', 'loading');
-  
-  fetch('/api/netatmo/devices')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return response.json();
-    })
-    .then(data => {
-      if (data.error) {
-        throw new Error(data.error);
-      }
-      
-      // Clear existing options
-      const deviceSelect = document.getElementById('netatmoDeviceId');
-      deviceSelect.innerHTML = '<option value="">Select Device...</option>';
-      
-      // Add devices to select
-      if (data.devices && data.devices.length > 0) {
-        data.devices.forEach(device => {
-          const option = document.createElement('option');
-          option.value = device.id;
-          option.textContent = device.name || device.id;
-          deviceSelect.appendChild(option);
-        });
-        
-        showStatus('Devices fetched successfully!', 'success');
-        setTimeout(hideStatus, 3000);
-      } else {
-        showStatus('No devices found', 'error');
-      }
-    })
-    .catch(error => {
-      console.error('Error fetching devices:', error);
-      showStatus('Error fetching devices: ' + error.message, 'error');
-    });
-}
-
 // Function to load modules for selected device
 function loadModules() {
   // Call the loadModules function from netatmo-devices.js

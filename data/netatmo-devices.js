@@ -126,15 +126,14 @@ function fetchNetatmoDevices() {
         // Standard format from getstationsdata
         console.log("Using standard format (body.devices)");
         devices = data.body.devices;
-      } else {
-        console.error("Unexpected data format:", data);
-        showStatus("Unexpected data format from API", "error");
-        return;
-      }
       } else if (data.devices) {
         // Alternative format
         console.log("Using alternative format (devices)");
         devices = data.devices;
+      } else {
+        console.error("Unexpected data format:", data);
+        showStatus("Unexpected data format from API", "error");
+        return;
       }
       
       console.log("Extracted devices:", devices);

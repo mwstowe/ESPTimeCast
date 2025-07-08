@@ -624,5 +624,40 @@ function updateSavingModal(message, showSpinner = true) {
       <div id="modalButtons"></div>
     </div>
   </div>
+  
+  <script>
+  // Function to handle toggle switch clicks
+  function handleToggleClick(event) {
+    // Find the associated checkbox
+    const toggleContainer = event.currentTarget;
+    const checkbox = toggleContainer.querySelector('input[type="checkbox"]');
+    
+    if (checkbox) {
+      // Toggle the checkbox state
+      checkbox.checked = !checkbox.checked;
+      
+      // Trigger the change event on the checkbox
+      const changeEvent = new Event('change', { bubbles: true });
+      checkbox.dispatchEvent(changeEvent);
+    }
+  }
+  
+  // Initialize toggle switches when the page is loaded
+  document.addEventListener('DOMContentLoaded', function() {
+    // Add click handlers to all toggle containers
+    const toggles = document.querySelectorAll('.toggle');
+    toggles.forEach(toggle => {
+      toggle.addEventListener('click', handleToggleClick);
+    });
+  });
+  
+  // Also initialize immediately in case the DOM is already loaded
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    const toggles = document.querySelectorAll('.toggle');
+    toggles.forEach(toggle => {
+      toggle.addEventListener('click', handleToggleClick);
+    });
+  }
+  </script>
 </body>
 </html>

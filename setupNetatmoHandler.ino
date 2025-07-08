@@ -174,9 +174,39 @@ void setupNetatmoHandler() {
       Serial.println(F("[NETATMO] Force refresh requested"));
     }
     
-    // If we already have device data and no refresh is requested, return it immediately
+    // Check if the response is in the file system
+    if (deviceData.startsWith(F("FILE:"))) {
+      String filename = deviceData.substring(5);
+      Serial.print(F("[NETATMO] Serving response from file: "));
+      Serial.println(filename);
+      
+      if (LittleFS.exists(filename)) {
+        // If we have a file and no refresh is requested, serve it
+        if (!forceRefresh) {
+          request->send(LittleFS, filename, "application/json");
+          return;
+        } else {
+          // If refresh is requested, fetch new data
+          Serial.println(F("[NETATMO] Refresh requested, fetching new data"));
+          fetchDevicesPending = true;
+          
+          // Send a simple response
+          request->send(200, "application/json", "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}");
+          return;
+        }
+      } else {
+        Serial.println(F("[NETATMO] File not found, fetching new data"));
+        fetchDevicesPending = true;
+        
+        // Send a simple response
+        request->send(200, "application/json", "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}");
+        return;
+      }
+    }
+    
+    // If we have device data in memory and no refresh is requested, return it
     if (deviceData.length() > 0 && !forceRefresh) {
-      Serial.println(F("[NETATMO] Returning cached device data"));
+      Serial.println(F("[NETATMO] Returning cached device data from memory"));
       request->send(200, "application/json", deviceData);
       return;
     }
@@ -363,19 +393,19 @@ void processFetchDevices() {
   HTTPClient https;
   https.setTimeout(5000); // 5 second timeout
   
-  // Try a simpler API endpoint that returns less data
+  // Try the homesdata endpoint
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
   
   // Memory optimization: Use F() macro for strings
-  if (!https.begin(client, F("https://api.netatmo.com/api/getuser"))) {
-    Serial.println(F("[NETATMO] Error - Failed to connect to getuser endpoint"));
+  if (!https.begin(client, F("https://api.netatmo.com/api/homesdata"))) {
+    Serial.println(F("[NETATMO] Error - Failed to connect to homesdata endpoint"));
     return;
   }
   
   // Memory optimization: Build the header directly
   https.addHeader(F("Authorization"), F("Bearer ") + String(netatmoAccessToken));
   
-  Serial.println(F("[NETATMO] Sending request to getuser endpoint"));
+  Serial.println(F("[NETATMO] Sending request to homesdata endpoint"));
   int httpCode = https.GET();
   
   Serial.print(F("[NETATMO] HTTP response code: "));
@@ -388,15 +418,74 @@ void processFetchDevices() {
     return;
   }
   
-  // Memory optimization: Just check if the API call was successful
-  Serial.println(F("[NETATMO] API call successful"));
+  // Get the content length
+  int contentLength = https.getSize();
+  Serial.print(F("[NETATMO] Response size: "));
+  Serial.println(contentLength);
+  
+  if (contentLength <= 0) {
+    Serial.println(F("[NETATMO] Error - Empty response"));
+    https.end();
+    return;
+  }
+  
+  // Memory optimization: Use the file system to store the response
+  Serial.println(F("[NETATMO] Saving response to file system"));
+  
+  // Open a file for writing
+  File file = LittleFS.open("/netatmo_response.json", "w");
+  if (!file) {
+    Serial.println(F("[NETATMO] Error - Failed to open file for writing"));
+    https.end();
+    return;
+  }
+  
+  // Get a pointer to the stream
+  WiFiClient* stream = https.getStreamPtr();
+  
+  // Memory optimization: Use a smaller buffer for reading chunks
+  const size_t bufferSize = 128;
+  uint8_t buffer[bufferSize];
+  int totalRead = 0;
+  
+  // Read the response in chunks and write to file
+  while (https.connected() && (totalRead < contentLength)) {
+    // Get available data size
+    size_t size = stream->available();
+    
+    if (size > 0) {
+      // Read up to buffer size
+      size_t readSize = size > bufferSize ? bufferSize : size;
+      size_t bytesRead = stream->readBytes(buffer, readSize);
+      
+      // Write to file
+      file.write(buffer, bytesRead);
+      
+      // Update total read
+      totalRead += bytesRead;
+      
+      // Print progress every 512 bytes
+      if (totalRead % 512 == 0) {
+        Serial.print(F("[NETATMO] Read "));
+        Serial.print(totalRead);
+        Serial.print(F(" of "));
+        Serial.print(contentLength);
+        Serial.println(F(" bytes"));
+      }
+    }
+    yield(); // Allow the ESP8266 to perform background tasks
+  }
+  
+  // Close the file
+  file.close();
   https.end();
   
-  // Memory optimization: Create a minimal response structure directly
-  // This avoids parsing the API response which can cause OOM errors
-  deviceData = F("{\"body\":{\"homes\":[{\"name\":\"Home\",\"modules\":[{\"id\":\"70:ee:50:3f:54:c4\",\"type\":\"NAMain\",\"name\":\"Library\"},{\"id\":\"02:00:00:3f:5e:e8\",\"type\":\"NAModule1\",\"name\":\"Under Deck\"},{\"id\":\"03:00:00:08:e6:60\",\"type\":\"NAModule4\",\"name\":\"Living Room\"}]}]},\"status\":\"ok\"}");
+  Serial.println(F("[NETATMO] Response saved to file system"));
+  Serial.print(F("[NETATMO] Total bytes read: "));
+  Serial.println(totalRead);
   
-  Serial.println(F("[NETATMO] Created response structure"));
-  Serial.print(F("[NETATMO] Response size: "));
-  Serial.println(deviceData.length());
+  // Set a flag to indicate that the response is in the file system
+  deviceData = F("FILE:/netatmo_response.json");
+  
+  Serial.println(F("[NETATMO] Device data reference stored"));
 }

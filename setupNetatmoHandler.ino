@@ -92,6 +92,12 @@ void setupNetatmoHandler() {
   server.on("/api/netatmo/auth", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling auth request"));
     
+    // Debug output to check client ID and secret
+    Serial.print(F("[NETATMO] Client ID length: "));
+    Serial.println(strlen(netatmoClientId));
+    Serial.print(F("[NETATMO] Client Secret length: "));
+    Serial.println(strlen(netatmoClientSecret));
+    
     if (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0) {
       Serial.println(F("[NETATMO] Error - No credentials"));
       request->send(400, "text/plain", "Missing credentials");

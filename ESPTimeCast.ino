@@ -71,6 +71,8 @@ void createDefaultConfig() {
   doc[F("timeZone")] = "";
   doc[F("brightness")] = brightness;
   doc[F("flipDisplay")] = flipDisplay;
+  doc[F("netatmoClientId")] = "";
+  doc[F("netatmoClientSecret")] = "";
   
   // Write the minimal config
   File f = LittleFS.open("/config.json", "w");
@@ -1061,6 +1063,8 @@ void saveTokensToConfig() {
   // Update the tokens
   doc["netatmoAccessToken"] = netatmoAccessToken;
   doc["netatmoRefreshToken"] = netatmoRefreshToken;
+  doc["netatmoClientId"] = netatmoClientId;
+  doc["netatmoClientSecret"] = netatmoClientSecret;
   
   // Save the updated config
   configFile = LittleFS.open("/config.json", "w");

@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>  // Use LittleFS instead of SPIFFS for ESP8266
 
 class Config {
 private:

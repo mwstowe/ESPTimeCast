@@ -5,8 +5,8 @@ Config::Config() {
 }
 
 void Config::begin() {
-  if (!SPIFFS.begin(true)) {
-    Serial.println("ERROR: Failed to initialize SPIFFS for config");
+  if (!LittleFS.begin()) {
+    Serial.println("ERROR: Failed to initialize LittleFS for config");
     return;
   }
   
@@ -17,12 +17,12 @@ void Config::begin() {
 }
 
 bool Config::loadConfigFile() {
-  if (!SPIFFS.exists(configFilePath)) {
+  if (!LittleFS.exists(configFilePath)) {
     Serial.println("Config file does not exist");
     return false;
   }
   
-  File configFile = SPIFFS.open(configFilePath, FILE_READ);
+  File configFile = LittleFS.open(configFilePath, "r");
   if (!configFile) {
     Serial.println("Failed to open config file for reading");
     return false;
@@ -120,7 +120,7 @@ bool Config::saveConfig() {
   doc["useNetatmoOutdoor"] = useNetatmoOutdoor;
   doc["prioritizeNetatmoIndoor"] = prioritizeNetatmoIndoor;
   
-  File configFile = SPIFFS.open(configFilePath, FILE_WRITE);
+  File configFile = LittleFS.open(configFilePath, "w");
   if (!configFile) {
     Serial.println("Failed to open config file for writing");
     return false;

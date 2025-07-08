@@ -2,7 +2,10 @@
 #define NETATMO_HANDLER_H
 
 #include <Arduino.h>
+#include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecureBearSSL.h>
 #include "Config.h"
 #include "Logger.h"
 #include "NetatmoOAuth.h"

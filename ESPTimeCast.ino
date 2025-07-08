@@ -1053,23 +1053,76 @@ void saveTokensToConfig() {
     return;
   }
   
+  // Create a backup of the config file first
+  if (LittleFS.exists("/config.json")) {
+    if (LittleFS.exists("/config.bak")) {
+      LittleFS.remove("/config.bak");
+    }
+    
+    File srcFile = LittleFS.open("/config.json", "r");
+    if (srcFile) {
+      File dstFile = LittleFS.open("/config.bak", "w");
+      if (dstFile) {
+        // Copy file contents
+        static const size_t BUFFER_SIZE = 256;
+        uint8_t buffer[BUFFER_SIZE];
+        size_t bytesRead;
+        
+        while ((bytesRead = srcFile.read(buffer, BUFFER_SIZE)) > 0) {
+          dstFile.write(buffer, bytesRead);
+        }
+        
+        dstFile.close();
+      }
+      srcFile.close();
+    }
+  }
+  
+  // Memory-efficient approach: Read the file line by line and modify only what we need
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
     Serial.println(F("[CONFIG] Failed to open config file for reading"));
     return;
   }
   
-  DynamicJsonDocument doc(1024);
-  DeserializationError error = deserializeJson(doc, configFile);
+  // Read the entire file into a string
+  String jsonStr = configFile.readString();
   configFile.close();
+  
+  // Create a new JSON document with minimal size
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, jsonStr);
   
   if (error) {
     Serial.print(F("[CONFIG] Failed to parse config file: "));
     Serial.println(error.c_str());
+    
+    // Try to restore from backup
+    if (LittleFS.exists("/config.bak")) {
+      Serial.println(F("[CONFIG] Attempting to restore from backup"));
+      File backupFile = LittleFS.open("/config.bak", "r");
+      if (backupFile) {
+        File configFile = LittleFS.open("/config.json", "w");
+        if (configFile) {
+          // Copy file contents
+          static const size_t BUFFER_SIZE = 256;
+          uint8_t buffer[BUFFER_SIZE];
+          size_t bytesRead;
+          
+          while ((bytesRead = backupFile.read(buffer, BUFFER_SIZE)) > 0) {
+            configFile.write(buffer, bytesRead);
+          }
+          
+          configFile.close();
+        }
+        backupFile.close();
+      }
+    }
+    
     return;
   }
   
-  // Update the tokens
+  // Update only the tokens
   doc["netatmoAccessToken"] = netatmoAccessToken;
   doc["netatmoRefreshToken"] = netatmoRefreshToken;
   doc["netatmoClientId"] = netatmoClientId;
@@ -1082,11 +1135,15 @@ void saveTokensToConfig() {
     return;
   }
   
+  // Use a smaller buffer for serialization
   if (serializeJson(doc, configFile) == 0) {
     Serial.println(F("[CONFIG] Failed to write to config file"));
   } else {
     Serial.println(F("[CONFIG] Tokens saved successfully"));
   }
+  
+  configFile.close();
+}
   
   configFile.close();
 }

@@ -30,8 +30,25 @@ function fetchNetatmoDevices() {
   // Show loading message
   showStatus("Fetching Netatmo devices...", "loading");
   
-  // Use the proxy endpoint to avoid CORS issues
-  fetch('/api/netatmo/proxy?endpoint=getstationsdata')
+  // First check token status
+  fetch('/api/netatmo/token-status')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(status => {
+      console.log("Token status:", status);
+      
+      if (!status.hasAccessToken) {
+        showStatus("No access token available. Please authorize Netatmo first.", "error");
+        throw new Error("No access token available");
+      }
+      
+      // Use the proxy endpoint to avoid CORS issues
+      return fetch('/api/netatmo/proxy?endpoint=getstationsdata');
+    })
     .then(response => {
       if (!response.ok) {
         // Get more detailed error information

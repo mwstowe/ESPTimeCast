@@ -19,6 +19,87 @@ String urlEncode(const char* input) {
       result += hex[c & 0xF];
     }
   }
+  
+  return result;
+}
+
+// Function to refresh the Netatmo token
+bool refreshNetatmoToken() {
+  Serial.println(F("[NETATMO] Refreshing token"));
+  
+  if (strlen(netatmoRefreshToken) == 0) {
+    Serial.println(F("[NETATMO] Error - No refresh token"));
+    return false;
+  }
+  
+  // Create a new client for the API call
+  static BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
+  
+  HTTPClient https;
+  https.setTimeout(10000); // 10 second timeout
+  
+  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    return false;
+  }
+  
+  https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  
+  // Build the POST data
+  String postData = "grant_type=refresh_token";
+  postData += "&client_id=";
+  postData += urlEncode(netatmoClientId);
+  postData += "&client_secret=";
+  postData += urlEncode(netatmoClientSecret);
+  postData += "&refresh_token=";
+  postData += urlEncode(netatmoRefreshToken);
+  
+  // Make the request
+  int httpCode = https.POST(postData);
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
+    String errorPayload = https.getString();
+    Serial.print(F("[NETATMO] Error payload: "));
+    Serial.println(errorPayload);
+    https.end();
+    return false;
+  }
+  
+  // Get the response
+  String response = https.getString();
+  https.end();
+  
+  // Parse the response
+  StaticJsonDocument<384> doc;
+  DeserializationError error = deserializeJson(doc, response);
+  
+  if (error) {
+    Serial.print(F("[NETATMO] JSON parse error: "));
+    Serial.println(error.c_str());
+    return false;
+  }
+  
+  // Extract the tokens
+  if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
+    Serial.println(F("[NETATMO] Missing tokens in response"));
+    return false;
+  }
+  
+  // Save the tokens
+  const char* accessToken = doc["access_token"];
+  const char* refreshToken = doc["refresh_token"];
+  
+  Serial.println(F("[NETATMO] Saving new tokens"));
+  strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
+  strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
+  
+  saveTokensToConfig();
+  return true;
+}
+  }
   return result;
 }
 
@@ -187,20 +268,38 @@ void setupNetatmoHandler() {
     request->send(200, "application/json", response);
   });
   
-  // Add a proxy endpoint for Netatmo API calls to avoid CORS issues
-  server.on("/api/netatmo/proxy", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Handling proxy request"));
+  // Add a debug endpoint to check token status
+  server.on("/api/netatmo/token-status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling token status request"));
     
-    if (strlen(netatmoAccessToken) == 0) {
-      Serial.println(F("[NETATMO] Error - No access token"));
-      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
-      return;
+    String response = "{";
+    response += "\"hasAccessToken\":" + String(strlen(netatmoAccessToken) > 0 ? "true" : "false");
+    response += ",\"hasRefreshToken\":" + String(strlen(netatmoRefreshToken) > 0 ? "true" : "false");
+    response += ",\"accessTokenLength\":" + String(strlen(netatmoAccessToken));
+    response += ",\"refreshTokenLength\":" + String(strlen(netatmoRefreshToken));
+    
+    // Add the first few characters of the tokens for verification
+    if (strlen(netatmoAccessToken) > 10) {
+      response += ",\"accessTokenPrefix\":\"" + String(netatmoAccessToken).substring(0, 10) + "...\"";
     }
     
-    // Check which API endpoint to call
-    String endpoint = "getstationsdata";
-    if (request->hasParam("endpoint")) {
-      endpoint = request->getParam("endpoint")->value();
+    if (strlen(netatmoRefreshToken) > 10) {
+      response += ",\"refreshTokenPrefix\":\"" + String(netatmoRefreshToken).substring(0, 10) + "...\"";
+    }
+    
+    response += "}";
+    
+    request->send(200, "application/json", response);
+  });
+  
+  // Add a token refresh endpoint
+  server.on("/api/netatmo/refresh-token", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling token refresh request"));
+    
+    if (strlen(netatmoRefreshToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No refresh token"));
+      request->send(401, "application/json", "{\"error\":\"No refresh token available\"}");
+      return;
     }
     
     // Create a new client for the API call
@@ -210,22 +309,25 @@ void setupNetatmoHandler() {
     HTTPClient https;
     https.setTimeout(10000); // 10 second timeout
     
-    String apiUrl = "https://api.netatmo.com/api/" + endpoint;
-    Serial.print(F("[NETATMO] Proxying request to: "));
-    Serial.println(apiUrl);
-    
-    if (!https.begin(client, apiUrl)) {
+    if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
       Serial.println(F("[NETATMO] Error - Failed to connect"));
       request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API\"}");
       return;
     }
     
-    // Add authorization header
-    https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
-    https.addHeader("Accept", "application/json");
+    https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+    // Build the POST data
+    String postData = "grant_type=refresh_token";
+    postData += "&client_id=";
+    postData += urlEncode(netatmoClientId);
+    postData += "&client_secret=";
+    postData += urlEncode(netatmoClientSecret);
+    postData += "&refresh_token=";
+    postData += urlEncode(netatmoRefreshToken);
     
     // Make the request
-    int httpCode = https.GET();
+    int httpCode = https.POST(postData);
     
     if (httpCode != HTTP_CODE_OK) {
       Serial.print(F("[NETATMO] Error - HTTP code: "));
@@ -239,11 +341,39 @@ void setupNetatmoHandler() {
     }
     
     // Get the response
-    String payload = https.getString();
+    String response = https.getString();
     https.end();
     
-    // Send the response back to the client
-    request->send(200, "application/json", payload);
+    // Parse the response
+    StaticJsonDocument<384> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (error) {
+      Serial.print(F("[NETATMO] JSON parse error: "));
+      Serial.println(error.c_str());
+      request->send(500, "application/json", "{\"error\":\"Failed to parse response\"}");
+      return;
+    }
+    
+    // Extract the tokens
+    if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
+      Serial.println(F("[NETATMO] Missing tokens in response"));
+      request->send(500, "application/json", "{\"error\":\"Missing tokens in response\"}");
+      return;
+    }
+    
+    // Save the tokens
+    const char* accessToken = doc["access_token"];
+    const char* refreshToken = doc["refresh_token"];
+    
+    Serial.println(F("[NETATMO] Saving new tokens"));
+    strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
+    strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
+    
+    saveTokensToConfig();
+    
+    // Send success response
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Token refreshed successfully\"}");
   });
   
   // Endpoint to save Netatmo settings without rebooting
@@ -288,6 +418,147 @@ void setupNetatmoHandler() {
     
     // Send success response
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings saved\"}");
+  });
+  
+  // Add a proxy endpoint for Netatmo API calls to avoid CORS issues
+  server.on("/api/netatmo/proxy", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling proxy request"));
+    
+    // Check if we have a valid access token
+    if (strlen(netatmoAccessToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
+      return;
+    }
+    
+    // Debug output
+    Serial.print(F("[NETATMO] Using access token: "));
+    Serial.println(netatmoAccessToken);
+    
+    // Check which API endpoint to call
+    String endpoint = "getstationsdata";
+    if (request->hasParam("endpoint")) {
+      endpoint = request->getParam("endpoint")->value();
+    }
+    
+    // Create a new client for the API call
+    static BearSSL::WiFiClientSecure client;
+    client.setInsecure(); // Skip certificate validation to save memory
+    
+    HTTPClient https;
+    https.setTimeout(10000); // 10 second timeout
+    
+    String apiUrl = "https://api.netatmo.com/api/" + endpoint;
+    Serial.print(F("[NETATMO] Proxying request to: "));
+    Serial.println(apiUrl);
+    
+    if (!https.begin(client, apiUrl)) {
+      Serial.println(F("[NETATMO] Error - Failed to connect"));
+      request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API\"}");
+      return;
+    }
+    
+    // Add authorization header
+    String authHeader = "Bearer ";
+    authHeader += netatmoAccessToken;
+    https.addHeader("Authorization", authHeader);
+    https.addHeader("Accept", "application/json");
+    
+    // Make the request
+    int httpCode = https.GET();
+    
+    if (httpCode != HTTP_CODE_OK) {
+      Serial.print(F("[NETATMO] Error - HTTP code: "));
+      Serial.println(httpCode);
+      String errorPayload = https.getString();
+      Serial.print(F("[NETATMO] Error payload: "));
+      Serial.println(errorPayload);
+      https.end();
+      
+      // If we get a 401 or 403, try to refresh the token
+      if (httpCode == 401 || httpCode == 403) {
+        Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+        
+        // Try to refresh the token
+        if (refreshNetatmoToken()) {
+          Serial.println(F("[NETATMO] Token refreshed, retrying request"));
+          
+          // Retry the request with the new token
+          HTTPClient https2;
+          https2.setTimeout(10000);
+          
+          if (!https2.begin(client, apiUrl)) {
+            Serial.println(F("[NETATMO] Error - Failed to connect on retry"));
+            request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API on retry\"}");
+            return;
+          }
+          
+          // Add authorization header with new token
+          String newAuthHeader = "Bearer ";
+          newAuthHeader += netatmoAccessToken;
+          https2.addHeader("Authorization", newAuthHeader);
+          https2.addHeader("Accept", "application/json");
+          
+          // Make the request again
+          int httpCode2 = https2.GET();
+          
+          if (httpCode2 != HTTP_CODE_OK) {
+            Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
+            Serial.println(httpCode2);
+            String errorPayload2 = https2.getString();
+            Serial.print(F("[NETATMO] Error payload on retry: "));
+            Serial.println(errorPayload2);
+            https2.end();
+            request->send(httpCode2, "application/json", errorPayload2);
+            return;
+          }
+          
+          // Get the response
+          String payload2 = https2.getString();
+          https2.end();
+          
+          // Send the response back to the client
+          request->send(200, "application/json", payload2);
+          return;
+        } else {
+          Serial.println(F("[NETATMO] Failed to refresh token"));
+        }
+      }
+      
+      request->send(httpCode, "application/json", errorPayload);
+      return;
+    }
+    
+    // Get the response
+    String payload = https.getString();
+    https.end();
+    
+    // Send the response back to the client
+    request->send(200, "application/json", payload);
+  });
+  
+  // Add a debug endpoint to check token status
+  server.on("/api/netatmo/token-status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling token status request"));
+    
+    String response = "{";
+    response += "\"hasAccessToken\":" + String(strlen(netatmoAccessToken) > 0 ? "true" : "false");
+    response += ",\"hasRefreshToken\":" + String(strlen(netatmoRefreshToken) > 0 ? "true" : "false");
+    response += ",\"accessTokenLength\":" + String(strlen(netatmoAccessToken));
+    response += ",\"refreshTokenLength\":" + String(strlen(netatmoRefreshToken));
+    
+    // Add the first few characters of the tokens for verification
+    if (strlen(netatmoAccessToken) > 10) {
+      response += ",\"accessTokenPrefix\":\"" + String(netatmoAccessToken).substring(0, 10) + "...\"";
+    }
+    
+    if (strlen(netatmoRefreshToken) > 10) {
+      response += ",\"refreshTokenPrefix\":\"" + String(netatmoRefreshToken).substring(0, 10) + "...\"";
+    }
+    
+    response += "}";
+    
+    request->send(200, "application/json", response);
   });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));

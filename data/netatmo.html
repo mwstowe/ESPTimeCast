@@ -440,7 +440,20 @@ function fetchNetatmoDevices() {
 
 // Function to load modules for selected device
 function loadModules() {
+  // Call the loadModules function from netatmo-devices.js
   const deviceId = document.getElementById('netatmoDeviceId').value;
+  const moduleId = document.getElementById('netatmoModuleId').value;
+  const indoorModuleId = document.getElementById('netatmoIndoorModuleId').value;
+  
+  // Use the global function from netatmo-devices.js
+  if (typeof window.netatmoDevices !== 'undefined') {
+    // The new script is loaded, use its function
+    console.log('Using loadModules from netatmo-devices.js');
+    return window.loadModulesFromJS ? 
+      window.loadModulesFromJS(deviceId, moduleId, indoorModuleId) : 
+      loadModulesFromNetatmoDevicesJS(deviceId, moduleId, indoorModuleId);
+  }
+  
   if (!deviceId) return;
   
   showStatus('Loading modules...', 'loading');
@@ -457,38 +470,9 @@ function loadModules() {
         throw new Error(data.error);
       }
       
-      // Clear existing options
-      const moduleSelect = document.getElementById('netatmoModuleId');
-      const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
-      
-      moduleSelect.innerHTML = '<option value="">Select Module...</option>';
-      indoorModuleSelect.innerHTML = '<option value="">Select Module...</option>';
-      
-      // Add modules to select
-      if (data.modules && data.modules.length > 0) {
-        data.modules.forEach(module => {
-          // Add outdoor modules to the outdoor module select
-          if (module.type === 'NAModule1') {
-            const option = document.createElement('option');
-            option.value = module.id;
-            option.textContent = module.name || module.id;
-            moduleSelect.appendChild(option);
-          }
-          
-          // Add indoor modules to the indoor module select
-          if (module.type === 'NAModule4' || module.type === 'NAMain') {
-            const option = document.createElement('option');
-            option.value = module.id;
-            option.textContent = module.name || module.id;
-            indoorModuleSelect.appendChild(option);
-          }
-        });
-        
-        showStatus('Modules loaded successfully!', 'success');
-        setTimeout(hideStatus, 3000);
-      } else {
-        showStatus('No modules found', 'error');
-      }
+      // We now use the loadModules function from netatmo-devices.js
+      // This function is now deprecated and will be removed
+      console.log('Using loadModules from netatmo-devices.js instead');
     })
     .catch(error => {
       console.error('Error loading modules:', error);

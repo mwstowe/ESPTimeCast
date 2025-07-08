@@ -1,6 +1,9 @@
 // Global variable to store Netatmo devices
 window.netatmoDevices = [];
 
+// Make loadModules function available globally
+window.loadModulesFromJS = loadModules;
+
 // Function to fetch Netatmo devices
 function fetchNetatmoDevices() {
   console.log("Fetching Netatmo devices...");

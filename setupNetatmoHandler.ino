@@ -113,24 +113,23 @@ String urlEncode(const String &input) {
   return result;
 }
 
+// Global variables for token exchange
+static String pendingCode = "";
+static bool tokenExchangePending = false;
+
 // Function to exchange authorization code for tokens
 void exchangeAuthCode(const String &code) {
   Serial.println(F("[NETATMO] Starting token exchange process"));
   
   // This will be called in the next loop iteration
-  static String pendingCode = "";
   pendingCode = code;
   
   // Set a flag to process this in the main loop
-  static bool tokenExchangePending = true;
   tokenExchangePending = true;
 }
 
 // Function to be called from loop() to process pending token exchange
 void processTokenExchange() {
-  static String pendingCode = "";
-  static bool tokenExchangePending = false;
-  
   if (!tokenExchangePending || pendingCode.isEmpty()) {
     return;
   }

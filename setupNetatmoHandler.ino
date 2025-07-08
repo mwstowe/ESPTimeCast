@@ -94,7 +94,7 @@ void setupNetatmoHandler() {
     authUrl += urlEncode(netatmoClientId);
     authUrl += "&redirect_uri=";
     authUrl += urlEncode(redirectUri.c_str());
-    authUrl += "&scope=read_station&response_type=code";
+    authUrl += "&scope=read_station%20read_thermostat&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
     Serial.println(authUrl);
@@ -342,9 +342,23 @@ void processFetchDevices() {
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  // Use the correct API endpoint
+  // Use the correct API endpoint with explicit parameters
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
-  if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata?get_favorites=false")) {
+  
+  // Print the access token (first few characters)
+  Serial.print(F("[NETATMO] Using access token: "));
+  if (strlen(netatmoAccessToken) > 10) {
+    char tokenPrefix[11];
+    strncpy(tokenPrefix, netatmoAccessToken, 10);
+    tokenPrefix[10] = '\0';
+    Serial.print(tokenPrefix);
+    Serial.println(F("..."));
+  } else {
+    Serial.println(netatmoAccessToken);
+  }
+  
+  // Try a different API endpoint
+  if (!https.begin(client, "https://api.netatmo.com/api/devicelist")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
   }
@@ -353,8 +367,9 @@ void processFetchDevices() {
   String authHeader = "Bearer ";
   authHeader += netatmoAccessToken;
   https.addHeader("Authorization", authHeader);
+  https.addHeader("Accept", "application/json");
   
-  Serial.println(F("[NETATMO] Sending request"));
+  Serial.println(F("[NETATMO] Sending request to /api/devicelist"));
   int httpCode = https.GET();
   
   Serial.print(F("[NETATMO] HTTP response code: "));
@@ -380,6 +395,14 @@ void processFetchDevices() {
   Serial.println(response.length());
   
   if (response.length() > 0) {
+    // Print the first 100 characters of the response for debugging
+    Serial.println(F("[NETATMO] Response preview:"));
+    if (response.length() > 100) {
+      Serial.println(response.substring(0, 100) + "...");
+    } else {
+      Serial.println(response);
+    }
+    
     // Create a simple response format that matches what the JavaScript expects
     String formattedResponse = "{\"body\":{\"devices\":";
     
@@ -442,10 +465,116 @@ void processFetchDevices() {
       Serial.print(F("[NETATMO] Formatted response size: "));
       Serial.println(deviceData.length());
     } else {
-      Serial.println(F("[NETATMO] Error - Invalid response format"));
-      Serial.println(response);
+      // Try to adapt the response format if it's different
+      Serial.println(F("[NETATMO] Trying alternative response format"));
+      
+      // Create a new document for the devices array
+      DynamicJsonDocument devicesDoc(3072);
+      JsonArray devicesArray = devicesDoc.to<JsonArray>();
+      
+      // Check if we have a devices array directly
+      if (doc.containsKey("devices") && doc["devices"].is<JsonArray>()) {
+        JsonArray devices = doc["devices"];
+        
+        // Copy each device to the new array
+        for (JsonObject device : devices) {
+          JsonObject newDevice = devicesArray.createNestedObject();
+          
+          // Copy essential fields
+          if (device.containsKey("_id")) newDevice["_id"] = device["_id"].as<const char*>();
+          else if (device.containsKey("id")) newDevice["_id"] = device["id"].as<const char*>();
+          
+          if (device.containsKey("station_name")) newDevice["station_name"] = device["station_name"].as<const char*>();
+          else if (device.containsKey("name")) newDevice["station_name"] = device["name"].as<const char*>();
+          
+          if (device.containsKey("type")) newDevice["type"] = device["type"].as<const char*>();
+          
+          // Copy modules if they exist
+          if (device.containsKey("modules")) {
+            JsonArray modules = device["modules"];
+            JsonArray newModules = newDevice.createNestedArray("modules");
+            
+            for (JsonObject module : modules) {
+              JsonObject newModule = newModules.createNestedObject();
+              
+              // Copy essential module fields
+              if (module.containsKey("_id")) newModule["_id"] = module["_id"].as<const char*>();
+              else if (module.containsKey("id")) newModule["_id"] = module["id"].as<const char*>();
+              
+              if (module.containsKey("module_name")) newModule["module_name"] = module["module_name"].as<const char*>();
+              else if (module.containsKey("name")) newModule["module_name"] = module["name"].as<const char*>();
+              
+              if (module.containsKey("type")) newModule["type"] = module["type"].as<const char*>();
+            }
+          }
+        }
+        
+        // Serialize the devices array
+        String devicesJson;
+        serializeJson(devicesArray, devicesJson);
+        
+        // Complete the response
+        formattedResponse += devicesJson;
+        formattedResponse += "}}";
+        
+        // Store the formatted response
+        deviceData = formattedResponse;
+        
+        Serial.println(F("[NETATMO] Device data processed using alternative format"));
+        Serial.print(F("[NETATMO] Formatted response size: "));
+        Serial.println(deviceData.length());
+      } else {
+        Serial.println(F("[NETATMO] Error - Invalid response format"));
+        Serial.println(response);
+      }
     }
   } else {
     Serial.println(F("[NETATMO] Error - Empty response"));
+    
+    // If the first attempt failed, try the getstationsdata endpoint
+    Serial.println(F("[NETATMO] Trying alternative API endpoint"));
+    
+    if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata")) {
+      Serial.println(F("[NETATMO] Error - Failed to connect to alternative endpoint"));
+      return;
+    }
+    
+    // Set the authorization header correctly
+    https.addHeader("Authorization", authHeader);
+    https.addHeader("Accept", "application/json");
+    
+    Serial.println(F("[NETATMO] Sending request to /api/getstationsdata"));
+    httpCode = https.GET();
+    
+    Serial.print(F("[NETATMO] HTTP response code: "));
+    Serial.println(httpCode);
+    
+    if (httpCode != HTTP_CODE_OK) {
+      Serial.print(F("[NETATMO] Error - HTTP code: "));
+      Serial.println(httpCode);
+      if (httpCode > 0) {
+        Serial.println(F("[NETATMO] Response: "));
+        Serial.println(https.getString());
+      }
+      https.end();
+      return;
+    }
+    
+    // Get the response
+    response = https.getString();
+    https.end();
+    
+    Serial.println(F("[NETATMO] Received device data from alternative endpoint"));
+    Serial.print(F("[NETATMO] Response size: "));
+    Serial.println(response.length());
+    
+    if (response.length() > 0) {
+      // Process the response as before
+      // Store the response for future requests
+      deviceData = response;
+      Serial.println(F("[NETATMO] Device data cached from alternative endpoint"));
+    } else {
+      Serial.println(F("[NETATMO] Error - Empty response from alternative endpoint"));
+    }
   }
 }

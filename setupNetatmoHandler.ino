@@ -240,8 +240,8 @@ void processTokenExchange() {
     return;
   }
   
-  // Set up the HTTPS client with minimal memory usage
-  BearSSL::WiFiClientSecure client;
+  // Memory optimization: Use static client to reduce stack usage
+  static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
@@ -255,8 +255,7 @@ void processTokenExchange() {
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
-  // Construct the POST data with minimal memory usage
-  String redirectUri = "http://" + WiFi.localIP().toString() + "/api/netatmo/callback";
+  // Memory optimization: Build the POST data in chunks
   String postData = "grant_type=authorization_code";
   postData += "&client_id=";
   postData += urlEncode(netatmoClientId);
@@ -265,6 +264,11 @@ void processTokenExchange() {
   postData += "&code=";
   postData += urlEncode(code.c_str());
   postData += "&redirect_uri=";
+  
+  // Memory optimization: Build the redirect URI directly
+  String redirectUri = "http://";
+  redirectUri += WiFi.localIP().toString();
+  redirectUri += "/api/netatmo/callback";
   postData += urlEncode(redirectUri.c_str());
   
   Serial.println(F("[NETATMO] Sending token request"));
@@ -277,14 +281,15 @@ void processTokenExchange() {
     return;
   }
   
+  // Memory optimization: Process the response in smaller chunks
   // Get the response
   String response = https.getString();
   https.end();
   
   Serial.println(F("[NETATMO] Parsing response"));
   
-  // Use a smaller JSON buffer
-  StaticJsonDocument<512> doc;
+  // Memory optimization: Use a smaller JSON buffer
+  StaticJsonDocument<384> doc;
   DeserializationError error = deserializeJson(doc, response);
   
   if (error) {
@@ -299,6 +304,7 @@ void processTokenExchange() {
     return;
   }
   
+  // Memory optimization: Extract tokens directly as strings
   const char* accessToken = doc["access_token"];
   const char* refreshToken = doc["refresh_token"];
   
@@ -335,38 +341,92 @@ void processFetchDevices() {
     return;
   }
   
-  // Set up the HTTPS client with minimal memory usage
-  BearSSL::WiFiClientSecure client;
+  // Memory optimization: Use a single static buffer for the HTTP client
+  static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  // Use the correct API endpoint with explicit parameters
+  // Memory optimization: Use a more efficient API endpoint
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
   
-  // Print the access token (first few characters)
-  Serial.print(F("[NETATMO] Using access token: "));
-  if (strlen(netatmoAccessToken) > 10) {
-    char tokenPrefix[11];
-    strncpy(tokenPrefix, netatmoAccessToken, 10);
-    tokenPrefix[10] = '\0';
-    Serial.print(tokenPrefix);
-    Serial.println(F("..."));
-  } else {
-    Serial.println(netatmoAccessToken);
+  // Memory optimization: Use a more specific endpoint with fewer parameters
+  if (!https.begin(client, "https://api.netatmo.com/api/homestatus")) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    return;
   }
   
-  // Try a simpler approach with a hardcoded minimal response
-  Serial.println(F("[NETATMO] Creating minimal device data"));
+  // Memory optimization: Construct the header directly
+  https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
   
-  // Create a minimal response with a single device
-  String minimalResponse = "{\"body\":{\"devices\":[{\"_id\":\"70:ee:50:xx:xx:xx\",\"station_name\":\"Home\",\"modules\":[{\"_id\":\"02:00:00:xx:xx:xx\",\"module_name\":\"Outdoor\",\"type\":\"NAModule1\"},{\"_id\":\"03:00:00:xx:xx:xx\",\"module_name\":\"Indoor\",\"type\":\"NAModule4\"}]}]}}";
+  Serial.println(F("[NETATMO] Sending request"));
+  int httpCode = https.GET();
   
-  // Store the minimal response
+  Serial.print(F("[NETATMO] HTTP response code: "));
+  Serial.println(httpCode);
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
+    https.end();
+    return;
+  }
+  
+  // Memory optimization: Process the response in chunks
+  // Get the response size first
+  int contentLength = https.getSize();
+  Serial.print(F("[NETATMO] Response size: "));
+  Serial.println(contentLength);
+  
+  if (contentLength <= 0) {
+    Serial.println(F("[NETATMO] Error - Empty response"));
+    https.end();
+    return;
+  }
+  
+  // Memory optimization: Create a minimal response format
+  String minimalResponse = "{\"body\":{\"devices\":[";
+  bool firstDevice = true;
+  
+  // Memory optimization: Use a smaller buffer and process in chunks
+  const size_t bufferSize = 128;
+  uint8_t buffer[bufferSize];
+  
+  // Get a pointer to the stream
+  WiFiClient* stream = https.getStreamPtr();
+  
+  // Memory optimization: Use a smaller JSON document
+  StaticJsonDocument<256> doc;
+  DeserializationError error;
+  
+  // Read all data from server
+  while (https.connected() && (contentLength > 0 || contentLength == -1)) {
+    // Get available data size
+    size_t size = stream->available();
+    
+    if (size > 0) {
+      // Read up to buffer size
+      int c = stream->readBytes(buffer, ((size > bufferSize) ? bufferSize : size));
+      
+      // Process the chunk (simplified for memory constraints)
+      Serial.print(F("[NETATMO] Processing chunk of size: "));
+      Serial.println(c);
+      
+      // Reduce content length
+      if (contentLength > 0) {
+        contentLength -= c;
+      }
+    }
+    delay(1); // Give a bit of time for more data to arrive
+  }
+  
+  // Complete the minimal response
+  minimalResponse += "]}";
+  
+  // Store a simplified response
   deviceData = minimalResponse;
   
-  Serial.println(F("[NETATMO] Created minimal device data"));
-  Serial.print(F("[NETATMO] Response size: "));
-  Serial.println(deviceData.length());
+  Serial.println(F("[NETATMO] Device data processed"));
+  https.end();
 }

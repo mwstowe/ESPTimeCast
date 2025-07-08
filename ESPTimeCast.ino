@@ -16,6 +16,10 @@
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecureBearSSL.h>
 
+#include "src/Config.h"
+#include "src/Logger.h"
+#include "src/NetatmoHandler.h"
+
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
 #include "tz_lookup.h" // Timezone lookup, do not duplicate mapping here!
 
@@ -294,6 +298,8 @@ void loadConfig() {
   if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
   if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
   if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
+  if (doc.containsKey("useNetatmoOutdoor")) useNetatmoOutdoor = doc["useNetatmoOutdoor"];
+  if (doc.containsKey("prioritizeNetatmoIndoor")) prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
   if (doc.containsKey("tempSource")) tempSource = doc["tempSource"];
   if (doc.containsKey("mdnsHostname")) strlcpy(mdnsHostname, doc["mdnsHostname"], sizeof(mdnsHostname));
   if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));
@@ -810,6 +816,9 @@ void setupWebServer() {
     handleNetatmoCallback(request);
   });
 
+  // Setup Netatmo OAuth handler
+  setupNetatmoHandler();
+  
   server.begin();
   Serial.println(F("[WEBSERVER] Web server started"));
 }

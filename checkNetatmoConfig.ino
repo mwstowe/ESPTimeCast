@@ -20,22 +20,6 @@ void checkNetatmoConfig() {
     Serial.println(F("[NETATMO] Client Secret is set"));
   }
   
-  // Check username and password
-  if (strlen(netatmoUsername) == 0) {
-    Serial.println(F("[NETATMO] ERROR: Username is missing"));
-    configOK = false;
-  } else {
-    Serial.print(F("[NETATMO] Username: "));
-    Serial.println(netatmoUsername);
-  }
-  
-  if (strlen(netatmoPassword) == 0) {
-    Serial.println(F("[NETATMO] ERROR: Password is missing"));
-    configOK = false;
-  } else {
-    Serial.println(F("[NETATMO] Password is set"));
-  }
-  
   // Check device and module IDs
   if (strlen(netatmoDeviceId) == 0) {
     Serial.println(F("[NETATMO] ERROR: Device ID is missing"));
@@ -53,18 +37,33 @@ void checkNetatmoConfig() {
     Serial.println(netatmoModuleId);
   }
   
+  // Check indoor module ID if set
+  if (strlen(netatmoIndoorModuleId) > 0) {
+    Serial.print(F("[NETATMO] Indoor Module ID: "));
+    Serial.println(netatmoIndoorModuleId);
+  } else {
+    Serial.println(F("[NETATMO] Indoor Module ID is not set"));
+  }
+  
   // Check tokens
   if (strlen(netatmoAccessToken) > 0) {
     Serial.println(F("[NETATMO] Access token is set"));
   } else {
-    Serial.println(F("[NETATMO] Access token is not set (will be obtained during first request)"));
+    Serial.println(F("[NETATMO] Access token is not set (will be obtained through OAuth)"));
   }
   
   if (strlen(netatmoRefreshToken) > 0) {
     Serial.println(F("[NETATMO] Refresh token is set"));
   } else {
-    Serial.println(F("[NETATMO] Refresh token is not set (will be obtained during first request)"));
+    Serial.println(F("[NETATMO] Refresh token is not set (will be obtained through OAuth)"));
   }
+  
+  // Check temperature settings
+  Serial.print(F("[NETATMO] Use Netatmo for outdoor temperature: "));
+  Serial.println(useNetatmoOutdoor ? "Yes" : "No");
+  
+  Serial.print(F("[NETATMO] Prioritize Netatmo for indoor temperature: "));
+  Serial.println(prioritizeNetatmoIndoor ? "Yes" : "No");
   
   if (configOK) {
     Serial.println(F("[NETATMO] Configuration looks good!"));

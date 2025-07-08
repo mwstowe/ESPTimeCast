@@ -371,26 +371,20 @@ void processFetchDevices() {
   static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
   
-  // Memory optimization: Use a smaller timeout
   HTTPClient https;
-  https.setTimeout(5000); // 5 second timeout
+  https.setTimeout(10000); // 10 second timeout
   
   // Try the homesdata endpoint first (for Netatmo Home + Weather)
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
   
-  // Memory optimization: Pre-allocate the URL string
-  String url = F("https://api.netatmo.com/api/homesdata");
-  
-  if (!https.begin(client, url)) {
+  if (!https.begin(client, F("https://api.netatmo.com/api/homesdata"))) {
     Serial.println(F("[NETATMO] Error - Failed to connect to homesdata endpoint"));
     return;
   }
   
-  // Memory optimization: Pre-allocate the auth header
+  // Set the authorization header correctly
   String authHeader = F("Bearer ");
   authHeader += netatmoAccessToken;
-  
-  // Memory optimization: Use fewer headers
   https.addHeader(F("Authorization"), authHeader);
   
   Serial.println(F("[NETATMO] Sending request to homesdata endpoint"));
@@ -399,84 +393,29 @@ void processFetchDevices() {
   Serial.print(F("[NETATMO] HTTP response code: "));
   Serial.println(httpCode);
   
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.print(F("[NETATMO] Error - HTTP code: "));
-    Serial.println(httpCode);
+  if (httpCode == HTTP_CODE_OK) {
+    // Get the response
+    String response = https.getString();
     https.end();
-    return;
-  }
-  
-  // Memory optimization: Process the response in chunks
-  int contentLength = https.getSize();
-  Serial.print(F("[NETATMO] Response size: "));
-  Serial.println(contentLength);
-  
-  if (contentLength <= 0) {
-    Serial.println(F("[NETATMO] Error - Empty response"));
-    https.end();
-    return;
-  }
-  
-  // Memory optimization: Pre-allocate a buffer for the response
-  // We'll build a simplified JSON response with just the essential data
-  String simplifiedResponse = F("{\"body\":{\"devices\":[");
-  bool firstDevice = true;
-  
-  // Memory optimization: Use a smaller buffer for reading chunks
-  const size_t bufferSize = 64;
-  char buffer[bufferSize];
-  int totalRead = 0;
-  
-  // Get a pointer to the stream
-  WiFiClient* stream = https.getStreamPtr();
-  
-  // Memory optimization: Use a smaller JSON document for parsing chunks
-  StaticJsonDocument<128> doc;
-  
-  // Read the response in chunks
-  while (https.connected() && (totalRead < contentLength)) {
-    // Get available data size
-    size_t size = stream->available();
     
-    if (size > 0) {
-      // Read up to buffer size
-      size_t readSize = size > bufferSize - 1 ? bufferSize - 1 : size;
-      size_t bytesRead = stream->readBytes((uint8_t*)buffer, readSize);
-      buffer[bytesRead] = '\0'; // Null-terminate the buffer
+    Serial.print(F("[NETATMO] Response size: "));
+    Serial.println(response.length());
+    
+    if (response.length() > 0) {
+      // Print the entire response for debugging
+      Serial.println(F("[NETATMO] Full response:"));
+      Serial.println(response);
       
-      // Process the chunk
-      totalRead += bytesRead;
-      
-      // Look for device information in the chunk
-      if (strstr(buffer, "\"homes\"") != NULL) {
-        Serial.println(F("[NETATMO] Found homes data"));
-      }
-      
-      if (strstr(buffer, "\"modules\"") != NULL) {
-        Serial.println(F("[NETATMO] Found modules data"));
-      }
-      
-      if (strstr(buffer, "\"station_name\"") != NULL || strstr(buffer, "\"name\"") != NULL) {
-        Serial.println(F("[NETATMO] Found device name"));
-      }
+      // Store the response for future requests
+      deviceData = response;
+      Serial.println(F("[NETATMO] Device data cached from homesdata endpoint"));
+      return;
     }
-    yield(); // Allow the ESP8266 to perform background tasks
   }
   
+  // If homesdata failed, try the devicelist endpoint
   https.end();
-  
-  // Complete the simplified response
-  simplifiedResponse += F("]}]}");
-  
-  // Store the simplified response
-  deviceData = simplifiedResponse;
-  
-  Serial.println(F("[NETATMO] Processed response data"));
-  Serial.print(F("[NETATMO] Simplified response size: "));
-  Serial.println(deviceData.length());
-  
-  // Now try the devicelist endpoint to get more specific device information
-  Serial.println(F("[NETATMO] Trying devicelist endpoint for more details"));
+  Serial.println(F("[NETATMO] Trying devicelist endpoint"));
   
   if (!https.begin(client, F("https://api.netatmo.com/api/devicelist"))) {
     Serial.println(F("[NETATMO] Error - Failed to connect to devicelist endpoint"));
@@ -492,20 +431,22 @@ void processFetchDevices() {
   Serial.println(httpCode);
   
   if (httpCode == HTTP_CODE_OK) {
-    // Get the response size
-    contentLength = https.getSize();
-    Serial.print(F("[NETATMO] Response size: "));
-    Serial.println(contentLength);
+    // Get the response
+    String response = https.getString();
+    https.end();
     
-    if (contentLength > 0) {
-      // This time, we'll just store the raw response
-      // The JavaScript will handle parsing it
-      String response = https.getString();
-      https.end();
+    Serial.print(F("[NETATMO] Response size: "));
+    Serial.println(response.length());
+    
+    if (response.length() > 0) {
+      // Print the entire response for debugging
+      Serial.println(F("[NETATMO] Full response:"));
+      Serial.println(response);
       
-      // Store the response
+      // Store the response for future requests
       deviceData = response;
-      Serial.println(F("[NETATMO] Stored devicelist response"));
+      Serial.println(F("[NETATMO] Device data cached from devicelist endpoint"));
+      return;
     }
   }
   

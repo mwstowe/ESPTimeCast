@@ -92,11 +92,58 @@ select:focus {
 .checkbox-group {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 0.75rem;
 }
 
-.checkbox-group input[type="checkbox"] {
-  margin-right: 0.5rem;
+/* Toggle switch styles */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--accent-color);
+}
+
+input:focus + .toggle-slider {
+  box-shadow: 0 0 1px var(--accent-color);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(26px);
 }
 
 button {
@@ -499,38 +546,59 @@ function updateSavingModal(message, showSpinner = true) {
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="flipDisplay" name="flipDisplay">
           <label for="flipDisplay">Flip Display</label>
+          <div class="toggle">
+            <input type="checkbox" id="flipDisplay" name="flipDisplay">
+            <span class="toggle-slider"></span>
+          </div>
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="twelveHourToggle" name="twelveHourToggle">
           <label for="twelveHourToggle">Use 12-hour Format</label>
+          <div class="toggle">
+            <input type="checkbox" id="twelveHourToggle" name="twelveHourToggle">
+            <span class="toggle-slider"></span>
+          </div>
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="showDayOfWeek" name="showDayOfWeek" checked>
           <label for="showDayOfWeek">Show Day of Week</label>
+          <div class="toggle">
+            <input type="checkbox" id="showDayOfWeek" name="showDayOfWeek" checked>
+            <span class="toggle-slider"></span>
+          </div>
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="showIndoorTemp" name="showIndoorTemp" checked>
           <label for="showIndoorTemp">Show Indoor Temperature</label>
+          <div class="toggle">
+            <input type="checkbox" id="showIndoorTemp" name="showIndoorTemp" checked>
+            <span class="toggle-slider"></span>
+          </div>
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="showOutdoorTemp" name="showOutdoorTemp" checked>
           <label for="showOutdoorTemp">Show Outdoor Temperature</label>
+          <div class="toggle">
+            <input type="checkbox" id="showOutdoorTemp" name="showOutdoorTemp" checked>
+            <span class="toggle-slider"></span>
+          </div>
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
           <label for="useNetatmoOutdoor">Use Netatmo for outdoor temperature</label>
+          <div class="toggle">
+            <input type="checkbox" id="useNetatmoOutdoor" name="useNetatmoOutdoor">
+            <span class="toggle-slider"></span>
+          </div>
         </div>
         
         <div class="checkbox-group">
-          <input type="checkbox" id="prioritizeNetatmoIndoor" name="prioritizeNetatmoIndoor">
           <label for="prioritizeNetatmoIndoor">Prioritize Netatmo for indoor temperature</label>
+          <div class="toggle">
+            <input type="checkbox" id="prioritizeNetatmoIndoor" name="prioritizeNetatmoIndoor">
+            <span class="toggle-slider"></span>
+          </div>
         </div>
       </div>
       

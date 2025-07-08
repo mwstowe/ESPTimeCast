@@ -30,53 +30,34 @@ function fetchNetatmoDevices() {
   // Show loading message
   showStatus("Fetching Netatmo devices...", "loading");
   
-  // First, check if the ESP has the data or if we need to fetch directly
-  fetch('/api/netatmo/devices?refresh=true')
+  // First, get the access token directly
+  fetch('/api/netatmo/token')
     .then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       return response.json();
     })
-    .then(data => {
-      // Check if we need to make a direct API call
-      if (data.redirect && data.redirect === "api") {
-        console.log("ESP requested direct API call");
-        
-        // Get the access token from the ESP
-        return fetch('/api/netatmo/token')
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`HTTP error! Status: ${response.status}`);
-            }
-            return response.json();
-          })
-          .then(tokenData => {
-            if (!tokenData.access_token) {
-              throw new Error("No access token available");
-            }
-            
-            console.log("Got access token from ESP");
-            
-            // Make the API call directly from the browser to get stations data
-            return fetch('https://api.netatmo.com/api/getstationsdata', {
-              headers: {
-                'Authorization': `Bearer ${tokenData.access_token}`,
-                'Accept': 'application/json'
-              }
-            });
-          })
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`Netatmo API error! Status: ${response.status}`);
-            }
-            return response.json();
-          });
-      } else {
-        // ESP already has the data
-        console.log("Using data from ESP");
-        return data;
+    .then(tokenData => {
+      if (!tokenData.access_token) {
+        throw new Error("No access token available");
       }
+      
+      console.log("Got access token from ESP");
+      
+      // Make the API call directly from the browser using homesdata API
+      return fetch('https://api.netatmo.com/api/homesdata', {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`,
+          'Accept': 'application/json'
+        }
+      });
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Netatmo API error! Status: ${response.status}`);
+      }
+      return response.json();
     })
     .then(data => {
       console.log("Received device data from Netatmo API:", data);
@@ -97,11 +78,53 @@ function fetchNetatmoDevices() {
         }
       }
       
-      // Handle the response from getstationsdata endpoint
+      // Handle the homes format from the homesdata endpoint
       let devices = [];
       
-      if (data.body && data.body.devices && Array.isArray(data.body.devices)) {
-        console.log("Using standard format from getstationsdata endpoint");
+      if (data.body && data.body.homes && data.body.homes.length > 0) {
+        console.log("Using homes format from homesdata endpoint");
+        
+        // Extract the home
+        const home = data.body.homes[0];
+        console.log("Home:", home);
+        
+        // Find weather stations (NAMain type)
+        const weatherStations = home.modules.filter(module => module.type === "NAMain");
+        console.log("Weather stations found:", weatherStations);
+        
+        if (weatherStations.length > 0) {
+          // Process each weather station
+          weatherStations.forEach(station => {
+            console.log("Processing station:", station);
+            
+            // Create a device object for the station
+            const device = {
+              _id: station.id,
+              station_name: station.name || home.name,
+              type: station.type,
+              modules: []
+            };
+            
+            // Add all modules that belong to this station
+            home.modules.forEach(module => {
+              if (module.id !== station.id && module.bridge === station.id) {
+                device.modules.push({
+                  _id: module.id,
+                  module_name: module.name,
+                  type: module.type
+                });
+              }
+            });
+            
+            devices.push(device);
+          });
+        } else {
+          console.log("No weather stations found in home");
+          showStatus("No weather stations found", "warning");
+        }
+      } else if (data.body && data.body.devices) {
+        // Standard format from getstationsdata
+        console.log("Using standard format (body.devices)");
         devices = data.body.devices;
       } else {
         console.error("Unexpected data format:", data);

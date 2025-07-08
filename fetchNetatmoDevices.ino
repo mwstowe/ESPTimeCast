@@ -2,25 +2,10 @@
 String fetchNetatmoDevices() {
   Serial.println(F("[NETATMO] fetchNetatmoDevices() called - triggering async fetch"));
   
-  // Set the flag to trigger the async fetch in the main loop
-  fetchDevicesPending = true;
+  // We need to use the external function to trigger the fetch
+  // since we don't have direct access to the global variables
+  triggerNetatmoDevicesFetch();
   
-  // Return cached data if available
-  if (deviceData.length() > 0) {
-    return deviceData;
-  }
-  
-  // Return a placeholder response
+  // Return a placeholder response - the actual data will be fetched asynchronously
   return "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}";
-}
-
-// Helper function to parse Netatmo JSON response
-bool parseNetatmoJson(String &payload, JsonDocument &doc) {
-  DeserializationError error = deserializeJson(doc, payload);
-  if (error) {
-    Serial.print(F("[NETATMO] JSON parsing failed: "));
-    Serial.println(error.c_str());
-    return false;
-  }
-  return true;
 }

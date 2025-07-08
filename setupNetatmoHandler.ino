@@ -323,7 +323,16 @@ void processTokenExchange() {
   fetchDevicesPending = true;
 }
 
-// Function to be called from loop() to fetch Netatmo devices
+// Function to trigger Netatmo device fetch from external files
+void triggerNetatmoDevicesFetch() {
+  Serial.println(F("[NETATMO] Device fetch triggered externally"));
+  fetchDevicesPending = true;
+}
+
+// Function to get cached device data
+String getNetatmoDeviceData() {
+  return deviceData;
+}
 void processFetchDevices() {
   if (!fetchDevicesPending) {
     return;

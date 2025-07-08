@@ -34,6 +34,8 @@ void createDefaultConfig();
 void setupNetatmoHandler();
 void processTokenExchange();
 void processFetchDevices();
+void triggerNetatmoDevicesFetch();
+String getNetatmoDeviceData();
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
 

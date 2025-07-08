@@ -348,16 +348,15 @@ void processFetchDevices() {
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  // Memory optimization: Use a more efficient API endpoint
+  // Use the correct API endpoint for getting stations data
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
   
-  // Memory optimization: Use a more specific endpoint with fewer parameters
-  if (!https.begin(client, "https://api.netatmo.com/api/homestatus")) {
+  if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
   }
   
-  // Memory optimization: Construct the header directly
+  // Set the authorization header correctly
   https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
   
   Serial.println(F("[NETATMO] Sending request"));
@@ -373,11 +372,21 @@ void processFetchDevices() {
     return;
   }
   
-  // Memory optimization: Process the response in chunks
-  // Get the response size first
-  int contentLength = https.getSize();
+  // Get the response
+  String response = https.getString();
+  https.end();
+  
   Serial.print(F("[NETATMO] Response size: "));
-  Serial.println(contentLength);
+  Serial.println(response.length());
+  
+  if (response.length() > 0) {
+    // Store the response for future requests
+    deviceData = response;
+    Serial.println(F("[NETATMO] Device data cached"));
+  } else {
+    Serial.println(F("[NETATMO] Error - Empty response"));
+  }
+}
   
   if (contentLength <= 0) {
     Serial.println(F("[NETATMO] Error - Empty response"));

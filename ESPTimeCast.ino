@@ -33,6 +33,10 @@ void handleNetatmoAuth(AsyncWebServerRequest *request);
 void handleNetatmoCallback(AsyncWebServerRequest *request);
 String fetchNetatmoDevices();
 void createDefaultConfig();
+void setupNetatmoHandler();
+void processTokenExchange();
+String urlEncode(const String &input);
+void exchangeAuthCode(const String &code);
 
 // Function to create default config.json
 void createDefaultConfig() {
@@ -1387,6 +1391,9 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED && !isAPMode) {
     MDNS.update();
   }
+  
+  // Process any pending Netatmo token exchanges
+  processTokenExchange();
 
   // --- AP Mode Animation ---
   static unsigned long apAnimTimer = 0;

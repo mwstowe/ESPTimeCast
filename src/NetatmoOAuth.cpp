@@ -1,8 +1,7 @@
 #include "NetatmoOAuth.h"
 
-NetatmoOAuth::NetatmoOAuth(Config* configManager, Logger* logManager) {
+NetatmoOAuth::NetatmoOAuth(Config* configManager) : logger("OAuth") {
   config = configManager;
-  logger = logManager;
 }
 
 String NetatmoOAuth::urlEncode(const String &input) {
@@ -24,10 +23,10 @@ String NetatmoOAuth::urlEncode(const String &input) {
 }
 
 bool NetatmoOAuth::saveCredentials(const String &clientId, const String &clientSecret) {
-  logger->log("OAuth: Saving Netatmo credentials");
+  logger.log("Saving Netatmo credentials");
   
   if (clientId.isEmpty() || clientSecret.isEmpty()) {
-    logger->log("OAuth: Error - Client ID or Secret is empty");
+    logger.log("Error - Client ID or Secret is empty");
     return false;
   }
   
@@ -36,26 +35,26 @@ bool NetatmoOAuth::saveCredentials(const String &clientId, const String &clientS
   bool success = config->saveConfig();
   
   if (success) {
-    logger->log("OAuth: Credentials saved successfully");
+    logger.log("Credentials saved successfully");
   } else {
-    logger->log("OAuth: Failed to save credentials");
+    logger.log("Failed to save credentials");
   }
   
   return success;
 }
 
 String NetatmoOAuth::getAuthorizationUrl() {
-  logger->log("OAuth: Generating authorization URL");
+  logger.log("Generating authorization URL");
   
   String clientId = config->getNetatmoClientId();
   if (clientId.isEmpty()) {
-    logger->log("OAuth: Error - Client ID not set");
+    logger.log("Error - Client ID not set");
     return "";
   }
   
-  // Use a minimal redirect URI on the ESP32
+  // Use a minimal redirect URI on the ESP8266
   String redirectUri = "http://" + WiFi.localIP().toString() + "/api/netatmo/callback";
-  logger->log("OAuth: Redirect URI: " + redirectUri);
+  logger.log("Redirect URI: " + redirectUri);
   
   // Construct the authorization URL with minimal scope for weather station data
   String authUrl = "https://api.netatmo.com/oauth2/authorize";
@@ -64,15 +63,15 @@ String NetatmoOAuth::getAuthorizationUrl() {
   authUrl += "&scope=" + urlEncode("read_station");
   authUrl += "&response_type=code";
   
-  logger->log("OAuth: Authorization URL generated");
+  logger.log("Authorization URL generated");
   return authUrl;
 }
 
 bool NetatmoOAuth::exchangeAuthorizationCode(const String &code) {
-  logger->log("OAuth: Exchanging authorization code for tokens");
+  logger.log("Exchanging authorization code for tokens");
   
   if (code.isEmpty()) {
-    logger->log("OAuth: Error - Authorization code is empty");
+    logger.log("Error - Authorization code is empty");
     return false;
   }
   
@@ -80,14 +79,14 @@ bool NetatmoOAuth::exchangeAuthorizationCode(const String &code) {
   String clientSecret = config->getNetatmoClientSecret();
   
   if (clientId.isEmpty() || clientSecret.isEmpty()) {
-    logger->log("OAuth: Error - Client credentials not set");
+    logger.log("Error - Client credentials not set");
     return false;
   }
   
   // Prepare for the token exchange request
-  logger->log("OAuth: Preparing token exchange request");
+  logger.log("Preparing token exchange request");
   
-  // Use a minimal redirect URI on the ESP32
+  // Use a minimal redirect URI on the ESP8266
   String redirectUri = "http://" + WiFi.localIP().toString() + "/api/netatmo/callback";
   
   // Construct the POST data
@@ -98,36 +97,36 @@ bool NetatmoOAuth::exchangeAuthorizationCode(const String &code) {
   postData += "&redirect_uri=" + urlEncode(redirectUri);
   
   // Set up the HTTPS client
-  logger->log("OAuth: Setting up HTTPS client");
-  WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
+  logger.log("Setting up HTTPS client");
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  logger->log("OAuth: Connecting to Netatmo token endpoint");
-  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
-    logger->log("OAuth: Error - Failed to connect to token endpoint");
+  logger.log("Connecting to Netatmo token endpoint");
+  if (!https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
+    logger.log("Error - Failed to connect to token endpoint");
     return false;
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   // Make the POST request
-  logger->log("OAuth: Sending token exchange request");
+  logger.log("Sending token exchange request");
   int httpCode = https.POST(postData);
   
   if (httpCode != HTTP_CODE_OK) {
-    logger->log("OAuth: Error - Token exchange failed with code: " + String(httpCode));
+    logger.log("Error - Token exchange failed with code: " + String(httpCode));
     if (httpCode > 0) {
-      logger->log("OAuth: Response: " + https.getString());
+      logger.log("Response: " + https.getString());
     }
     https.end();
     return false;
   }
   
   // Get the response
-  logger->log("OAuth: Token exchange successful, parsing response");
+  logger.log("Token exchange successful, parsing response");
   String response = https.getString();
   https.end();
   
@@ -136,7 +135,7 @@ bool NetatmoOAuth::exchangeAuthorizationCode(const String &code) {
 }
 
 bool NetatmoOAuth::parseTokenResponse(const String &response) {
-  logger->log("OAuth: Parsing token response");
+  logger.log("Parsing token response");
   
   // Use ArduinoJson to parse the response
   // Calculate the capacity based on expected response size
@@ -147,13 +146,13 @@ bool NetatmoOAuth::parseTokenResponse(const String &response) {
   
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
-    logger->log("OAuth: Error parsing JSON: " + String(error.c_str()));
+    logger.log("Error parsing JSON: " + String(error.c_str()));
     return false;
   }
   
   // Extract the tokens
   if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
-    logger->log("OAuth: Error - Response missing required tokens");
+    logger.log("Error - Response missing required tokens");
     return false;
   }
   
@@ -165,30 +164,30 @@ bool NetatmoOAuth::parseTokenResponse(const String &response) {
   unsigned long expirationTime = millis() + (expiresIn * 1000);
   
   // Save the tokens
-  logger->log("OAuth: Saving tokens to config");
+  logger.log("Saving tokens to config");
   config->setNetatmoAccessToken(accessToken);
   config->setNetatmoRefreshToken(refreshToken);
   config->setNetatmoTokenExpiration(expirationTime);
   
   bool success = config->saveConfig();
   if (success) {
-    logger->log("OAuth: Tokens saved successfully");
+    logger.log("Tokens saved successfully");
   } else {
-    logger->log("OAuth: Failed to save tokens");
+    logger.log("Failed to save tokens");
   }
   
   return success;
 }
 
 bool NetatmoOAuth::refreshAccessToken() {
-  logger->log("OAuth: Refreshing access token");
+  logger.log("Refreshing access token");
   
   String clientId = config->getNetatmoClientId();
   String clientSecret = config->getNetatmoClientSecret();
   String refreshToken = config->getNetatmoRefreshToken();
   
   if (clientId.isEmpty() || clientSecret.isEmpty() || refreshToken.isEmpty()) {
-    logger->log("OAuth: Error - Missing credentials for token refresh");
+    logger.log("Error - Missing credentials for token refresh");
     return false;
   }
   
@@ -199,36 +198,36 @@ bool NetatmoOAuth::refreshAccessToken() {
   postData += "&refresh_token=" + urlEncode(refreshToken);
   
   // Set up the HTTPS client
-  logger->log("OAuth: Setting up HTTPS client for token refresh");
-  WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
+  logger.log("Setting up HTTPS client for token refresh");
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  logger->log("OAuth: Connecting to Netatmo token endpoint");
-  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
-    logger->log("OAuth: Error - Failed to connect to token endpoint");
+  logger.log("Connecting to Netatmo token endpoint");
+  if (!https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
+    logger.log("Error - Failed to connect to token endpoint");
     return false;
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   // Make the POST request
-  logger->log("OAuth: Sending token refresh request");
+  logger.log("Sending token refresh request");
   int httpCode = https.POST(postData);
   
   if (httpCode != HTTP_CODE_OK) {
-    logger->log("OAuth: Error - Token refresh failed with code: " + String(httpCode));
+    logger.log("Error - Token refresh failed with code: " + String(httpCode));
     if (httpCode > 0) {
-      logger->log("OAuth: Response: " + https.getString());
+      logger.log("Response: " + https.getString());
     }
     https.end();
     return false;
   }
   
   // Get the response
-  logger->log("OAuth: Token refresh successful, parsing response");
+  logger.log("Token refresh successful, parsing response");
   String response = https.getString();
   https.end();
   

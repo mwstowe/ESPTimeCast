@@ -1,28 +1,16 @@
 // Global variable to store Netatmo devices
 window.netatmoDevices = [];
 
-// Function to log client-side messages
-function logMessage(message) {
-  console.log(`Netatmo: ${message}`);
-  
-  // Optionally display in UI
-  const statusElement = document.getElementById('tokenStatus');
-  if (statusElement) {
-    const timestamp = new Date().toLocaleTimeString();
-    statusElement.innerHTML += `<br><small>[${timestamp}] ${message}</small>`;
-  }
-}
-
 // Function to fetch Netatmo devices
 function fetchNetatmoDevices() {
-  logMessage("Fetching Netatmo devices...");
+  console.log("Fetching Netatmo devices...");
   
   const deviceSelect = document.getElementById('netatmoDeviceId');
   const moduleSelect = document.getElementById('netatmoModuleId');
   const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
   
   if (!deviceSelect || !moduleSelect || !indoorModuleSelect) {
-    logMessage("Error: Device or module select elements not found");
+    console.error("Device or module select elements not found");
     return;
   }
   
@@ -52,10 +40,10 @@ function fetchNetatmoDevices() {
       document.getElementById('savingModal').style.display = 'none';
       document.body.classList.remove('modal-open');
       
-      logMessage("Received device data from API");
+      console.log("Received device data from API");
       
       if (!data.body || !data.body.devices || data.body.devices.length === 0) {
-        logMessage("No devices found in response");
+        console.log("No devices found in response");
         showStatus("No Netatmo devices found", "error");
         return;
       }
@@ -77,27 +65,27 @@ function fetchNetatmoDevices() {
         loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
       }
       
-      logMessage(`Found ${data.body.devices.length} Netatmo devices`);
+      console.log(`Found ${data.body.devices.length} Netatmo devices`);
     })
     .catch(error => {
       // Hide loading message
       document.getElementById('savingModal').style.display = 'none';
       document.body.classList.remove('modal-open');
       
-      logMessage(`Error fetching devices: ${error.message}`);
+      console.error(`Error fetching devices: ${error.message}`);
       showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
     });
 }
 
 // Function to load modules for a selected device
 function loadModules(deviceId, previousModuleId = null, previousIndoorModuleId = null) {
-  logMessage(`Loading modules for device: ${deviceId}`);
+  console.log(`Loading modules for device: ${deviceId}`);
   
   const moduleSelect = document.getElementById('netatmoModuleId');
   const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
   
   if (!moduleSelect || !indoorModuleSelect) {
-    logMessage("Error: Module select elements not found");
+    console.error("Module select elements not found");
     return;
   }
   
@@ -106,7 +94,7 @@ function loadModules(deviceId, previousModuleId = null, previousIndoorModuleId =
   indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
   
   if (!deviceId) {
-    logMessage("No device selected");
+    console.log("No device selected");
     return;
   }
   
@@ -114,11 +102,11 @@ function loadModules(deviceId, previousModuleId = null, previousIndoorModuleId =
   const device = window.netatmoDevices.find(d => d._id === deviceId);
   
   if (!device) {
-    logMessage(`Device not found: ${deviceId}`);
+    console.log(`Device not found: ${deviceId}`);
     return;
   }
   
-  logMessage(`Found device: ${device.station_name || device.name}`);
+  console.log(`Found device: ${device.station_name || device.name}`);
   
   // Add the main module (base station)
   const mainOption = document.createElement('option');
@@ -130,7 +118,7 @@ function loadModules(deviceId, previousModuleId = null, previousIndoorModuleId =
   // Add additional modules
   if (device.modules && device.modules.length > 0) {
     device.modules.forEach(module => {
-      logMessage(`Found module: ${module.module_name} (${module.type})`);
+      console.log(`Found module: ${module.module_name} (${module.type})`);
       
       const option = document.createElement('option');
       option.value = module._id;
@@ -173,13 +161,13 @@ function getModuleTypeName(type) {
 
 // Function to connect to Netatmo
 function connectToNetatmo() {
-  logMessage("Connecting to Netatmo...");
+  console.log("Connecting to Netatmo...");
   
   const clientId = document.getElementById('netatmoClientId').value;
   const clientSecret = document.getElementById('netatmoClientSecret').value;
   
   if (!clientId || !clientSecret) {
-    logMessage("Error: Client ID and Secret are required");
+    console.error("Client ID and Secret are required");
     showStatus("Client ID and Secret are required", "error");
     return;
   }
@@ -210,14 +198,14 @@ function connectToNetatmo() {
     document.getElementById('savingModal').style.display = 'none';
     document.body.classList.remove('modal-open');
     
-    logMessage(`Error connecting to Netatmo: ${error.message}`);
+    console.error(`Error connecting to Netatmo: ${error.message}`);
     showStatus(`Failed to connect to Netatmo: ${error.message}`, "error");
   });
 }
 
 // Function to update token status
 function updateTokenStatus() {
-  logMessage("Updating token status...");
+  console.log("Updating token status...");
   
   // Check if we have an access token by looking at the page data
   fetch('/config.json')
@@ -232,7 +220,7 @@ function updateTokenStatus() {
       const connectButton = document.getElementById('connectButton');
       
       if (data.netatmoAccessToken) {
-        logMessage("Netatmo access token found");
+        console.log("Netatmo access token found");
         tokenStatus.textContent = 'Connected to Netatmo';
         tokenStatus.className = 'status-connected';
         
@@ -240,13 +228,13 @@ function updateTokenStatus() {
           connectButton.textContent = 'Reconnect to Netatmo';
         }
       } else {
-        logMessage("No Netatmo access token found");
+        console.log("No Netatmo access token found");
         tokenStatus.textContent = 'Not connected to Netatmo';
         tokenStatus.className = 'status-disconnected';
       }
     })
     .catch(error => {
-      logMessage(`Error checking token status: ${error.message}`);
+      console.error(`Error checking token status: ${error.message}`);
       const tokenStatus = document.getElementById('tokenStatus');
       tokenStatus.textContent = 'Error checking connection status';
       tokenStatus.className = 'status-error';

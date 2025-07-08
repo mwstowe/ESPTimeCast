@@ -2,8 +2,9 @@
 #define NETATMO_OAUTH_H
 
 #include <Arduino.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClientSecureBearSSL.h>
 #include <ArduinoJson.h>
 #include "Config.h"
 #include "Logger.h"
@@ -11,14 +12,14 @@
 class NetatmoOAuth {
 private:
   Config* config;
-  Logger* logger;
+  Logger logger;
   
   // Memory-efficient string handling
   String urlEncode(const String &input);
   bool parseTokenResponse(const String &response);
   
 public:
-  NetatmoOAuth(Config* configManager, Logger* logManager);
+  NetatmoOAuth(Config* configManager);
   
   // OAuth flow handlers
   bool saveCredentials(const String &clientId, const String &clientSecret);

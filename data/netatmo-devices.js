@@ -58,8 +58,8 @@ function fetchNetatmoDevices() {
             
             console.log("Got access token from ESP");
             
-            // Make the API call directly from the browser
-            return fetch('https://api.netatmo.com/api/homesdata', {
+            // Make the API call directly from the browser to get stations data
+            return fetch('https://api.netatmo.com/api/getstationsdata', {
               headers: {
                 'Authorization': `Bearer ${tokenData.access_token}`,
                 'Accept': 'application/json'
@@ -97,57 +97,17 @@ function fetchNetatmoDevices() {
         }
       }
       
-      // Handle the homes format from the homesdata endpoint
+      // Handle the response from getstationsdata endpoint
       let devices = [];
       
-      if (data.body && data.body.homes && data.body.homes.length > 0) {
-        console.log("Using homes format from homesdata endpoint");
-        
-        // Extract the home
-        const home = data.body.homes[0];
-        console.log("Home:", home);
-        
-        // Find the main station (NAMain type)
-        const mainStation = home.modules.find(module => module.type === "NAMain");
-        if (mainStation) {
-          console.log("Found main station:", mainStation);
-          
-          // Create a device object for the main station
-          const device = {
-            _id: mainStation.id,
-            station_name: mainStation.name || home.name,
-            type: mainStation.type,
-            modules: []
-          };
-          
-          // Add all other modules as sub-modules of the main station
-          home.modules.forEach(module => {
-            if (module.id !== mainStation.id) {
-              device.modules.push({
-                _id: module.id,
-                module_name: module.name,
-                type: module.type,
-                room_id: module.room_id
-              });
-            }
-          });
-          
-          devices.push(device);
-        } else {
-          // If no main station is found, add all modules as separate devices
-          home.modules.forEach(module => {
-            devices.push({
-              _id: module.id,
-              station_name: module.name,
-              type: module.type,
-              modules: []
-            });
-          });
-        }
-      } else if (data.body && data.body.devices) {
-        // Standard format
-        console.log("Using standard format (body.devices)");
+      if (data.body && data.body.devices && Array.isArray(data.body.devices)) {
+        console.log("Using standard format from getstationsdata endpoint");
         devices = data.body.devices;
+      } else {
+        console.error("Unexpected data format:", data);
+        showStatus("Unexpected data format from API", "error");
+        return;
+      }
       } else if (data.devices) {
         // Alternative format
         console.log("Using alternative format (devices)");

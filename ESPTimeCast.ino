@@ -29,8 +29,6 @@ void fetchNetatmoIndoorTemperature();
 String getNetatmoToken();
 void forceNetatmoTokenRefresh();
 bool parseNetatmoJson(String &payload, JsonDocument &doc);
-void handleNetatmoAuth(AsyncWebServerRequest *request);
-void handleNetatmoCallback(AsyncWebServerRequest *request);
 String fetchNetatmoDevices();
 void createDefaultConfig();
 void setupNetatmoHandler();
@@ -810,16 +808,6 @@ void setupWebServer() {
   });
   
   // Add OAuth2 endpoints
-  server.on("/api/netatmo/auth", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println(F("[WEBSERVER] Request: /api/netatmo/auth"));
-    handleNetatmoAuth(request);
-  });
-  
-  server.on("/oauth2/callback", HTTP_GET, [](AsyncWebServerRequest *request){
-    Serial.println(F("[WEBSERVER] Request: /oauth2/callback"));
-    handleNetatmoCallback(request);
-  });
-
   // Setup Netatmo OAuth handler
   setupNetatmoHandler();
   

@@ -114,6 +114,17 @@ function fetchNetatmoDevices() {
                 });
               }
             });
+          } else if (parsedData.body && parsedData.body.devices && parsedData.body.devices.length === 0) {
+            // If we have an empty devices array, create a manual device
+            console.log("No devices found, creating manual device");
+            devices = [{
+              _id: "manual",
+              station_name: "Manual Configuration",
+              modules: [
+                { _id: "manual_outdoor", module_name: "Outdoor Module", type: "NAModule1" },
+                { _id: "manual_indoor", module_name: "Indoor Module", type: "NAModule4" }
+              ]
+            }];
           }
         } catch (e) {
           console.error("Error parsing device data:", e);
@@ -123,9 +134,16 @@ function fetchNetatmoDevices() {
       console.log("Extracted devices:", devices);
       
       if (!devices || devices.length === 0) {
-        console.log("No devices found in response");
-        showStatus("No Netatmo devices found", "error");
-        return;
+        console.log("No devices found in response, creating manual device");
+        // Create a manual device as a fallback
+        devices = [{
+          _id: "manual",
+          station_name: "Manual Configuration",
+          modules: [
+            { _id: "manual_outdoor", module_name: "Outdoor Module", type: "NAModule1" },
+            { _id: "manual_indoor", module_name: "Indoor Module", type: "NAModule4" }
+          ]
+        }];
       }
       
       // Store devices in global variable

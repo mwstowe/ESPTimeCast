@@ -157,9 +157,9 @@ void setupNetatmoHandler() {
     request->send(200, "text/html", html);
   });
   
-  // Endpoint to get Netatmo devices
-  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Handling get devices request"));
+  // Endpoint to get the access token
+  server.on("/api/netatmo/token", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get token request"));
     
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
@@ -167,56 +167,12 @@ void setupNetatmoHandler() {
       return;
     }
     
-    // Check if we should force a refresh
-    bool forceRefresh = false;
-    if (request->hasParam("refresh")) {
-      forceRefresh = request->getParam("refresh")->value() == "true";
-      Serial.println(F("[NETATMO] Force refresh requested"));
-    }
+    // Create a JSON response with the access token
+    String response = "{\"access_token\":\"";
+    response += netatmoAccessToken;
+    response += "\"}";
     
-    // Check if the response is in the file system
-    if (deviceData.startsWith(F("FILE:"))) {
-      String filename = deviceData.substring(5);
-      Serial.print(F("[NETATMO] Serving response from file: "));
-      Serial.println(filename);
-      
-      if (LittleFS.exists(filename)) {
-        // If we have a file and no refresh is requested, serve it
-        if (!forceRefresh) {
-          request->send(LittleFS, filename, "application/json");
-          return;
-        } else {
-          // If refresh is requested, fetch new data
-          Serial.println(F("[NETATMO] Refresh requested, fetching new data"));
-          fetchDevicesPending = true;
-          
-          // Send a simple response
-          request->send(200, "application/json", "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}");
-          return;
-        }
-      } else {
-        Serial.println(F("[NETATMO] File not found, fetching new data"));
-        fetchDevicesPending = true;
-        
-        // Send a simple response
-        request->send(200, "application/json", "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}");
-        return;
-      }
-    }
-    
-    // If we have device data in memory and no refresh is requested, return it
-    if (deviceData.length() > 0 && !forceRefresh) {
-      Serial.println(F("[NETATMO] Returning cached device data from memory"));
-      request->send(200, "application/json", deviceData);
-      return;
-    }
-    
-    // Otherwise, fetch it asynchronously
-    Serial.println(F("[NETATMO] Setting fetchDevicesPending flag"));
-    fetchDevicesPending = true;
-    
-    // Send a simple response
-    request->send(200, "application/json", "{\"body\":{\"devices\":[]},\"status\":\"fetching\"}");
+    request->send(200, "application/json", response);
   });
   
   // Endpoint to save Netatmo settings without rebooting
@@ -385,107 +341,40 @@ void processFetchDevices() {
     return;
   }
   
-  // Memory optimization: Use a single static buffer for the HTTP client
-  static BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
+  // Memory optimization: Create a minimal response structure
+  // This is a placeholder that tells the JavaScript to use the API directly
+  deviceData = F("{\"redirect\":\"api\"}");
   
-  // Memory optimization: Use a smaller timeout
-  HTTPClient https;
-  https.setTimeout(5000); // 5 second timeout
-  
-  // Try the homesdata endpoint
-  Serial.println(F("[NETATMO] Connecting to Netatmo API"));
-  
-  // Memory optimization: Use F() macro for strings
-  if (!https.begin(client, F("https://api.netatmo.com/api/homesdata"))) {
-    Serial.println(F("[NETATMO] Error - Failed to connect to homesdata endpoint"));
-    return;
-  }
-  
-  // Memory optimization: Build the header directly
-  https.addHeader(F("Authorization"), F("Bearer ") + String(netatmoAccessToken));
-  
-  Serial.println(F("[NETATMO] Sending request to homesdata endpoint"));
-  int httpCode = https.GET();
-  
-  Serial.print(F("[NETATMO] HTTP response code: "));
-  Serial.println(httpCode);
-  
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.print(F("[NETATMO] Error - HTTP code: "));
-    Serial.println(httpCode);
-    https.end();
-    return;
-  }
-  
-  // Get the content length
-  int contentLength = https.getSize();
-  Serial.print(F("[NETATMO] Response size: "));
-  Serial.println(contentLength);
-  
-  if (contentLength <= 0) {
-    Serial.println(F("[NETATMO] Error - Empty response"));
-    https.end();
-    return;
-  }
-  
-  // Memory optimization: Use the file system to store the response
-  Serial.println(F("[NETATMO] Saving response to file system"));
-  
-  // Open a file for writing
-  File file = LittleFS.open("/netatmo_response.json", "w");
-  if (!file) {
-    Serial.println(F("[NETATMO] Error - Failed to open file for writing"));
-    https.end();
-    return;
-  }
-  
-  // Get a pointer to the stream
-  WiFiClient* stream = https.getStreamPtr();
-  
-  // Memory optimization: Use a smaller buffer for reading chunks
-  const size_t bufferSize = 128;
-  uint8_t buffer[bufferSize];
-  int totalRead = 0;
-  
-  // Read the response in chunks and write to file
-  while (https.connected() && (totalRead < contentLength)) {
-    // Get available data size
-    size_t size = stream->available();
-    
-    if (size > 0) {
-      // Read up to buffer size
-      size_t readSize = size > bufferSize ? bufferSize : size;
-      size_t bytesRead = stream->readBytes(buffer, readSize);
-      
-      // Write to file
-      file.write(buffer, bytesRead);
-      
-      // Update total read
-      totalRead += bytesRead;
-      
-      // Print progress every 512 bytes
-      if (totalRead % 512 == 0) {
-        Serial.print(F("[NETATMO] Read "));
-        Serial.print(totalRead);
-        Serial.print(F(" of "));
-        Serial.print(contentLength);
-        Serial.println(F(" bytes"));
-      }
-    }
-    yield(); // Allow the ESP8266 to perform background tasks
-  }
-  
-  // Close the file
-  file.close();
-  https.end();
-  
-  Serial.println(F("[NETATMO] Response saved to file system"));
-  Serial.print(F("[NETATMO] Total bytes read: "));
-  Serial.println(totalRead);
-  
-  // Set a flag to indicate that the response is in the file system
-  deviceData = F("FILE:/netatmo_response.json");
-  
-  Serial.println(F("[NETATMO] Device data reference stored"));
+  Serial.println(F("[NETATMO] Set redirect flag for client-side API call"));
 }
+  // Endpoint to get Netatmo devices
+  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get devices request"));
+    
+    if (strlen(netatmoAccessToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
+      return;
+    }
+    
+    // Check if we should force a refresh
+    bool forceRefresh = false;
+    if (request->hasParam("refresh")) {
+      forceRefresh = request->getParam("refresh")->value() == "true";
+      Serial.println(F("[NETATMO] Force refresh requested"));
+    }
+    
+    // If we have device data and no refresh is requested, return it
+    if (deviceData.length() > 0 && !forceRefresh) {
+      Serial.println(F("[NETATMO] Returning cached device data"));
+      request->send(200, "application/json", deviceData);
+      return;
+    }
+    
+    // Otherwise, set the flag to indicate a redirect
+    Serial.println(F("[NETATMO] Setting fetchDevicesPending flag"));
+    fetchDevicesPending = true;
+    
+    // Send a redirect response
+    request->send(200, "application/json", "{\"redirect\":\"api\"}");
+  });

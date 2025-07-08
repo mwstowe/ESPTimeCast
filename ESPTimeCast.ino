@@ -1115,12 +1115,13 @@ void saveTokensToConfig() {
       File dstFile = LittleFS.open("/config.bak", "w");
       if (dstFile) {
         // Copy file contents
-        static const size_t BUFFER_SIZE = 256;
+        static const size_t BUFFER_SIZE = 128; // Reduced buffer size
         uint8_t buffer[BUFFER_SIZE];
         size_t bytesRead;
         
         while ((bytesRead = srcFile.read(buffer, BUFFER_SIZE)) > 0) {
           dstFile.write(buffer, bytesRead);
+          yield(); // Allow system to process other tasks
         }
         
         dstFile.close();
@@ -1129,85 +1130,81 @@ void saveTokensToConfig() {
     }
   }
   
-  // Memory-efficient approach: Read the file line by line and modify only what we need
+  // Ultra memory-efficient approach: Direct file modification
+  // Instead of parsing the entire JSON, we'll just replace the token values
+  
+  // First, read the file to find the token positions
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
     Serial.println(F("[CONFIG] Failed to open config file for reading"));
     return;
   }
   
-  // Read the entire file into a string
-  String jsonStr = configFile.readString();
-  configFile.close();
+  // Create a new temporary file
+  File tempFile = LittleFS.open("/config.tmp", "w");
+  if (!tempFile) {
+    Serial.println(F("[CONFIG] Failed to create temporary file"));
+    configFile.close();
+    return;
+  }
   
-  // Add a small delay after file operations
-  delay(10);
+  // Process the file line by line
+  const int BUFFER_SIZE = 64; // Small buffer to reduce memory usage
+  char buffer[BUFFER_SIZE];
+  int bytesRead;
+  bool accessTokenFound = false;
+  bool refreshTokenFound = false;
+  bool clientIdFound = false;
+  bool clientSecretFound = false;
   
-  // Create a new JSON document with minimal size - reduced from 512 to 256 bytes
-  StaticJsonDocument<256> doc;
-  
-  // Force garbage collection before JSON parsing with safer approach
-  safeGarbageCollection();
-  
-  // Print memory stats before parsing
-  Serial.println(F("[CONFIG] Memory status before JSON parsing:"));
-  printMemoryStats();
-  
-  // Add another small delay before parsing
-  delay(10);
-  
-  DeserializationError error = deserializeJson(doc, jsonStr);
-  
-  if (error) {
-    Serial.print(F("[CONFIG] Failed to parse config file: "));
-    Serial.println(error.c_str());
+  while ((bytesRead = configFile.readBytesUntil('\n', buffer, BUFFER_SIZE-1)) > 0) {
+    buffer[bytesRead] = '\0'; // Null terminate
+    String line = String(buffer);
     
-    // Try to restore from backup
-    if (LittleFS.exists("/config.bak")) {
-      Serial.println(F("[CONFIG] Attempting to restore from backup"));
-      File backupFile = LittleFS.open("/config.bak", "r");
-      if (backupFile) {
-        File configFile = LittleFS.open("/config.json", "w");
-        if (configFile) {
-          // Copy file contents
-          static const size_t BUFFER_SIZE = 256;
-          uint8_t buffer[BUFFER_SIZE];
-          size_t bytesRead;
-          
-          while ((bytesRead = backupFile.read(buffer, BUFFER_SIZE)) > 0) {
-            configFile.write(buffer, bytesRead);
-          }
-          
-          configFile.close();
-        }
-        backupFile.close();
-      }
+    // Check for token fields and replace them
+    if (line.indexOf("\"netatmoAccessToken\"") >= 0 && !accessTokenFound) {
+      tempFile.print("  \"netatmoAccessToken\": \"");
+      tempFile.print(netatmoAccessToken);
+      tempFile.println("\",");
+      accessTokenFound = true;
+    }
+    else if (line.indexOf("\"netatmoRefreshToken\"") >= 0 && !refreshTokenFound) {
+      tempFile.print("  \"netatmoRefreshToken\": \"");
+      tempFile.print(netatmoRefreshToken);
+      tempFile.println("\",");
+      refreshTokenFound = true;
+    }
+    else if (line.indexOf("\"netatmoClientId\"") >= 0 && !clientIdFound) {
+      tempFile.print("  \"netatmoClientId\": \"");
+      tempFile.print(netatmoClientId);
+      tempFile.println("\",");
+      clientIdFound = true;
+    }
+    else if (line.indexOf("\"netatmoClientSecret\"") >= 0 && !clientSecretFound) {
+      tempFile.print("  \"netatmoClientSecret\": \"");
+      tempFile.print(netatmoClientSecret);
+      tempFile.println("\",");
+      clientSecretFound = true;
+    }
+    else {
+      // Write the line as is
+      tempFile.println(line);
     }
     
-    return;
-  }
-  
-  // Update only the tokens
-  doc["netatmoAccessToken"] = netatmoAccessToken;
-  doc["netatmoRefreshToken"] = netatmoRefreshToken;
-  doc["netatmoClientId"] = netatmoClientId;
-  doc["netatmoClientSecret"] = netatmoClientSecret;
-  
-  // Save the updated config
-  configFile = LittleFS.open("/config.json", "w");
-  if (!configFile) {
-    Serial.println(F("[CONFIG] Failed to open config file for writing"));
-    return;
-  }
-  
-  // Use a smaller buffer for serialization
-  if (serializeJson(doc, configFile) == 0) {
-    Serial.println(F("[CONFIG] Failed to write to config file"));
-  } else {
-    Serial.println(F("[CONFIG] Tokens saved successfully"));
+    yield(); // Allow system to process other tasks
   }
   
   configFile.close();
+  tempFile.close();
+  
+  // Replace the original file with the temporary file
+  if (LittleFS.exists("/config.json")) {
+    LittleFS.remove("/config.json");
+  }
+  
+  LittleFS.rename("/config.tmp", "/config.json");
+  
+  Serial.println(F("[CONFIG] Tokens saved successfully"));
 }
 
 // Function to fetch outdoor temperature from Netatmo

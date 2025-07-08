@@ -54,16 +54,57 @@ function fetchNetatmoDevices() {
         console.log("Response keys:", Object.keys(data));
         if (data.body) {
           console.log("Body keys:", Object.keys(data.body));
-          if (data.body.homes) {
-            console.log("Found homes data:", data.body.homes);
-          }
         }
       }
       
-      // Handle different response formats
+      // Handle the homes format from the homesdata endpoint
       let devices = [];
       
-      if (data.body && data.body.devices) {
+      if (data.body && data.body.homes && data.body.homes.length > 0) {
+        console.log("Using homes format from homesdata endpoint");
+        
+        // Extract the home
+        const home = data.body.homes[0];
+        console.log("Home:", home);
+        
+        // Find the main station (NAMain type)
+        const mainStation = home.modules.find(module => module.type === "NAMain");
+        if (mainStation) {
+          console.log("Found main station:", mainStation);
+          
+          // Create a device object for the main station
+          const device = {
+            _id: mainStation.id,
+            station_name: mainStation.name || home.name,
+            type: mainStation.type,
+            modules: []
+          };
+          
+          // Add all other modules as sub-modules of the main station
+          home.modules.forEach(module => {
+            if (module.id !== mainStation.id) {
+              device.modules.push({
+                _id: module.id,
+                module_name: module.name,
+                type: module.type,
+                room_id: module.room_id
+              });
+            }
+          });
+          
+          devices.push(device);
+        } else {
+          // If no main station is found, add all modules as separate devices
+          home.modules.forEach(module => {
+            devices.push({
+              _id: module.id,
+              station_name: module.name,
+              type: module.type,
+              modules: []
+            });
+          });
+        }
+      } else if (data.body && data.body.devices) {
         // Standard format
         console.log("Using standard format (body.devices)");
         devices = data.body.devices;
@@ -71,24 +112,6 @@ function fetchNetatmoDevices() {
         // Alternative format
         console.log("Using alternative format (devices)");
         devices = data.devices;
-      } else if (data.body && data.body.homes) {
-        // Homes format (from homesdata endpoint)
-        console.log("Using homes format (body.homes)");
-        // Extract devices from homes
-        const homes = data.body.homes;
-        homes.forEach(home => {
-          if (home.modules) {
-            // Convert modules to devices format
-            home.modules.forEach(module => {
-              devices.push({
-                _id: module.id,
-                station_name: module.name,
-                type: module.type,
-                modules: module.modules || []
-              });
-            });
-          }
-        });
       } else {
         // Try to parse the response as a Netatmo API response
         console.log("Trying to parse response as Netatmo API response");
@@ -96,35 +119,48 @@ function fetchNetatmoDevices() {
           const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
           console.log("Parsed data:", parsedData);
           
-          if (parsedData.body && parsedData.body.devices) {
-            devices = parsedData.body.devices;
-          } else if (parsedData.body && parsedData.body.homes) {
-            // Extract devices from homes
-            const homes = parsedData.body.homes;
-            homes.forEach(home => {
-              if (home.modules) {
-                // Convert modules to devices format
-                home.modules.forEach(module => {
-                  devices.push({
+          if (parsedData.body && parsedData.body.homes && parsedData.body.homes.length > 0) {
+            // Extract the home
+            const home = parsedData.body.homes[0];
+            console.log("Home:", home);
+            
+            // Find the main station (NAMain type)
+            const mainStation = home.modules.find(module => module.type === "NAMain");
+            if (mainStation) {
+              console.log("Found main station:", mainStation);
+              
+              // Create a device object for the main station
+              const device = {
+                _id: mainStation.id,
+                station_name: mainStation.name || home.name,
+                type: mainStation.type,
+                modules: []
+              };
+              
+              // Add all other modules as sub-modules of the main station
+              home.modules.forEach(module => {
+                if (module.id !== mainStation.id) {
+                  device.modules.push({
                     _id: module.id,
-                    station_name: module.name,
+                    module_name: module.name,
                     type: module.type,
-                    modules: module.modules || []
+                    room_id: module.room_id
                   });
+                }
+              });
+              
+              devices.push(device);
+            } else {
+              // If no main station is found, add all modules as separate devices
+              home.modules.forEach(module => {
+                devices.push({
+                  _id: module.id,
+                  station_name: module.name,
+                  type: module.type,
+                  modules: []
                 });
-              }
-            });
-          } else if (parsedData.body && parsedData.body.devices && parsedData.body.devices.length === 0) {
-            // If we have an empty devices array, create a manual device
-            console.log("No devices found, creating manual device");
-            devices = [{
-              _id: "manual",
-              station_name: "Manual Configuration",
-              modules: [
-                { _id: "manual_outdoor", module_name: "Outdoor Module", type: "NAModule1" },
-                { _id: "manual_indoor", module_name: "Indoor Module", type: "NAModule4" }
-              ]
-            }];
+              });
+            }
           }
         } catch (e) {
           console.error("Error parsing device data:", e);
@@ -134,16 +170,9 @@ function fetchNetatmoDevices() {
       console.log("Extracted devices:", devices);
       
       if (!devices || devices.length === 0) {
-        console.log("No devices found in response, creating manual device");
-        // Create a manual device as a fallback
-        devices = [{
-          _id: "manual",
-          station_name: "Manual Configuration",
-          modules: [
-            { _id: "manual_outdoor", module_name: "Outdoor Module", type: "NAModule1" },
-            { _id: "manual_indoor", module_name: "Indoor Module", type: "NAModule4" }
-          ]
-        }];
+        console.log("No devices found in response");
+        showStatus("No Netatmo devices found", "error");
+        return;
       }
       
       // Store devices in global variable
@@ -173,7 +202,6 @@ function fetchNetatmoDevices() {
       showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
     });
 }
-
 // Function to load modules for a selected device
 function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
   console.log("Loading modules for device:", deviceId);
@@ -209,38 +237,18 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
   
   console.log("Found device:", device);
   
-  // Add the main device as an option for indoor module
-  const mainOption = document.createElement('option');
-  mainOption.value = device._id || device.id;
-  mainOption.textContent = "Main Station" + (device.module_name ? ` (${device.module_name})` : (device.name ? ` (${device.name})` : ""));
-  indoorModuleSelect.appendChild(mainOption);
+  // Add the main device as an option for indoor module if it's a NAMain type
+  if (device.type === "NAMain") {
+    const mainOption = document.createElement('option');
+    mainOption.value = device._id || device.id;
+    mainOption.textContent = "Main Station" + (device.station_name ? ` (${device.station_name})` : "");
+    indoorModuleSelect.appendChild(mainOption);
+  }
   
   // Check if device has modules
   if (!device.modules || device.modules.length === 0) {
     console.log("No modules found for this device");
-    
-    // Check if this is a module itself (from homesdata endpoint)
-    if (device.type) {
-      console.log("Device is a module itself, type:", device.type);
-      
-      // If it's an outdoor module, add it to the outdoor module select
-      if (device.type === 'NAModule1' || device.type.includes('outdoor')) {
-        const option = document.createElement('option');
-        option.value = device._id || device.id;
-        option.textContent = device.station_name || device.name || device._id || device.id;
-        moduleSelect.appendChild(option);
-      }
-      
-      // If it's an indoor module, add it to the indoor module select
-      if (device.type === 'NAModule4' || device.type === 'NAMain' || device.type.includes('indoor')) {
-        const option = document.createElement('option');
-        option.value = device._id || device.id;
-        option.textContent = device.station_name || device.name || device._id || device.id;
-        indoorModuleSelect.appendChild(option);
-      }
-    } else {
-      showStatus("No modules found for this device", "error");
-    }
+    showStatus("No modules found for this device", "warning");
     return;
   }
   
@@ -249,7 +257,7 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
     console.log("Processing module:", module);
     
     // For outdoor modules (typically type NAModule1)
-    if (module.type === 'NAModule1' || (module.type && module.type.includes('outdoor'))) {
+    if (module.type === 'NAModule1') {
       const option = document.createElement('option');
       option.value = module._id || module.id;
       option.textContent = module.module_name || module.name || module._id || module.id;
@@ -257,7 +265,7 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
     }
     
     // For indoor modules (typically type NAModule4 or NAMain)
-    if (module.type === 'NAModule4' || module.type === 'NAMain' || (module.type && module.type.includes('indoor'))) {
+    if (module.type === 'NAModule4') {
       const option = document.createElement('option');
       option.value = module._id || module.id;
       option.textContent = module.module_name || module.name || module._id || module.id;

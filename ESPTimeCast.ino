@@ -1121,7 +1121,7 @@ void saveTokensToConfig() {
         
         while ((bytesRead = srcFile.read(buffer, BUFFER_SIZE)) > 0) {
           dstFile.write(buffer, bytesRead);
-          yield(); // Allow system to process other tasks
+          delay(0); // Safe alternative to yield()
         }
         
         dstFile.close();
@@ -1191,7 +1191,7 @@ void saveTokensToConfig() {
       tempFile.println(line);
     }
     
-    yield(); // Allow system to process other tasks
+    delay(0); // Safe alternative to yield()
   }
   
   configFile.close();

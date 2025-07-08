@@ -419,7 +419,25 @@ void setupWebServer() {
   
   server.on("/netatmo.html", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /netatmo.html"));
+    
+    // Check if the file exists
+    if (!LittleFS.exists("/netatmo.html")) {
+      Serial.println(F("[WEBSERVER] ERROR: netatmo.html not found in LittleFS"));
+      request->send(404, "text/plain", "File not found");
+      return;
+    }
+    
+    // Print file info
+    File infoFile = LittleFS.open("/netatmo.html", "r");
+    if (infoFile) {
+      Serial.print(F("[WEBSERVER] netatmo.html size: "));
+      Serial.println(infoFile.size());
+      infoFile.close();
+    }
+    
+    // Send the file
     request->send(LittleFS, "/netatmo.html", "text/html");
+    Serial.println(F("[WEBSERVER] netatmo.html sent"));
   });
   
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -851,7 +869,25 @@ void setupWebServer() {
   // Add handler for netatmo-devices.js
   server.on("/netatmo-devices.js", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /netatmo-devices.js"));
+    
+    // Check if the file exists
+    if (!LittleFS.exists("/netatmo-devices.js")) {
+      Serial.println(F("[WEBSERVER] ERROR: netatmo-devices.js not found in LittleFS"));
+      request->send(404, "text/plain", "File not found");
+      return;
+    }
+    
+    // Print file info
+    File infoFile = LittleFS.open("/netatmo-devices.js", "r");
+    if (infoFile) {
+      Serial.print(F("[WEBSERVER] netatmo-devices.js size: "));
+      Serial.println(infoFile.size());
+      infoFile.close();
+    }
+    
+    // Send the file
     request->send(LittleFS, "/netatmo-devices.js", "application/javascript");
+    Serial.println(F("[WEBSERVER] netatmo-devices.js sent"));
   });
   
   // Add a generic static file handler for any other files

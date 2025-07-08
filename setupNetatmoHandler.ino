@@ -153,11 +153,26 @@ void setupNetatmoHandler() {
     pendingCode = code;
     tokenExchangePending = true;
     
-    // Simple HTML response to save memory
-    String html = F("<html><body><h1>Authorization Successful</h1>");
+    // Enhanced HTML response with JavaScript redirection
+    String html = F("<!DOCTYPE html>");
+    html += F("<html><head>");
+    html += F("<meta charset='UTF-8'>");
+    html += F("<meta name='viewport' content='width=device-width, initial-scale=1'>");
+    html += F("<title>ESPTimeCast - Authorization Successful</title>");
+    html += F("<style>");
+    html += F("body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }");
+    html += F("h1 { color: #0075ff; }");
+    html += F("</style>");
+    html += F("<script>");
+    html += F("setTimeout(function() {");
+    html += F("  window.location.href = '/netatmo.html';");
+    html += F("}, 5000);");
+    html += F("</script>");
+    html += F("</head><body>");
+    html += F("<h1>Authorization Successful</h1>");
     html += F("<p>Exchanging code for tokens...</p>");
     html += F("<p>You will be redirected in 5 seconds.</p>");
-    html += F("<meta http-equiv='refresh' content='5;url=/netatmo.html'>");
+    html += F("<p>If you are not redirected, <a href='/netatmo.html'>click here</a>.</p>");
     html += F("</body></html>");
     
     request->send(200, "text/html", html);

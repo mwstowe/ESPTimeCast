@@ -30,32 +30,15 @@ function fetchNetatmoDevices() {
   // Show loading message
   showStatus("Fetching Netatmo devices...", "loading");
   
-  // First, get the access token directly
-  fetch('/api/netatmo/token')
+  // Use the proxy endpoint to avoid CORS issues
+  fetch('/api/netatmo/proxy?endpoint=getstationsdata')
     .then(response => {
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(tokenData => {
-      if (!tokenData.access_token) {
-        throw new Error("No access token available");
-      }
-      
-      console.log("Got access token from ESP");
-      
-      // Make the API call directly from the browser using homesdata API
-      return fetch('https://api.netatmo.com/api/homesdata', {
-        headers: {
-          'Authorization': `Bearer ${tokenData.access_token}`,
-          'Accept': 'application/json'
-        }
-      });
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`Netatmo API error! Status: ${response.status}`);
+        // Get more detailed error information
+        return response.text().then(text => {
+          console.error(`API error (${response.status}):`, text);
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        });
       }
       return response.json();
     })

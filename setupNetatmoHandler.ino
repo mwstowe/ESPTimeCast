@@ -111,7 +111,7 @@ void setupNetatmoHandler() {
     authUrl += urlEncode(netatmoClientId);
     authUrl += "&redirect_uri=";
     authUrl += urlEncode(redirectUri.c_str());
-    authUrl += "&scope=read_station%20read_thermostat&response_type=code";
+    authUrl += "&scope=read_station%20read_homecoach%20access_camera%20read_presence%20read_thermostat&state=state&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
     Serial.println(authUrl);
@@ -187,9 +187,9 @@ void setupNetatmoHandler() {
     request->send(200, "application/json", response);
   });
   
-  // Endpoint to get Netatmo devices
-  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Handling get devices request"));
+  // Add a proxy endpoint for Netatmo API calls to avoid CORS issues
+  server.on("/api/netatmo/proxy", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling proxy request"));
     
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
@@ -197,26 +197,53 @@ void setupNetatmoHandler() {
       return;
     }
     
-    // Check if we should force a refresh
-    bool forceRefresh = false;
-    if (request->hasParam("refresh")) {
-      forceRefresh = request->getParam("refresh")->value() == "true";
-      Serial.println(F("[NETATMO] Force refresh requested"));
+    // Check which API endpoint to call
+    String endpoint = "getstationsdata";
+    if (request->hasParam("endpoint")) {
+      endpoint = request->getParam("endpoint")->value();
     }
     
-    // If we have device data and no refresh is requested, return it
-    if (deviceData.length() > 0 && !forceRefresh) {
-      Serial.println(F("[NETATMO] Returning cached device data"));
-      request->send(200, "application/json", deviceData);
+    // Create a new client for the API call
+    static BearSSL::WiFiClientSecure client;
+    client.setInsecure(); // Skip certificate validation to save memory
+    
+    HTTPClient https;
+    https.setTimeout(10000); // 10 second timeout
+    
+    String apiUrl = "https://api.netatmo.com/api/" + endpoint;
+    Serial.print(F("[NETATMO] Proxying request to: "));
+    Serial.println(apiUrl);
+    
+    if (!https.begin(client, apiUrl)) {
+      Serial.println(F("[NETATMO] Error - Failed to connect"));
+      request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API\"}");
       return;
     }
     
-    // Otherwise, set the flag to indicate a redirect
-    Serial.println(F("[NETATMO] Setting fetchDevicesPending flag"));
-    fetchDevicesPending = true;
+    // Add authorization header
+    https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
+    https.addHeader("Accept", "application/json");
     
-    // Send a redirect response
-    request->send(200, "application/json", "{\"redirect\":\"api\"}");
+    // Make the request
+    int httpCode = https.GET();
+    
+    if (httpCode != HTTP_CODE_OK) {
+      Serial.print(F("[NETATMO] Error - HTTP code: "));
+      Serial.println(httpCode);
+      String errorPayload = https.getString();
+      Serial.print(F("[NETATMO] Error payload: "));
+      Serial.println(errorPayload);
+      https.end();
+      request->send(httpCode, "application/json", errorPayload);
+      return;
+    }
+    
+    // Get the response
+    String payload = https.getString();
+    https.end();
+    
+    // Send the response back to the client
+    request->send(200, "application/json", payload);
   });
   
   // Endpoint to save Netatmo settings without rebooting

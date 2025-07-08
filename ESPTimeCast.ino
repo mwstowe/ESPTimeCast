@@ -148,6 +148,10 @@ char netatmoIndoorModuleId[64] = ""; // New: Module ID for indoor temperature fr
 char mdnsHostname[32] = "esptime"; // Default mDNS hostname
 char weatherUnits[12] = "metric";
 char timeZone[64] = "";
+
+// Reboot control variables
+bool rebootPending = false;
+unsigned long rebootTime = 0;
 unsigned long clockDuration = 10000;
 unsigned long weatherDuration = 5000;
 int tempSource = 0; // 0: Local sensor primary, 1: Netatmo primary, 2: Netatmo only
@@ -435,9 +439,29 @@ void setupWebServer() {
       infoFile.close();
     }
     
-    // Send the file
-    request->send(LittleFS, "/netatmo.html", "text/html");
-    Serial.println(F("[WEBSERVER] netatmo.html sent"));
+    // Instead of sending the full file, send a simplified version
+    String html = F("<!DOCTYPE html>");
+    html += F("<html><head>");
+    html += F("<meta charset='UTF-8'>");
+    html += F("<meta name='viewport' content='width=device-width, initial-scale=1'>");
+    html += F("<title>ESPTimeCast Netatmo Settings</title>");
+    html += F("<style>");
+    html += F("body { font-family: Arial, sans-serif; margin: 20px; }");
+    html += F("h1 { color: #0075ff; }");
+    html += F(".container { max-width: 800px; margin: 0 auto; }");
+    html += F("button { background-color: #0075ff; color: white; border: none; padding: 10px 15px; cursor: pointer; }");
+    html += F("</style>");
+    html += F("</head><body>");
+    html += F("<div class='container'>");
+    html += F("<h1>ESPTimeCast Netatmo Settings</h1>");
+    html += F("<p>OAuth authentication successful! Your Netatmo tokens have been saved.</p>");
+    html += F("<p>You can now use the Netatmo features of ESPTimeCast.</p>");
+    html += F("<p><button onclick=\"window.location.href='/';\">Return to Main Settings</button></p>");
+    html += F("</div>");
+    html += F("</body></html>");
+    
+    request->send(200, "text/html", html);
+    Serial.println(F("[WEBSERVER] Simplified netatmo.html sent"));
   });
   
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -1542,6 +1566,14 @@ void setup() {
 }
 
 void loop() {
+  // Check if a reboot is pending
+  if (rebootPending && millis() > rebootTime) {
+    Serial.println(F("[SYSTEM] Executing scheduled reboot..."));
+    delay(100); // Short delay to allow serial output to complete
+    ESP.restart();
+    return; // Just in case restart doesn't happen immediately
+  }
+  
   // Update mDNS responder
   if (WiFi.status() == WL_CONNECTED && !isAPMode) {
     MDNS.update();

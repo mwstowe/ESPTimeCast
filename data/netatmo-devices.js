@@ -25,7 +25,7 @@ function fetchNetatmoDevices() {
   indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
   
   // Show loading message
-  showSavingModal("Fetching Netatmo devices...");
+  showStatus("Fetching Netatmo devices...", "loading");
   
   // Fetch devices from the API
   fetch('/api/netatmo/devices')
@@ -36,26 +36,50 @@ function fetchNetatmoDevices() {
       return response.json();
     })
     .then(data => {
-      // Hide loading message
-      document.getElementById('savingModal').style.display = 'none';
-      document.body.classList.remove('modal-open');
+      console.log("Received device data from API:", data);
       
-      console.log("Received device data from API");
+      // Check if we have a valid response
+      if (!data) {
+        console.error("No data received from API");
+        showStatus("No data received from API", "error");
+        return;
+      }
       
-      if (!data.body || !data.body.devices || data.body.devices.length === 0) {
+      // Handle different response formats
+      let devices = [];
+      
+      if (data.body && data.body.devices) {
+        // Standard format
+        devices = data.body.devices;
+      } else if (data.devices) {
+        // Alternative format
+        devices = data.devices;
+      } else {
+        // Try to parse the response as a Netatmo API response
+        try {
+          const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+          if (parsedData.body && parsedData.body.devices) {
+            devices = parsedData.body.devices;
+          }
+        } catch (e) {
+          console.error("Error parsing device data:", e);
+        }
+      }
+      
+      if (devices.length === 0) {
         console.log("No devices found in response");
         showStatus("No Netatmo devices found", "error");
         return;
       }
       
       // Store devices in global variable
-      window.netatmoDevices = data.body.devices;
+      window.netatmoDevices = devices;
       
       // Populate device dropdown
-      data.body.devices.forEach(device => {
+      devices.forEach(device => {
         const option = document.createElement('option');
-        option.value = device._id;
-        option.textContent = device.station_name || device.name || device._id;
+        option.value = device._id || device.id;
+        option.textContent = device.station_name || device.name || device._id || device.id;
         deviceSelect.appendChild(option);
       });
       
@@ -65,27 +89,34 @@ function fetchNetatmoDevices() {
         loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
       }
       
-      console.log(`Found ${data.body.devices.length} Netatmo devices`);
+      console.log(`Found ${devices.length} Netatmo devices`);
+      showStatus(`Found ${devices.length} Netatmo devices`, "success");
+      setTimeout(hideStatus, 3000);
     })
     .catch(error => {
-      // Hide loading message
-      document.getElementById('savingModal').style.display = 'none';
-      document.body.classList.remove('modal-open');
-      
       console.error(`Error fetching devices: ${error.message}`);
       showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
     });
 }
 
 // Function to load modules for a selected device
-function loadModules(deviceId, previousModuleId = null, previousIndoorModuleId = null) {
-  console.log(`Loading modules for device: ${deviceId}`);
+function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
+  console.log("Loading modules for device:", deviceId);
   
+  const deviceSelect = document.getElementById('netatmoDeviceId');
   const moduleSelect = document.getElementById('netatmoModuleId');
   const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
   
-  if (!moduleSelect || !indoorModuleSelect) {
-    console.error("Module select elements not found");
+  if (!deviceSelect || !moduleSelect || !indoorModuleSelect) {
+    console.error("Device or module select elements not found");
+    return;
+  }
+  
+  // Use provided deviceId or get from select
+  deviceId = deviceId || deviceSelect.value;
+  
+  if (!deviceId) {
+    console.log("No device selected");
     return;
   }
   
@@ -93,150 +124,88 @@ function loadModules(deviceId, previousModuleId = null, previousIndoorModuleId =
   moduleSelect.innerHTML = '<option value="">Select Module...</option>';
   indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
   
-  if (!deviceId) {
-    console.log("No device selected");
-    return;
-  }
-  
   // Find the selected device
-  const device = window.netatmoDevices.find(d => d._id === deviceId);
+  const device = window.netatmoDevices.find(d => (d._id === deviceId || d.id === deviceId));
   
   if (!device) {
-    console.log(`Device not found: ${deviceId}`);
+    console.error("Selected device not found in devices list");
     return;
   }
   
-  console.log(`Found device: ${device.station_name || device.name}`);
+  console.log("Found device:", device);
   
-  // Add the main module (base station)
+  // Add the main device as an option for indoor module
   const mainOption = document.createElement('option');
-  mainOption.value = device._id;
-  mainOption.textContent = `${device.module_name || 'Base Station'} (Main)`;
-  moduleSelect.appendChild(mainOption);
-  indoorModuleSelect.appendChild(mainOption.cloneNode(true));
+  mainOption.value = device._id || device.id;
+  mainOption.textContent = "Main Station" + (device.module_name ? ` (${device.module_name})` : "");
+  indoorModuleSelect.appendChild(mainOption);
   
-  // Add additional modules
-  if (device.modules && device.modules.length > 0) {
-    device.modules.forEach(module => {
-      console.log(`Found module: ${module.module_name} (${module.type})`);
-      
-      const option = document.createElement('option');
-      option.value = module._id;
-      option.textContent = `${module.module_name} (${getModuleTypeName(module.type)})`;
-      
-      // Outdoor modules go to the outdoor dropdown
-      if (module.type === 'NAModule1') {
-        moduleSelect.appendChild(option);
-      }
-      
-      // Indoor modules go to the indoor dropdown
-      if (module.type === 'NAModule4') {
-        indoorModuleSelect.appendChild(option.cloneNode(true));
-      }
-    });
-  }
-  
-  // Restore previous selections if they exist
-  if (previousModuleId) {
-    moduleSelect.value = previousModuleId;
-  }
-  
-  if (previousIndoorModuleId) {
-    indoorModuleSelect.value = previousIndoorModuleId;
-  }
-}
-
-// Helper function to get human-readable module type names
-function getModuleTypeName(type) {
-  const types = {
-    'NAMain': 'Base Station',
-    'NAModule1': 'Outdoor',
-    'NAModule2': 'Wind',
-    'NAModule3': 'Rain',
-    'NAModule4': 'Indoor'
-  };
-  
-  return types[type] || type;
-}
-
-// Function to connect to Netatmo
-function connectToNetatmo() {
-  console.log("Connecting to Netatmo...");
-  
-  const clientId = document.getElementById('netatmoClientId').value;
-  const clientSecret = document.getElementById('netatmoClientSecret').value;
-  
-  if (!clientId || !clientSecret) {
-    console.error("Client ID and Secret are required");
-    showStatus("Client ID and Secret are required", "error");
+  // Check if device has modules
+  if (!device.modules || device.modules.length === 0) {
+    console.log("No modules found for this device");
+    showStatus("No modules found for this device", "error");
     return;
   }
   
-  // Show loading message
-  showSavingModal("Connecting to Netatmo...");
-  
-  // Create form data
-  const formData = new FormData();
-  formData.append('clientId', clientId);
-  formData.append('clientSecret', clientSecret);
-  
-  // Send credentials to server
-  fetch('/api/netatmo/save-credentials', {
-    method: 'POST',
-    body: formData
-  })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+  // Process modules
+  device.modules.forEach(module => {
+    console.log("Processing module:", module);
+    
+    // For outdoor modules (typically type NAModule1)
+    if (module.type === 'NAModule1') {
+      const option = document.createElement('option');
+      option.value = module._id || module.id;
+      option.textContent = module.module_name || module.name || module._id || module.id;
+      moduleSelect.appendChild(option);
     }
     
-    // The server will redirect to Netatmo auth page
-    window.location.href = '/api/netatmo/auth';
-  })
-  .catch(error => {
-    // Hide loading message
-    document.getElementById('savingModal').style.display = 'none';
-    document.body.classList.remove('modal-open');
-    
-    console.error(`Error connecting to Netatmo: ${error.message}`);
-    showStatus(`Failed to connect to Netatmo: ${error.message}`, "error");
+    // For indoor modules (typically type NAModule4 or NAMain)
+    if (module.type === 'NAModule4' || module.type === 'NAMain') {
+      const option = document.createElement('option');
+      option.value = module._id || module.id;
+      option.textContent = module.module_name || module.name || module._id || module.id;
+      indoorModuleSelect.appendChild(option);
+    }
   });
+  
+  // Restore selections if provided
+  if (selectedModuleId) {
+    moduleSelect.value = selectedModuleId;
+  }
+  
+  if (selectedIndoorModuleId) {
+    indoorModuleSelect.value = selectedIndoorModuleId;
+  }
+  
+  console.log("Modules loaded successfully");
 }
 
-// Function to update token status
-function updateTokenStatus() {
-  console.log("Updating token status...");
+// Function to show a saving modal
+function showSavingModal(message) {
+  let modal = document.getElementById('savingModal');
   
-  // Check if we have an access token by looking at the page data
-  fetch('/config.json')
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(data => {
-      const tokenStatus = document.getElementById('tokenStatus');
-      const connectButton = document.getElementById('connectButton');
-      
-      if (data.netatmoAccessToken) {
-        console.log("Netatmo access token found");
-        tokenStatus.textContent = 'Connected to Netatmo';
-        tokenStatus.className = 'status-connected';
-        
-        if (connectButton) {
-          connectButton.textContent = 'Reconnect to Netatmo';
-        }
-      } else {
-        console.log("No Netatmo access token found");
-        tokenStatus.textContent = 'Not connected to Netatmo';
-        tokenStatus.className = 'status-disconnected';
-      }
-    })
-    .catch(error => {
-      console.error(`Error checking token status: ${error.message}`);
-      const tokenStatus = document.getElementById('tokenStatus');
-      tokenStatus.textContent = 'Error checking connection status';
-      tokenStatus.className = 'status-error';
-    });
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'savingModal';
+    modal.className = 'modal';
+    
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    
+    const messageElement = document.createElement('p');
+    messageElement.id = 'savingModalMessage';
+    
+    modalContent.appendChild(spinner);
+    modalContent.appendChild(messageElement);
+    modal.appendChild(modalContent);
+    
+    document.body.appendChild(modal);
+  }
+  
+  document.getElementById('savingModalMessage').textContent = message;
+  modal.style.display = 'flex';
+  document.body.classList.add('modal-open');
 }

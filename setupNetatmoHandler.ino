@@ -332,14 +332,23 @@ void processFetchDevices() {
     return;
   }
   
-  https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
+  String authHeader = "Bearer ";
+  authHeader += netatmoAccessToken;
+  https.addHeader("Authorization", authHeader);
   
   Serial.println(F("[NETATMO] Sending request"));
   int httpCode = https.GET();
   
+  Serial.print(F("[NETATMO] HTTP response code: "));
+  Serial.println(httpCode);
+  
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
+    if (httpCode > 0) {
+      Serial.println(F("[NETATMO] Response: "));
+      Serial.println(https.getString());
+    }
     https.end();
     return;
   }
@@ -352,6 +361,11 @@ void processFetchDevices() {
   Serial.print(F("[NETATMO] Response size: "));
   Serial.println(response.length());
   
-  // Store the response for future requests
-  deviceData = response;
+  if (response.length() > 0) {
+    // Store the response for future requests
+    deviceData = response;
+    Serial.println(F("[NETATMO] Device data cached"));
+  } else {
+    Serial.println(F("[NETATMO] Error - Empty response"));
+  }
 }

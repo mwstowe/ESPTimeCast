@@ -38,6 +38,12 @@ void triggerNetatmoDevicesFetch();
 String getNetatmoDeviceData();
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
+void handleBlockedRequest(String errorPayload);
+void setupCrashHandler();
+String getCrashInfoHtml();
+bool checkAndRepairConfig();
+void checkNetatmoConfig();
+String getExceptionDetails(rst_info *resetInfo);
 
 // Function to create default config.json
 void createDefaultConfig() {
@@ -550,7 +556,29 @@ void setupWebServer() {
     f.close();
     
     // Create a backup of the configuration
-    backupConfig();
+    if (LittleFS.exists("/config.bak")) {
+      LittleFS.remove("/config.bak");
+    }
+    
+    if (LittleFS.exists("/config.json")) {
+      File src = LittleFS.open("/config.json", "r");
+      if (src) {
+        File dst = LittleFS.open("/config.bak", "w");
+        if (dst) {
+          // Copy file contents
+          static const size_t BUFFER_SIZE = 256;
+          uint8_t buffer[BUFFER_SIZE];
+          size_t bytesRead;
+          
+          while ((bytesRead = src.read(buffer, BUFFER_SIZE)) > 0) {
+            dst.write(buffer, bytesRead);
+          }
+          
+          dst.close();
+        }
+        src.close();
+      }
+    }
     
     File verify = LittleFS.open("/config.json", "r");
     DynamicJsonDocument test(2048);
@@ -1141,9 +1169,6 @@ void saveTokensToConfig() {
   } else {
     Serial.println(F("[CONFIG] Tokens saved successfully"));
   }
-  
-  configFile.close();
-}
   
   configFile.close();
 }

@@ -98,7 +98,7 @@ void setupNetatmoHandler() {
     
     // Process all parameters
     for (int i = 0; i < request->params(); i++) {
-      AsyncWebParameter* p = request->getParam(i);
+      const AsyncWebParameter* p = request->getParam(i);
       String name = p->name();
       String value = p->value();
       

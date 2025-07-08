@@ -16,6 +16,20 @@ void setupNetatmoHandler() {
   server.on("/api/netatmo/save-credentials", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling save credentials request"));
     
+    // Log all parameters for debugging
+    Serial.print(F("[NETATMO] Number of parameters: "));
+    Serial.println(request->params());
+    
+    for (int i = 0; i < request->params(); i++) {
+      const AsyncWebParameter* p = request->getParam(i);
+      Serial.print(F("[NETATMO] Parameter "));
+      Serial.print(i);
+      Serial.print(F(": "));
+      Serial.print(p->name());
+      Serial.print(F(" = "));
+      Serial.println(p->value());
+    }
+    
     if (!request->hasParam("clientId", true) || !request->hasParam("clientSecret", true)) {
       Serial.println(F("[NETATMO] Error - Missing required parameters"));
       request->send(400, "text/plain", "Missing required parameters");
@@ -25,7 +39,9 @@ void setupNetatmoHandler() {
     String clientId = request->getParam("clientId", true)->value();
     String clientSecret = request->getParam("clientSecret", true)->value();
     
-    Serial.println(F("[NETATMO] Saving credentials to config"));
+    Serial.print(F("[NETATMO] Client ID: "));
+    Serial.println(clientId);
+    Serial.println(F("[NETATMO] Client Secret is set"));
     
     // Save to global variables
     strlcpy(netatmoClientId, clientId.c_str(), sizeof(netatmoClientId));
@@ -34,8 +50,18 @@ void setupNetatmoHandler() {
     // Save to config file
     saveTokensToConfig();
     
-    Serial.println(F("[NETATMO] Redirecting to auth endpoint"));
-    request->redirect("/api/netatmo/auth");
+    // Send a success response first
+    DynamicJsonDocument doc(128);
+    doc["success"] = true;
+    doc["message"] = "Credentials saved successfully";
+    
+    String response;
+    serializeJson(doc, response);
+    
+    // Then redirect to auth endpoint
+    request->send(200, "application/json", response);
+    
+    Serial.println(F("[NETATMO] Credentials saved successfully"));
   });
   
   // Endpoint to initiate OAuth flow

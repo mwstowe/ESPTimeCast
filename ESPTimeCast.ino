@@ -33,7 +33,7 @@ String fetchNetatmoDevices();
 void createDefaultConfig();
 void setupNetatmoHandler();
 void processTokenExchange();
-String urlEncode(const String &input);
+String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
 
 // Function to create default config.json

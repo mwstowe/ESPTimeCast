@@ -14,25 +14,11 @@ void setupNetatmoHandler() {
   
   // Endpoint to save Netatmo credentials without rebooting
   server.on("/api/netatmo/save-credentials", HTTP_POST, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Handling save credentials request"));
-    
-    // Log all parameters for debugging
-    Serial.print(F("[NETATMO] Number of parameters: "));
-    Serial.println(request->params());
-    
-    for (int i = 0; i < request->params(); i++) {
-      const AsyncWebParameter* p = request->getParam(i);
-      Serial.print(F("[NETATMO] Parameter "));
-      Serial.print(i);
-      Serial.print(F(": "));
-      Serial.print(p->name());
-      Serial.print(F(" = "));
-      Serial.println(p->value());
-    }
+    Serial.println(F("[NETATMO] Handling save credentials"));
     
     if (!request->hasParam("clientId", true) || !request->hasParam("clientSecret", true)) {
-      Serial.println(F("[NETATMO] Error - Missing required parameters"));
-      request->send(400, "text/plain", "Missing required parameters");
+      Serial.println(F("[NETATMO] Error - Missing parameters"));
+      request->send(400, "text/plain", "Missing parameters");
       return;
     }
     
@@ -50,18 +36,11 @@ void setupNetatmoHandler() {
     // Save to config file
     saveTokensToConfig();
     
-    // Send a success response first
-    DynamicJsonDocument doc(128);
-    doc["success"] = true;
-    doc["message"] = "Credentials saved successfully";
+    // Send a simple response
+    request->send(200, "application/json", "{\"success\":true}");
     
-    String response;
-    serializeJson(doc, response);
-    
-    // Then redirect to auth endpoint
-    request->send(200, "application/json", response);
-    
-    Serial.println(F("[NETATMO] Credentials saved successfully"));
+    Serial.println(F("[NETATMO] Credentials saved"));
+  });
   });
   
   // Endpoint to initiate OAuth flow
@@ -69,23 +48,24 @@ void setupNetatmoHandler() {
     Serial.println(F("[NETATMO] Handling auth request"));
     
     if (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0) {
-      Serial.println(F("[NETATMO] Error - No valid credentials"));
-      request->send(400, "text/plain", "No valid Netatmo credentials found");
+      Serial.println(F("[NETATMO] Error - No credentials"));
+      request->send(400, "text/plain", "Missing credentials");
       return;
     }
     
-    // Generate authorization URL
+    // Generate authorization URL with minimal memory usage
     String redirectUri = "http://" + WiFi.localIP().toString() + "/api/netatmo/callback";
     String authUrl = "https://api.netatmo.com/oauth2/authorize";
-    authUrl += "?client_id=" + urlEncode(netatmoClientId);
-    authUrl += "&redirect_uri=" + urlEncode(redirectUri);
-    authUrl += "&scope=" + urlEncode("read_station");
-    authUrl += "&response_type=code";
+    authUrl += "?client_id=";
+    authUrl += urlEncode(netatmoClientId);
+    authUrl += "&redirect_uri=";
+    authUrl += urlEncode(redirectUri);
+    authUrl += "&scope=read_station&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
     Serial.println(authUrl);
     
-    Serial.println(F("[NETATMO] Redirecting to Netatmo authorization page"));
+    Serial.println(F("[NETATMO] Redirecting to auth page"));
     request->redirect(authUrl);
   });
   
@@ -93,75 +73,43 @@ void setupNetatmoHandler() {
   server.on("/api/netatmo/callback", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling OAuth callback"));
     
-    // Log all parameters for debugging
-    Serial.print(F("[NETATMO] Number of parameters: "));
-    Serial.println(request->params());
-    
-    for (int i = 0; i < request->params(); i++) {
-      const AsyncWebParameter* p = request->getParam(i);
-      Serial.print(F("[NETATMO] Parameter "));
-      Serial.print(i);
-      Serial.print(F(": "));
-      Serial.print(p->name());
-      Serial.print(F(" = "));
-      Serial.println(p->value());
-    }
-    
+    // Simple error handling to save memory
     if (request->hasParam("error")) {
       String error = request->getParam("error")->value();
-      String errorDescription = request->hasParam("error_description") ? 
-                              request->getParam("error_description")->value() : "Unknown error";
-      
       Serial.print(F("[NETATMO] OAuth error: "));
-      Serial.print(error);
-      Serial.print(F(" - "));
-      Serial.println(errorDescription);
+      Serial.println(error);
       
-      // Provide more detailed error information based on the error code
-      if (error == "invalid_client") {
-        Serial.println(F("[NETATMO] This typically means your Client ID or Client Secret is incorrect"));
-        Serial.println(F("[NETATMO] Or the redirect URI doesn't match what's registered in your Netatmo app"));
-        
-        String html = "<html><body>";
-        html += "<h1>Netatmo Authorization Failed</h1>";
-        html += "<p>Error: <strong>" + error + "</strong></p>";
-        html += "<p>Description: " + errorDescription + "</p>";
-        html += "<p>This typically means:</p>";
-        html += "<ul>";
-        html += "<li>Your Client ID or Client Secret is incorrect</li>";
-        html += "<li>The redirect URI doesn't match what's registered in your Netatmo app</li>";
-        html += "</ul>";
-        html += "<p>Please check your Netatmo Developer Portal settings and ensure:</p>";
-        html += "<ul>";
-        html += "<li>The Client ID and Secret are correct</li>";
-        html += "<li>The redirect URI <code>http://" + WiFi.localIP().toString() + "/api/netatmo/callback</code> is registered in your app</li>";
-        html += "</ul>";
-        html += "<p><a href='/netatmo.html'>Return to Netatmo Settings</a></p>";
-        html += "</body></html>";
-        
-        request->send(200, "text/html", html);
-        return;
-      }
+      // Simple HTML response to save memory
+      String html = F("<html><body><h1>Auth Error</h1><p>Error: ");
+      html += error;
+      html += F("</p><a href='/netatmo.html'>Back</a></body></html>");
       
-      request->send(400, "text/plain", "Authorization failed: " + error + " - " + errorDescription);
+      request->send(200, "text/html", html);
       return;
     }
     
     if (!request->hasParam("code")) {
       Serial.println(F("[NETATMO] Error - No authorization code in callback"));
-      request->send(400, "text/plain", "Authorization failed - No code parameter received");
+      request->send(400, "text/plain", "No code parameter");
       return;
     }
     
     String code = request->getParam("code")->value();
-    Serial.print(F("[NETATMO] Received authorization code: "));
+    Serial.print(F("[NETATMO] Received code: "));
     Serial.println(code);
     
-    // Exchange code for tokens (will be handled asynchronously)
-    exchangeAuthCode(code);
+    // Store the code for later processing
+    pendingCode = code;
+    tokenExchangePending = true;
     
-    // Redirect back to Netatmo page
-    request->redirect("/netatmo.html");
+    // Simple HTML response to save memory
+    String html = F("<html><body><h1>Authorization Successful</h1>");
+    html += F("<p>Exchanging code for tokens...</p>");
+    html += F("<p>You will be redirected in 5 seconds.</p>");
+    html += F("<meta http-equiv='refresh' content='5;url=/netatmo.html'>");
+    html += F("</body></html>");
+    
+    request->send(200, "text/html", html);
   });
   
   // Endpoint to save Netatmo settings without rebooting
@@ -212,13 +160,13 @@ void setupNetatmoHandler() {
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
 }
 
-// Helper function to URL encode a string
-String urlEncode(const String &input) {
+// Helper function to URL encode a string (memory-efficient version)
+String urlEncode(const char* input) {
   const char *hex = "0123456789ABCDEF";
   String result = "";
   
-  for (size_t i = 0; i < input.length(); i++) {
-    char c = input.charAt(i);
+  while (*input) {
+    char c = *input++;
     if (isAlphaNumeric(c) || c == '-' || c == '_' || c == '.' || c == '~') {
       result += c;
     } else {
@@ -252,82 +200,84 @@ void processTokenExchange() {
   }
   
   Serial.println(F("[NETATMO] Processing token exchange"));
+  
+  // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
+  String code = pendingCode;
+  pendingCode = "";
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
   }
   
-  // Set up the HTTPS client
-  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation to save memory
+  // Set up the HTTPS client with minimal memory usage
+  BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  Serial.println(F("[NETATMO] Connecting to Netatmo token endpoint"));
-  if (!https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
-    Serial.println(F("[NETATMO] Error - Failed to connect to token endpoint"));
+  Serial.println(F("[NETATMO] Connecting to token endpoint"));
+  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
-  // Construct the POST data
+  // Construct the POST data with minimal memory usage
   String redirectUri = "http://" + WiFi.localIP().toString() + "/api/netatmo/callback";
   String postData = "grant_type=authorization_code";
-  postData += "&client_id=" + urlEncode(netatmoClientId);
-  postData += "&client_secret=" + urlEncode(netatmoClientSecret);
-  postData += "&code=" + urlEncode(pendingCode);
-  postData += "&redirect_uri=" + urlEncode(redirectUri);
+  postData += "&client_id=";
+  postData += urlEncode(netatmoClientId);
+  postData += "&client_secret=";
+  postData += urlEncode(netatmoClientSecret);
+  postData += "&code=";
+  postData += urlEncode(code);
+  postData += "&redirect_uri=";
+  postData += urlEncode(redirectUri);
   
-  Serial.println(F("[NETATMO] Sending token exchange request"));
+  Serial.println(F("[NETATMO] Sending token request"));
   int httpCode = https.POST(postData);
   
   if (httpCode != HTTP_CODE_OK) {
-    Serial.print(F("[NETATMO] Error - Token exchange failed with code: "));
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
-    if (httpCode > 0) {
-      Serial.print(F("[NETATMO] Response: "));
-      Serial.println(https.getString());
-    }
     https.end();
     return;
   }
   
   // Get the response
-  Serial.println(F("[NETATMO] Token exchange successful, parsing response"));
   String response = https.getString();
   https.end();
   
-  // Parse the response
-  DynamicJsonDocument doc(1024);
+  Serial.println(F("[NETATMO] Parsing response"));
+  
+  // Use a smaller JSON buffer
+  StaticJsonDocument<512> doc;
   DeserializationError error = deserializeJson(doc, response);
   
   if (error) {
-    Serial.print(F("[NETATMO] Error parsing JSON: "));
+    Serial.print(F("[NETATMO] JSON parse error: "));
     Serial.println(error.c_str());
     return;
   }
   
   // Extract the tokens
   if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
-    Serial.println(F("[NETATMO] Error - Response missing required tokens"));
+    Serial.println(F("[NETATMO] Missing tokens in response"));
     return;
   }
   
-  String accessToken = doc["access_token"].as<String>();
-  String refreshToken = doc["refresh_token"].as<String>();
+  const char* accessToken = doc["access_token"];
+  const char* refreshToken = doc["refresh_token"];
   
   // Save the tokens
-  Serial.println(F("[NETATMO] Saving tokens to config"));
-  strlcpy(netatmoAccessToken, accessToken.c_str(), sizeof(netatmoAccessToken));
-  strlcpy(netatmoRefreshToken, refreshToken.c_str(), sizeof(netatmoRefreshToken));
+  Serial.println(F("[NETATMO] Saving tokens"));
+  strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
+  strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
   
   saveTokensToConfig();
   Serial.println(F("[NETATMO] Token exchange complete"));
-  
-  // Clear the pending code
-  pendingCode = "";
 }

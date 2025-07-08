@@ -93,23 +93,69 @@ void setupNetatmoHandler() {
   server.on("/api/netatmo/callback", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling OAuth callback"));
     
+    // Log all parameters for debugging
+    Serial.print(F("[NETATMO] Number of parameters: "));
+    Serial.println(request->params());
+    
+    for (int i = 0; i < request->params(); i++) {
+      const AsyncWebParameter* p = request->getParam(i);
+      Serial.print(F("[NETATMO] Parameter "));
+      Serial.print(i);
+      Serial.print(F(": "));
+      Serial.print(p->name());
+      Serial.print(F(" = "));
+      Serial.println(p->value());
+    }
+    
+    if (request->hasParam("error")) {
+      String error = request->getParam("error")->value();
+      String errorDescription = request->hasParam("error_description") ? 
+                              request->getParam("error_description")->value() : "Unknown error";
+      
+      Serial.print(F("[NETATMO] OAuth error: "));
+      Serial.print(error);
+      Serial.print(F(" - "));
+      Serial.println(errorDescription);
+      
+      // Provide more detailed error information based on the error code
+      if (error == "invalid_client") {
+        Serial.println(F("[NETATMO] This typically means your Client ID or Client Secret is incorrect"));
+        Serial.println(F("[NETATMO] Or the redirect URI doesn't match what's registered in your Netatmo app"));
+        
+        String html = "<html><body>";
+        html += "<h1>Netatmo Authorization Failed</h1>";
+        html += "<p>Error: <strong>" + error + "</strong></p>";
+        html += "<p>Description: " + errorDescription + "</p>";
+        html += "<p>This typically means:</p>";
+        html += "<ul>";
+        html += "<li>Your Client ID or Client Secret is incorrect</li>";
+        html += "<li>The redirect URI doesn't match what's registered in your Netatmo app</li>";
+        html += "</ul>";
+        html += "<p>Please check your Netatmo Developer Portal settings and ensure:</p>";
+        html += "<ul>";
+        html += "<li>The Client ID and Secret are correct</li>";
+        html += "<li>The redirect URI <code>http://" + WiFi.localIP().toString() + "/api/netatmo/callback</code> is registered in your app</li>";
+        html += "</ul>";
+        html += "<p><a href='/netatmo.html'>Return to Netatmo Settings</a></p>";
+        html += "</body></html>";
+        
+        request->send(200, "text/html", html);
+        return;
+      }
+      
+      request->send(400, "text/plain", "Authorization failed: " + error + " - " + errorDescription);
+      return;
+    }
+    
     if (!request->hasParam("code")) {
       Serial.println(F("[NETATMO] Error - No authorization code in callback"));
-      if (request->hasParam("error")) {
-        String error = request->getParam("error")->value();
-        String errorDescription = request->hasParam("error_description") ? 
-                                request->getParam("error_description")->value() : "Unknown error";
-        Serial.print(F("[NETATMO] OAuth error: "));
-        Serial.print(error);
-        Serial.print(F(" - "));
-        Serial.println(errorDescription);
-      }
-      request->send(400, "text/plain", "Authorization failed");
+      request->send(400, "text/plain", "Authorization failed - No code parameter received");
       return;
     }
     
     String code = request->getParam("code")->value();
-    Serial.println(F("[NETATMO] Received authorization code, exchanging for tokens"));
+    Serial.print(F("[NETATMO] Received authorization code: "));
+    Serial.println(code);
     
     // Exchange code for tokens (will be handled asynchronously)
     exchangeAuthCode(code);

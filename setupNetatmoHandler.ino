@@ -181,6 +181,38 @@ void setupNetatmoHandler() {
     request->send(200, "application/json", response);
   });
   
+  // Endpoint to get Netatmo devices
+  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get devices request"));
+    
+    if (strlen(netatmoAccessToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
+      return;
+    }
+    
+    // Check if we should force a refresh
+    bool forceRefresh = false;
+    if (request->hasParam("refresh")) {
+      forceRefresh = request->getParam("refresh")->value() == "true";
+      Serial.println(F("[NETATMO] Force refresh requested"));
+    }
+    
+    // If we have device data and no refresh is requested, return it
+    if (deviceData.length() > 0 && !forceRefresh) {
+      Serial.println(F("[NETATMO] Returning cached device data"));
+      request->send(200, "application/json", deviceData);
+      return;
+    }
+    
+    // Otherwise, set the flag to indicate a redirect
+    Serial.println(F("[NETATMO] Setting fetchDevicesPending flag"));
+    fetchDevicesPending = true;
+    
+    // Send a redirect response
+    request->send(200, "application/json", "{\"redirect\":\"api\"}");
+  });
+  
   // Endpoint to save Netatmo settings without rebooting
   server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling save settings request"));
@@ -353,34 +385,3 @@ void processFetchDevices() {
   
   Serial.println(F("[NETATMO] Set redirect flag for client-side API call"));
 }
-  // Endpoint to get Netatmo devices
-  server.on("/api/netatmo/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Handling get devices request"));
-    
-    if (strlen(netatmoAccessToken) == 0) {
-      Serial.println(F("[NETATMO] Error - No access token"));
-      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
-      return;
-    }
-    
-    // Check if we should force a refresh
-    bool forceRefresh = false;
-    if (request->hasParam("refresh")) {
-      forceRefresh = request->getParam("refresh")->value() == "true";
-      Serial.println(F("[NETATMO] Force refresh requested"));
-    }
-    
-    // If we have device data and no refresh is requested, return it
-    if (deviceData.length() > 0 && !forceRefresh) {
-      Serial.println(F("[NETATMO] Returning cached device data"));
-      request->send(200, "application/json", deviceData);
-      return;
-    }
-    
-    // Otherwise, set the flag to indicate a redirect
-    Serial.println(F("[NETATMO] Setting fetchDevicesPending flag"));
-    fetchDevicesPending = true;
-    
-    // Send a redirect response
-    request->send(200, "application/json", "{\"redirect\":\"api\"}");
-  });

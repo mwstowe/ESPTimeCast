@@ -41,7 +41,6 @@ void setupNetatmoHandler() {
     
     Serial.println(F("[NETATMO] Credentials saved"));
   });
-  });
   
   // Endpoint to initiate OAuth flow
   server.on("/api/netatmo/auth", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -59,7 +58,7 @@ void setupNetatmoHandler() {
     authUrl += "?client_id=";
     authUrl += urlEncode(netatmoClientId);
     authUrl += "&redirect_uri=";
-    authUrl += urlEncode(redirectUri);
+    authUrl += urlEncode(redirectUri.c_str());
     authUrl += "&scope=read_station&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
@@ -122,11 +121,6 @@ void setupNetatmoHandler() {
       String name = p->name();
       String value = p->value();
       
-      Serial.print(F("[NETATMO] Parameter: "));
-      Serial.print(name);
-      Serial.print(F(" = "));
-      Serial.println(value);
-      
       if (name == "netatmoDeviceId") {
         strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
       }
@@ -148,13 +142,7 @@ void setupNetatmoHandler() {
     saveTokensToConfig();
     
     // Send success response
-    DynamicJsonDocument doc(128);
-    doc["success"] = true;
-    doc["message"] = "Netatmo settings saved successfully";
-    
-    String response;
-    serializeJson(doc, response);
-    request->send(200, "application/json", response);
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings saved\"}");
   });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
@@ -234,9 +222,9 @@ void processTokenExchange() {
   postData += "&client_secret=";
   postData += urlEncode(netatmoClientSecret);
   postData += "&code=";
-  postData += urlEncode(code);
+  postData += urlEncode(code.c_str());
   postData += "&redirect_uri=";
-  postData += urlEncode(redirectUri);
+  postData += urlEncode(redirectUri.c_str());
   
   Serial.println(F("[NETATMO] Sending token request"));
   int httpCode = https.POST(postData);

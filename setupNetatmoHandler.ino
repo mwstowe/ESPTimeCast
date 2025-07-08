@@ -160,15 +160,18 @@ void setupNetatmoHandler() {
     bool forceRefresh = false;
     if (request->hasParam("refresh")) {
       forceRefresh = request->getParam("refresh")->value() == "true";
+      Serial.println(F("[NETATMO] Force refresh requested"));
     }
     
     // If we already have device data and no refresh is requested, return it immediately
     if (deviceData.length() > 0 && !forceRefresh) {
+      Serial.println(F("[NETATMO] Returning cached device data"));
       request->send(200, "application/json", deviceData);
       return;
     }
     
     // Otherwise, fetch it asynchronously
+    Serial.println(F("[NETATMO] Setting fetchDevicesPending flag"));
     fetchDevicesPending = true;
     
     // Send a simple response
@@ -341,6 +344,18 @@ void processFetchDevices() {
     return;
   }
   
+  // Print the access token (first few characters)
+  Serial.print(F("[NETATMO] Using access token: "));
+  if (strlen(netatmoAccessToken) > 10) {
+    char tokenPrefix[11];
+    strncpy(tokenPrefix, netatmoAccessToken, 10);
+    tokenPrefix[10] = '\0';
+    Serial.print(tokenPrefix);
+    Serial.println(F("..."));
+  } else {
+    Serial.println(netatmoAccessToken);
+  }
+  
   // Memory optimization: Use a single static buffer for the HTTP client
   static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
@@ -351,15 +366,19 @@ void processFetchDevices() {
   // Use the correct API endpoint for getting stations data
   Serial.println(F("[NETATMO] Connecting to Netatmo API"));
   
+  // Try the getstationsdata endpoint
   if (!https.begin(client, "https://api.netatmo.com/api/getstationsdata")) {
-    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    Serial.println(F("[NETATMO] Error - Failed to connect to getstationsdata endpoint"));
     return;
   }
   
   // Set the authorization header correctly
-  https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
+  String authHeader = "Bearer ";
+  authHeader += netatmoAccessToken;
+  https.addHeader("Authorization", authHeader);
+  https.addHeader("Accept", "application/json");
   
-  Serial.println(F("[NETATMO] Sending request"));
+  Serial.println(F("[NETATMO] Sending request to getstationsdata endpoint"));
   int httpCode = https.GET();
   
   Serial.print(F("[NETATMO] HTTP response code: "));
@@ -368,8 +387,31 @@ void processFetchDevices() {
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
+    
+    // Try the devicelist endpoint as a fallback
     https.end();
-    return;
+    Serial.println(F("[NETATMO] Trying devicelist endpoint as fallback"));
+    
+    if (!https.begin(client, "https://api.netatmo.com/api/devicelist")) {
+      Serial.println(F("[NETATMO] Error - Failed to connect to devicelist endpoint"));
+      return;
+    }
+    
+    https.addHeader("Authorization", authHeader);
+    https.addHeader("Accept", "application/json");
+    
+    Serial.println(F("[NETATMO] Sending request to devicelist endpoint"));
+    httpCode = https.GET();
+    
+    Serial.print(F("[NETATMO] HTTP response code: "));
+    Serial.println(httpCode);
+    
+    if (httpCode != HTTP_CODE_OK) {
+      Serial.print(F("[NETATMO] Error - HTTP code: "));
+      Serial.println(httpCode);
+      https.end();
+      return;
+    }
   }
   
   // Get the response
@@ -380,6 +422,14 @@ void processFetchDevices() {
   Serial.println(response.length());
   
   if (response.length() > 0) {
+    // Print the first 100 characters of the response for debugging
+    Serial.println(F("[NETATMO] Response preview:"));
+    if (response.length() > 100) {
+      Serial.println(response.substring(0, 100) + "...");
+    } else {
+      Serial.println(response);
+    }
+    
     // Store the response for future requests
     deviceData = response;
     Serial.println(F("[NETATMO] Device data cached"));

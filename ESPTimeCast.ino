@@ -409,7 +409,17 @@ void setupWebServer() {
   
   server.on("/netatmo.html", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /netatmo.html"));
-    request->send(LittleFS, "/netatmo.html", "text/html");
+    
+    // Use a streaming response to avoid loading the entire file into memory
+    AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/netatmo.html", "text/html", false, [](const String& filename, String& contentType) {
+      Serial.println(F("[WEBSERVER] Streaming netatmo.html"));
+      return true; // Continue with the file
+    });
+    
+    // Set cache control to improve performance
+    response->addHeader("Cache-Control", "max-age=86400");
+    
+    request->send(response);
   });
   
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -815,6 +825,9 @@ void setupWebServer() {
   // Add OAuth2 endpoints
   // Setup Netatmo OAuth handler
   setupNetatmoHandler();
+  
+  // Add a generic static file handler for any other files
+  server.serveStatic("/", LittleFS, "/", "max-age=86400");
   
   server.begin();
   Serial.println(F("[WEBSERVER] Web server started"));
@@ -1608,3 +1621,17 @@ void loop() {
 
   yield();
 }
+  server.on("/netatmo-devices.js", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /netatmo-devices.js"));
+    
+    // Use a streaming response to avoid loading the entire file into memory
+    AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/netatmo-devices.js", "application/javascript", false, [](const String& filename, String& contentType) {
+      Serial.println(F("[WEBSERVER] Streaming netatmo-devices.js"));
+      return true; // Continue with the file
+    });
+    
+    // Set cache control to improve performance
+    response->addHeader("Cache-Control", "max-age=86400");
+    
+    request->send(response);
+  });

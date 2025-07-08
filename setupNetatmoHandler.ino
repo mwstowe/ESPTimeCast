@@ -189,10 +189,20 @@ void setupNetatmoHandler() {
         strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
       }
       else if (name == "netatmoModuleId") {
-        strlcpy(netatmoModuleId, value.c_str(), sizeof(netatmoModuleId));
+        // Handle "none" value
+        if (value == "none") {
+          netatmoModuleId[0] = '\0'; // Empty string
+        } else {
+          strlcpy(netatmoModuleId, value.c_str(), sizeof(netatmoModuleId));
+        }
       }
       else if (name == "netatmoIndoorModuleId") {
-        strlcpy(netatmoIndoorModuleId, value.c_str(), sizeof(netatmoIndoorModuleId));
+        // Handle "none" value
+        if (value == "none") {
+          netatmoIndoorModuleId[0] = '\0'; // Empty string
+        } else {
+          strlcpy(netatmoIndoorModuleId, value.c_str(), sizeof(netatmoIndoorModuleId));
+        }
       }
       else if (name == "useNetatmoOutdoor") {
         useNetatmoOutdoor = (value == "true" || value == "on" || value == "1");

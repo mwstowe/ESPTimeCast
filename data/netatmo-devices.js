@@ -21,8 +21,8 @@ function fetchNetatmoDevices() {
   
   // Clear existing options
   deviceSelect.innerHTML = '<option value="">Select Device...</option>';
-  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
-  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
+  moduleSelect.innerHTML = '<option value="none">Do not use</option>';
+  indoorModuleSelect.innerHTML = '<option value="none">Do not use</option>';
   
   // Show loading message
   showStatus("Fetching Netatmo devices...", "loading");
@@ -120,9 +120,9 @@ function loadModules(deviceId, selectedModuleId, selectedIndoorModuleId) {
     return;
   }
   
-  // Clear existing options
-  moduleSelect.innerHTML = '<option value="">Select Module...</option>';
-  indoorModuleSelect.innerHTML = '<option value="">Select Indoor Module...</option>';
+  // Clear existing options but keep the "Do not use" option
+  moduleSelect.innerHTML = '<option value="none">Do not use</option>';
+  indoorModuleSelect.innerHTML = '<option value="none">Do not use</option>';
   
   // Find the selected device
   const device = window.netatmoDevices.find(d => (d._id === deviceId || d.id === deviceId));

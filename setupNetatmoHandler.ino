@@ -645,12 +645,19 @@ void processTokenExchange() {
     return;
   }
   
+  // Debug WiFi status
+  Serial.print(F("[NETATMO] WiFi RSSI: "));
+  Serial.println(WiFi.RSSI());
+  Serial.print(F("[NETATMO] WiFi IP: "));
+  Serial.println(WiFi.localIP());
+  
   // Memory optimization: Use static client to reduce stack usage
   static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
+  client.setTimeout(15000); // Increase timeout to 15 seconds
   
   HTTPClient https;
-  https.setTimeout(10000); // 10 second timeout
+  https.setTimeout(15000); // Increase timeout to 15 seconds
   
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
   if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
@@ -659,6 +666,8 @@ void processTokenExchange() {
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  https.addHeader("Accept", "application/json");
+  https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
   
   // Memory optimization: Build the POST data in smaller chunks
   String postData = "grant_type=authorization_code";
@@ -677,12 +686,62 @@ void processTokenExchange() {
   postData += urlEncode(redirectUri.c_str());
   
   Serial.println(F("[NETATMO] Sending token request"));
+  Serial.print(F("[NETATMO] POST data: "));
+  Serial.println(postData);
+  
   int httpCode = https.POST(postData);
   
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
+    
+    // Get more detailed error information if available
+    if (httpCode > 0) {
+      String payload = https.getString();
+      Serial.print(F("[NETATMO] Error response: "));
+      Serial.println(payload);
+    } else {
+      Serial.print(F("[NETATMO] Connection error: "));
+      Serial.println(https.errorToString(httpCode));
+    }
+    
     https.end();
+    
+    // Try a simpler approach with plain WiFiClient
+    Serial.println(F("[NETATMO] Trying alternative approach..."));
+    WiFiClient plainClient;
+    HTTPClient http;
+    
+    if (http.begin(plainClient, "http://api.netatmo.com/oauth2/token")) {
+      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+      http.addHeader("Accept", "application/json");
+      
+      int plainHttpCode = http.POST(postData);
+      
+      if (plainHttpCode > 0) {
+        Serial.print(F("[NETATMO] Alternative HTTP code: "));
+        Serial.println(plainHttpCode);
+        
+        if (plainHttpCode == HTTP_CODE_OK) {
+          String response = http.getString();
+          http.end();
+          
+          Serial.println(F("[NETATMO] Alternative approach successful, parsing response"));
+          processTokenResponse(response);
+          return;
+        } else {
+          String payload = http.getString();
+          Serial.print(F("[NETATMO] Alternative error response: "));
+          Serial.println(payload);
+        }
+      } else {
+        Serial.print(F("[NETATMO] Alternative connection error: "));
+        Serial.println(http.errorToString(plainHttpCode));
+      }
+      
+      http.end();
+    }
+    
     return;
   }
   
@@ -690,7 +749,14 @@ void processTokenExchange() {
   String response = https.getString();
   https.end();
   
+  processTokenResponse(response);
+}
+
+// Helper function to process token response
+void processTokenResponse(String response) {
   Serial.println(F("[NETATMO] Parsing response"));
+  Serial.print(F("[NETATMO] Response: "));
+  Serial.println(response);
   
   // Memory optimization: Use a smaller JSON buffer
   StaticJsonDocument<384> doc;

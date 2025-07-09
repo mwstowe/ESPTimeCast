@@ -48,6 +48,7 @@ void printMemoryStats();
 void defragmentHeap();
 void forceGarbageCollection();
 bool shouldDefragment();
+void processSaveCredentials();
 
 // Function to create default config.json
 void createDefaultConfig() {
@@ -1512,6 +1513,9 @@ void loop() {
   
   // Process any pending Netatmo device fetches
   processFetchDevices();
+  
+  // Process any pending credential saves
+  processSaveCredentials();
 
   // --- AP Mode Animation ---
   static unsigned long apAnimTimer = 0;

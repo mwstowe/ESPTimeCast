@@ -122,6 +122,9 @@ void exchangeAuthCode(const String &code) {
   tokenExchangePending = true;
 }
 
+// Global flag to indicate that credentials need to be saved
+static bool saveCredentialsPending = false;
+
 // Function to setup Netatmo OAuth handler
 void setupNetatmoHandler() {
   Serial.println(F("[NETATMO] Setting up Netatmo OAuth handler..."));
@@ -157,13 +160,13 @@ void setupNetatmoHandler() {
     strlcpy(netatmoClientId, clientId.c_str(), sizeof(netatmoClientId));
     strlcpy(netatmoClientSecret, clientSecret.c_str(), sizeof(netatmoClientSecret));
     
-    // Save to config file
-    saveTokensToConfig();
+    // Set flag to save in main loop instead of doing it here
+    saveCredentialsPending = true;
     
     // Send a simple response
     request->send(200, "application/json", "{\"success\":true}");
     
-    Serial.println(F("[NETATMO] Credentials saved"));
+    Serial.println(F("[NETATMO] Credentials saved to memory, will be written to config in main loop"));
   });
   
   // Endpoint to get auth URL without redirecting
@@ -763,4 +766,21 @@ void processFetchDevices() {
   deviceData = F("{\"redirect\":\"api\"}");
   
   Serial.println(F("[NETATMO] Set redirect flag for client-side API call"));
+}
+
+// Function to be called from loop() to process pending credential saves
+void processSaveCredentials() {
+  if (!saveCredentialsPending) {
+    return;
+  }
+  
+  Serial.println(F("[NETATMO] Processing pending credential save"));
+  
+  // Clear the flag immediately to prevent repeated attempts if this fails
+  saveCredentialsPending = false;
+  
+  // Save to config file
+  saveTokensToConfig();
+  
+  Serial.println(F("[NETATMO] Credentials saved to config file"));
 }

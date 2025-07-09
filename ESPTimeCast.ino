@@ -1165,52 +1165,76 @@ void saveTokensToConfig() {
     return;
   }
   
-  // Skip creating a backup to save memory
-  Serial.println(F("[CONFIG] Skipping backup creation to save memory"));
+  // First, read the existing config file to preserve all settings
+  DynamicJsonDocument doc(2048);
+  bool configExists = false;
   
-  // Use a more memory-efficient approach: Update only the Netatmo tokens
-  // without loading the entire config into memory
+  if (LittleFS.exists("/config.json")) {
+    File configFile = LittleFS.open("/config.json", "r");
+    if (configFile) {
+      DeserializationError error = deserializeJson(doc, configFile);
+      configFile.close();
+      
+      if (!error) {
+        configExists = true;
+        Serial.println(F("[CONFIG] Successfully read existing config"));
+      } else {
+        Serial.print(F("[CONFIG] Error parsing config file: "));
+        Serial.println(error.c_str());
+        // Continue with empty doc if parsing fails
+      }
+    }
+  }
   
-  // Create a new config file with just the Netatmo tokens
+  // Create a backup of the current config file if it exists
+  if (configExists && LittleFS.exists("/config.json")) {
+    if (LittleFS.exists("/config.json.bak")) {
+      LittleFS.remove("/config.json.bak");
+    }
+    
+    File sourceFile = LittleFS.open("/config.json", "r");
+    File destFile = LittleFS.open("/config.json.bak", "w");
+    
+    if (sourceFile && destFile) {
+      // Copy the file in chunks to avoid memory issues
+      uint8_t buf[128];
+      size_t len;
+      while ((len = sourceFile.read(buf, sizeof(buf))) > 0) {
+        destFile.write(buf, len);
+        yield(); // Allow the watchdog to be fed
+      }
+      
+      sourceFile.close();
+      destFile.close();
+      Serial.println(F("[CONFIG] Backup created successfully"));
+    } else {
+      Serial.println(F("[CONFIG] Failed to create backup"));
+    }
+  }
+  
+  // Update only the Netatmo tokens in the JSON document
+  doc["netatmoAccessToken"] = netatmoAccessToken;
+  doc["netatmoRefreshToken"] = netatmoRefreshToken;
+  doc["netatmoClientId"] = netatmoClientId;
+  doc["netatmoClientSecret"] = netatmoClientSecret;
+  doc["netatmoStationId"] = netatmoStationId;
+  doc["netatmoModuleId"] = netatmoModuleId;
+  doc["netatmoIndoorModuleId"] = netatmoIndoorModuleId;
+  
+  // Create a new config file
   File outFile = LittleFS.open("/config.json.new", "w");
   if (!outFile) {
     Serial.println(F("[CONFIG] Failed to open temp config file for writing"));
     return;
   }
   
-  // Write the JSON manually to avoid using DynamicJsonDocument
-  outFile.print("{");
+  // Serialize the updated JSON document to the file
+  if (serializeJson(doc, outFile) == 0) {
+    Serial.println(F("[CONFIG] Failed to write to config file"));
+    outFile.close();
+    return;
+  }
   
-  // Write the Netatmo tokens
-  outFile.print("\"netatmoAccessToken\":\"");
-  outFile.print(netatmoAccessToken);
-  outFile.print("\",");
-  
-  outFile.print("\"netatmoRefreshToken\":\"");
-  outFile.print(netatmoRefreshToken);
-  outFile.print("\",");
-  
-  outFile.print("\"netatmoClientId\":\"");
-  outFile.print(netatmoClientId);
-  outFile.print("\",");
-  
-  outFile.print("\"netatmoClientSecret\":\"");
-  outFile.print(netatmoClientSecret);
-  outFile.print("\",");
-  
-  outFile.print("\"netatmoStationId\":\"");
-  outFile.print(netatmoStationId);
-  outFile.print("\",");
-  
-  outFile.print("\"netatmoModuleId\":\"");
-  outFile.print(netatmoModuleId);
-  outFile.print("\",");
-  
-  outFile.print("\"netatmoIndoorModuleId\":\"");
-  outFile.print(netatmoIndoorModuleId);
-  outFile.print("\"");
-  
-  outFile.print("}");
   outFile.close();
   
   // Replace the old config file with the new one
@@ -1220,8 +1244,22 @@ void saveTokensToConfig() {
   
   if (LittleFS.rename("/config.json.new", "/config.json")) {
     Serial.println(F("[CONFIG] Tokens saved successfully"));
+    
+    // Verify the config file is valid after saving
+    if (!checkAndRepairConfig()) {
+      Serial.println(F("[CONFIG] WARNING: Config verification failed after saving"));
+    }
   } else {
     Serial.println(F("[CONFIG] Failed to rename config file"));
+    
+    // If rename fails, try to restore from backup
+    if (LittleFS.exists("/config.json.bak")) {
+      if (LittleFS.rename("/config.json.bak", "/config.json")) {
+        Serial.println(F("[CONFIG] Restored from backup"));
+      } else {
+        Serial.println(F("[CONFIG] Failed to restore from backup"));
+      }
+    }
   }
   
   // Report memory status after saving config

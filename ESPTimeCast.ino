@@ -58,6 +58,7 @@ void printMemoryStats();
 void defragmentHeap();
 void forceGarbageCollection();
 bool shouldDefragment();
+void simpleNetatmoCall();
 void processSaveCredentials();
 
 // Function to create default config.json
@@ -764,6 +765,22 @@ void setupWebServer() {
     Serial.println(F("[WEBSERVER] Request: /api/netatmo/devices"));
     String devices = fetchNetatmoDevices();
     request->send(200, "application/json", devices);
+  });
+  
+  server.on("/api/netatmo/simple", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println(F("[WEBSERVER] Request: /api/netatmo/simple"));
+    
+    // Check if we should handle this request
+    if (!shouldHandleWebRequest()) {
+      request->send(503, "text/plain", "Server busy, try again later");
+      return;
+    }
+    
+    // Call the simple Netatmo function
+    simpleNetatmoCall();
+    
+    // Send a response
+    request->send(200, "text/plain", "Simple Netatmo API call initiated. Check serial output for results.");
   });
   
   server.on("/debug", HTTP_GET, [](AsyncWebServerRequest *request){

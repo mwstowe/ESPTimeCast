@@ -28,224 +28,137 @@ function fetchNetatmoDevices() {
   indoorModuleSelect.innerHTML = '<option value="none">Not mapped</option>';
   
   // Show loading message
-  showStatus("Preparing to fetch Netatmo devices...", "loading");
+  showStatus("Refreshing Netatmo stations data...", "loading");
   
-  // First, check memory and defragment if needed
-  fetch('/api/memory?defrag=true')
+  // First, trigger a refresh of the stations data
+  fetch('/api/netatmo/refresh-stations')
     .then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(memoryData => {
-      console.log("Memory stats:", memoryData);
-      showStatus(`Memory optimized. Free heap: ${memoryData.freeHeap} bytes. Testing connection...`, "loading");
-      
-      // Test connection to Netatmo API
-      return fetch('/api/netatmo/test-connection');
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(testResults => {
-      console.log("Connection test results:", testResults);
-      
-      // Check if TLS connection works
-      const tlsTest = testResults.tests.find(test => test.name === "TLS Connection");
-      const httpTest = testResults.tests.find(test => test.name === "HTTP GET");
-      
-      if (tlsTest && !tlsTest.success) {
-        showStatus("TLS connection to Netatmo API failed. Using mock data instead.", "warning");
-        console.log("Using mock data due to TLS connection failure");
-        return fetch('/api/netatmo/mock-devices');
-      }
-      
-      if (httpTest && !httpTest.success) {
-        showStatus("HTTP connection to Netatmo API failed. Using mock data instead.", "warning");
-        console.log("Using mock data due to HTTP connection failure");
-        return fetch('/api/netatmo/mock-devices');
-      }
-      
-      // Now check token status
-      return fetch('/api/netatmo/token-status');
-    })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(status => {
-      console.log("Token status:", status);
-      
-      if (!status.hasAccessToken) {
-        showStatus("No access token available. Please authorize Netatmo first.", "error");
-        throw new Error("No access token available");
-      }
-      
-      // Step 1: Trigger the device fetch to save to file
-      return fetch('/api/netatmo/fetch-devices', { method: 'POST' });
-    })
-    .then(response => {
-      if (!response.ok) {
-        return response.text().then(text => {
-          try {
-            const errorObj = JSON.parse(text);
-            throw new Error(`API error: ${errorObj.error || response.statusText}`);
-          } catch (e) {
-            throw new Error(`API error: ${response.status} ${response.statusText}`);
-          }
-        });
       }
       return response.json();
     })
     .then(data => {
-      console.log("Device fetch initiated:", data);
+      console.log("Refresh initiated:", data);
       
-      if (data.status === "success") {
-        showStatus("Devices saved to file. Loading device data...", "loading");
-        
-        // Step 2: Retrieve the saved device data
-        return fetch('/api/netatmo/saved-devices');
-      } else if (data.status === "token_refreshed") {
-        showStatus("Token refreshed. Please try again.", "warning");
-        setTimeout(() => {
-          hideStatus();
-        }, 3000);
-        throw new Error("Token refreshed. Please try again.");
-      } else if (data.status === "initiated") {
-        // The fetch was initiated but not completed yet
-        showStatus("Device fetch initiated. Please wait...", "loading");
-        
-        // Poll for completion
-        return new Promise((resolve, reject) => {
-          let attempts = 0;
-          const maxAttempts = 10;
-          
-          const checkStatus = () => {
-            attempts++;
-            console.log(`Checking for device data (attempt ${attempts}/${maxAttempts})...`);
+      // Wait a moment for the refresh to complete
+      setTimeout(() => {
+        // Now get the stations data
+        fetch('/api/netatmo/stations')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log("Received stations data");
             
-            fetch('/api/netatmo/saved-devices')
-              .then(response => {
-                if (response.ok) {
-                  resolve(response.json());
-                } else if (attempts < maxAttempts) {
-                  // Wait and try again
-                  setTimeout(checkStatus, 2000);
-                } else {
-                  // Try mock data as a last resort
-                  console.log("Falling back to mock data after failed attempts");
-                  return fetch('/api/netatmo/mock-devices')
-                    .then(mockResponse => {
-                      if (mockResponse.ok) {
-                        showStatus("Using mock data after failed API attempts", "warning");
-                        resolve(mockResponse.json());
-                      } else {
-                        reject(new Error("Timed out waiting for device data and mock data unavailable"));
-                      }
-                    })
-                    .catch(error => {
-                      reject(error);
-                    });
-                }
-              })
-              .catch(error => {
-                if (attempts < maxAttempts) {
-                  // Wait and try again
-                  setTimeout(checkStatus, 2000);
-                } else {
-                  // Try mock data as a last resort
-                  console.log("Falling back to mock data after error");
-                  fetch('/api/netatmo/mock-devices')
-                    .then(mockResponse => {
-                      if (mockResponse.ok) {
-                        showStatus("Using mock data after API errors", "warning");
-                        resolve(mockResponse.json());
-                      } else {
-                        reject(error);
-                      }
-                    })
-                    .catch(mockError => {
-                      reject(error);
-                    });
-                }
-              });
-          };
-          
-          // Start polling after a short delay
-          setTimeout(checkStatus, 2000);
-        });
-      } else {
-        throw new Error(data.message || "Unknown error");
-      }
+            // Process the device data
+            let devices = [];
+            
+            if (data.body && data.body.devices) {
+              console.log("Using standard format (body.devices)");
+              devices = data.body.devices;
+            } else if (data.devices) {
+              console.log("Using alternative format (devices)");
+              devices = data.devices;
+            } else {
+              console.error("Unexpected data format");
+              showStatus("Unexpected data format from API", "error");
+              return;
+            }
+            
+            if (!devices || devices.length === 0) {
+              console.log("No devices found in response");
+              showStatus("No Netatmo devices found", "error");
+              return;
+            }
+            
+            // Store devices in global variable
+            window.netatmoDevices = devices;
+            
+            // Populate device dropdown
+            devices.forEach(device => {
+              const option = document.createElement('option');
+              option.value = device._id || device.id;
+              option.textContent = device.station_name || device.name || device._id || device.id;
+              deviceSelect.appendChild(option);
+            });
+            
+            // Restore previous selections if they exist
+            if (currentDeviceId) {
+              deviceSelect.value = currentDeviceId;
+              loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+            }
+            
+            console.log(`Found ${devices.length} Netatmo devices`);
+            showStatus(`Found ${devices.length} Netatmo devices`, "success");
+            setTimeout(hideStatus, 3000);
+          })
+          .catch(error => {
+            console.error(`Error loading stations data: ${error.message}`);
+            showStatus(`Failed to load stations data: ${error.message}`, "error");
+          });
+      }, 2000); // Wait 2 seconds for the refresh to complete
     })
     .catch(error => {
-      console.error(`Error in fetch chain: ${error.message}`);
+      console.error(`Error refreshing stations: ${error.message}`);
       
-      // Try to use mock data as fallback
-      showStatus(`API error: ${error.message}. Trying mock data...`, "warning");
-      
-      return fetch('/api/netatmo/mock-devices')
+      // Try to load existing stations data
+      fetch('/api/netatmo/stations')
         .then(response => {
           if (!response.ok) {
-            throw new Error("Mock data not available");
+            throw new Error(`HTTP error! Status: ${response.status}`);
           }
           return response.json();
+        })
+        .then(data => {
+          console.log("Using existing stations data");
+          showStatus("Using existing stations data", "warning");
+          
+          // Process the device data
+          let devices = [];
+          
+          if (data.body && data.body.devices) {
+            console.log("Using standard format (body.devices)");
+            devices = data.body.devices;
+          } else if (data.devices) {
+            console.log("Using alternative format (devices)");
+            devices = data.devices;
+          } else {
+            throw new Error("Unexpected data format");
+          }
+          
+          if (!devices || devices.length === 0) {
+            throw new Error("No devices found");
+          }
+          
+          // Store devices in global variable
+          window.netatmoDevices = devices;
+          
+          // Populate device dropdown
+          devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device._id || device.id;
+            option.textContent = device.station_name || device.name || device._id || device.id;
+            deviceSelect.appendChild(option);
+          });
+          
+          // Restore previous selections if they exist
+          if (currentDeviceId) {
+            deviceSelect.value = currentDeviceId;
+            loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+          }
+          
+          console.log(`Found ${devices.length} Netatmo devices`);
+          showStatus(`Found ${devices.length} Netatmo devices (from existing data)`, "success");
+          setTimeout(hideStatus, 3000);
+        })
+        .catch(fallbackError => {
+          console.error(`Fallback error: ${fallbackError.message}`);
+          showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
         });
-    })
-    .then(data => {
-      console.log("Processing device data");
-      
-      // Process the device data
-      let devices = [];
-      
-      if (data.body && data.body.devices) {
-        console.log("Using standard format (body.devices)");
-        devices = data.body.devices;
-      } else if (data.devices) {
-        console.log("Using alternative format (devices)");
-        devices = data.devices;
-      } else {
-        console.error("Unexpected data format");
-        showStatus("Unexpected data format from API", "error");
-        return;
-      }
-      
-      if (!devices || devices.length === 0) {
-        console.log("No devices found in response");
-        showStatus("No Netatmo devices found", "error");
-        return;
-      }
-      
-      // Store devices in global variable
-      window.netatmoDevices = devices;
-      
-      // Populate device dropdown
-      devices.forEach(device => {
-        const option = document.createElement('option');
-        option.value = device._id || device.id;
-        option.textContent = device.station_name || device.name || device._id || device.id;
-        deviceSelect.appendChild(option);
-      });
-      
-      // Restore previous selections if they exist
-      if (currentDeviceId) {
-        deviceSelect.value = currentDeviceId;
-        loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
-      }
-      
-      console.log(`Found ${devices.length} Netatmo devices`);
-      showStatus(`Found ${devices.length} Netatmo devices`, "success");
-      setTimeout(hideStatus, 3000);
-    })
-    .catch(error => {
-      console.error(`Final error: ${error.message}`);
-      showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
     });
 }
 // Function to connect to Netatmo

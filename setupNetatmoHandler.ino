@@ -2,6 +2,7 @@
 static String pendingCode = "";
 static bool tokenExchangePending = false;
 static bool fetchDevicesPending = false;
+static bool fetchStationsDataPending = false;
 static String deviceData = "";
 
 // Helper function to URL encode a string (memory-efficient version)
@@ -669,18 +670,66 @@ void setupNetatmoHandler() {
   server.on("/api/netatmo/mock-devices", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling mock devices request"));
     
-    // Check if the mock data file exists
-    if (!LittleFS.exists("/mock_netatmo_data.json")) {
-      Serial.println(F("[NETATMO] Mock data file not found"));
-      request->send(404, "application/json", "{\"error\":\"Mock data file not found\"}");
+    // Instead of reading from file, use a hardcoded minimal JSON response
+    // This avoids file system operations that might cause yield issues
+    static const char MOCK_JSON[] PROGMEM = 
+      "{\"body\":{\"devices\":[{\"_id\":\"70:ee:50:00:00:01\",\"station_name\":\"Mock Weather Station\",\"type\":\"NAMain\",\"modules\":[{\"_id\":\"70:ee:50:00:00:02\",\"module_name\":\"Mock Outdoor Module\",\"type\":\"NAModule1\"},{\"_id\":\"70:ee:50:00:00:03\",\"module_name\":\"Mock Indoor Module\",\"type\":\"NAModule4\"}]}]},\"status\":\"ok\"}";
+    
+    request->send_P(200, "application/json", MOCK_JSON);
+  });
+  
+  // Add an endpoint to test connectivity to Netatmo API
+  server.on("/api/netatmo/test-connection", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Testing connection to Netatmo API"));
+    
+    // Create a simpler response with just DNS resolution test
+    // This avoids potentially problematic network operations in the handler
+    IPAddress ip;
+    bool dnsResolved = WiFi.hostByName("api.netatmo.com", ip);
+    
+    String response = "{\"tests\":[{\"name\":\"DNS Resolution\",\"success\":";
+    response += dnsResolved ? "true" : "false";
+    response += ",\"details\":\"";
+    response += dnsResolved ? ip.toString() : "Failed to resolve hostname";
+    response += "\"}]}";
+    
+    request->send(200, "application/json", response);
+  });
+  
+  // Add an endpoint to refresh stations data
+  server.on("/api/netatmo/refresh-stations", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling refresh stations request"));
+    
+    // Check if we have a valid access token
+    if (strlen(netatmoAccessToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
+      return;
+    }
+    
+    // Set a flag to fetch stations data in the main loop
+    fetchStationsDataPending = true;
+    
+    // Send a response indicating that the refresh has been initiated
+    request->send(200, "application/json", "{\"status\":\"initiated\",\"message\":\"Stations refresh initiated\"}");
+  });
+  
+  // Add an endpoint to get stations data
+  server.on("/api/netatmo/stations", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get stations request"));
+    
+    // Check if the file exists
+    if (!LittleFS.exists("/devices/netatmo_devices.json")) {
+      Serial.println(F("[NETATMO] Device data file not found"));
+      request->send(404, "application/json", "{\"error\":\"Device data not found\"}");
       return;
     }
     
     // Open the file
-    File mockFile = LittleFS.open("/mock_netatmo_data.json", "r");
-    if (!mockFile) {
-      Serial.println(F("[NETATMO] Failed to open mock data file"));
-      request->send(500, "application/json", "{\"error\":\"Failed to open mock data file\"}");
+    File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "r");
+    if (!deviceFile) {
+      Serial.println(F("[NETATMO] Failed to open device data file"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open device data file\"}");
       return;
     }
     
@@ -691,154 +740,16 @@ void setupNetatmoHandler() {
     const size_t bufSize = 256;
     uint8_t buf[bufSize];
     
-    while (mockFile.available()) {
-      size_t bytesRead = mockFile.read(buf, bufSize);
+    while (deviceFile.available()) {
+      size_t bytesRead = deviceFile.read(buf, bufSize);
       if (bytesRead > 0) {
         response->write(buf, bytesRead);
       }
       yield(); // Allow the watchdog to be fed
     }
     
-    mockFile.close();
+    deviceFile.close();
     request->send(response);
-  });
-  
-  // Add an endpoint to test connectivity to Netatmo API
-  server.on("/api/netatmo/test-connection", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Testing connection to Netatmo API"));
-    
-    // Create a response object
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    response->print("{\"tests\":[");
-    
-    // Test 1: DNS resolution
-    IPAddress ip;
-    bool dnsResolved = WiFi.hostByName("api.netatmo.com", ip);
-    
-    response->printf(
-      "{\"name\":\"DNS Resolution\",\"success\":%s,\"details\":\"%s\"}",
-      dnsResolved ? "true" : "false",
-      dnsResolved ? ip.toString().c_str() : "Failed to resolve hostname"
-    );
-    
-    // Test 2: TCP connection (port 80)
-    WiFiClient client;
-    bool tcpConnected = client.connect("api.netatmo.com", 80);
-    
-    response->printf(
-      ",{\"name\":\"TCP Connection (Port 80)\",\"success\":%s,\"details\":\"%s\"}",
-      tcpConnected ? "true" : "false",
-      tcpConnected ? "Connected successfully" : "Connection failed"
-    );
-    
-    if (tcpConnected) {
-      client.stop();
-    }
-    
-    // Test 3: TCP connection (port 443)
-    WiFiClient client2;
-    bool tcpConnected443 = client2.connect("api.netatmo.com", 443);
-    
-    response->printf(
-      ",{\"name\":\"TCP Connection (Port 443)\",\"success\":%s,\"details\":\"%s\"}",
-      tcpConnected443 ? "true" : "false",
-      tcpConnected443 ? "Connected successfully" : "Connection failed"
-    );
-    
-    if (tcpConnected443) {
-      client2.stop();
-    }
-    
-    // Test 4: TLS connection
-    std::unique_ptr<BearSSL::WiFiClientSecure> secureClient(new BearSSL::WiFiClientSecure);
-    secureClient->setInsecure(); // Skip certificate validation
-    
-    bool tlsConnected = secureClient->connect("api.netatmo.com", 443);
-    
-    response->printf(
-      ",{\"name\":\"TLS Connection\",\"success\":%s,\"details\":\"%s\"}",
-      tlsConnected ? "true" : "false",
-      tlsConnected ? "Connected successfully" : "Connection failed"
-    );
-    
-    if (tlsConnected) {
-      secureClient->stop();
-    }
-    
-    // Test 5: Simple HTTP request
-    HTTPClient http;
-    http.setTimeout(5000);
-    bool httpBegin = http.begin(*secureClient, "https://api.netatmo.com");
-    
-    response->printf(
-      ",{\"name\":\"HTTP Begin\",\"success\":%s,\"details\":\"%s\"}",
-      httpBegin ? "true" : "false",
-      httpBegin ? "HTTP client initialized" : "Failed to initialize HTTP client"
-    );
-    
-    if (httpBegin) {
-      int httpCode = http.GET();
-      
-      response->printf(
-        ",{\"name\":\"HTTP GET\",\"success\":%s,\"details\":\"HTTP code: %d\"}",
-        httpCode > 0 ? "true" : "false",
-        httpCode
-      );
-      
-      http.end();
-    }
-    
-    response->print("]}");
-    request->send(response);
-  });
-  
-  // Add an endpoint to initialize mock data
-  server.on("/api/netatmo/init-mock-data", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Initializing mock data"));
-    
-    // Check if the mock data file exists
-    if (!LittleFS.exists("/mock_netatmo_data.json")) {
-      Serial.println(F("[NETATMO] Mock data source file not found"));
-      request->send(404, "application/json", "{\"error\":\"Mock data source file not found\"}");
-      return;
-    }
-    
-    // Create the devices directory if it doesn't exist
-    if (!LittleFS.exists("/devices")) {
-      LittleFS.mkdir("/devices");
-    }
-    
-    // Copy the mock data file to the devices directory
-    File sourceFile = LittleFS.open("/mock_netatmo_data.json", "r");
-    File destFile = LittleFS.open("/devices/netatmo_devices.json", "w");
-    
-    if (!sourceFile || !destFile) {
-      Serial.println(F("[NETATMO] Failed to open files for copying"));
-      request->send(500, "application/json", "{\"error\":\"Failed to open files for copying\"}");
-      return;
-    }
-    
-    // Copy the file
-    const size_t bufSize = 256;
-    uint8_t buf[bufSize];
-    int totalCopied = 0;
-    
-    while (sourceFile.available()) {
-      size_t bytesRead = sourceFile.read(buf, bufSize);
-      if (bytesRead > 0) {
-        destFile.write(buf, bytesRead);
-        totalCopied += bytesRead;
-      }
-      yield(); // Allow the watchdog to be fed
-    }
-    
-    sourceFile.close();
-    destFile.close();
-    
-    Serial.print(F("[NETATMO] Mock data copied to devices directory, bytes: "));
-    Serial.println(totalCopied);
-    
-    request->send(200, "application/json", "{\"status\":\"success\",\"message\":\"Mock data initialized\",\"bytes\":" + String(totalCopied) + "}");
   });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
@@ -956,8 +867,8 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Token exchange complete"));
   
-  // No reboot needed - tokens are already in memory and will be saved to config
-  Serial.println(F("[NETATMO] Tokens applied, no reboot needed"));
+  // Immediately fetch stations data
+  fetchStationsData();
 }
 
 // Function to be called from loop() to fetch Netatmo devices
@@ -1230,4 +1141,235 @@ void processSaveCredentials() {
       }
     }
   }
+}
+// Function to fetch stations data directly
+void fetchStationsData() {
+  Serial.println(F("[NETATMO] Fetching stations data"));
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    return;
+  }
+  
+  if (strlen(netatmoAccessToken) == 0) {
+    Serial.println(F("[NETATMO] Error - No access token"));
+    return;
+  }
+  
+  // Create a new client for the API call
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
+  
+  HTTPClient https;
+  https.setTimeout(10000); // 10 second timeout
+  
+  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
+  Serial.print(F("[NETATMO] Fetching from: "));
+  Serial.println(apiUrl);
+  
+  if (!https.begin(*client, apiUrl)) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    return;
+  }
+  
+  // Add authorization header
+  String authHeader = "Bearer ";
+  authHeader += netatmoAccessToken;
+  https.addHeader("Authorization", authHeader);
+  https.addHeader("Accept", "application/json");
+  
+  // Make the request with yield to avoid watchdog issues
+  Serial.println(F("[NETATMO] Sending request..."));
+  int httpCode = https.GET();
+  yield(); // Allow the watchdog to be fed
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
+    
+    // Get error payload with yield
+    String errorPayload = https.getString();
+    yield(); // Allow the watchdog to be fed
+    
+    Serial.print(F("[NETATMO] Error payload: "));
+    Serial.println(errorPayload);
+    https.end();
+    
+    // If we get a 401 or 403, try to refresh the token
+    if (httpCode == 401 || httpCode == 403) {
+      Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+      
+      // Try to refresh the token
+      if (refreshNetatmoToken()) {
+        Serial.println(F("[NETATMO] Token refreshed, retrying request"));
+        fetchStationsData(); // Recursive call after token refresh
+      } else {
+        Serial.println(F("[NETATMO] Failed to refresh token"));
+      }
+    }
+    return;
+  }
+  
+  // Create the devices directory if it doesn't exist
+  if (!LittleFS.exists("/devices")) {
+    LittleFS.mkdir("/devices");
+  }
+  
+  // Open a file to save the raw response
+  File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "w");
+  if (!deviceFile) {
+    Serial.println(F("[NETATMO] Failed to open file for writing"));
+    https.end();
+    return;
+  }
+  
+  // Stream the response directly to the file
+  WiFiClient* stream = https.getStreamPtr();
+  const size_t bufSize = 256;
+  uint8_t buf[bufSize];
+  int totalRead = 0;
+  int expectedSize = https.getSize();
+  
+  Serial.print(F("[NETATMO] Expected response size: "));
+  Serial.print(expectedSize);
+  Serial.println(F(" bytes"));
+  
+  while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
+    // Read available data
+    size_t available = stream->available();
+    if (available) {
+      // Read up to buffer size
+      size_t readBytes = available > bufSize ? bufSize : available;
+      int bytesRead = stream->readBytes(buf, readBytes);
+      
+      if (bytesRead > 0) {
+        // Write to file
+        deviceFile.write(buf, bytesRead);
+        totalRead += bytesRead;
+        
+        // Print progress every 1KB
+        if (totalRead % 1024 == 0) {
+          Serial.print(F("[NETATMO] Read "));
+          Serial.print(totalRead);
+          Serial.println(F(" bytes"));
+        }
+      }
+      
+      yield(); // Allow the watchdog to be fed
+    } else if (totalRead >= expectedSize && expectedSize > 0) {
+      // We've read all the data
+      break;
+    } else {
+      // No data available, wait a bit
+      delay(10);
+      yield();
+    }
+  }
+  
+  deviceFile.close();
+  https.end();
+  
+  Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
+  Serial.println(totalRead);
+  
+  // Now extract the device and module IDs for easy access
+  extractDeviceInfo();
+}
+// Function to extract device info from the saved JSON file
+void extractDeviceInfo() {
+  Serial.println(F("[NETATMO] Extracting device info"));
+  
+  if (!LittleFS.exists("/devices/netatmo_devices.json")) {
+    Serial.println(F("[NETATMO] Error - Device data file not found"));
+    return;
+  }
+  
+  File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "r");
+  if (!deviceFile) {
+    Serial.println(F("[NETATMO] Error - Failed to open device data file"));
+    return;
+  }
+  
+  // Use a streaming parser to avoid loading the entire file into memory
+  DynamicJsonDocument filter(256);
+  filter["body"]["devices"][0]["_id"] = true;
+  filter["body"]["devices"][0]["station_name"] = true;
+  filter["body"]["devices"][0]["modules"][0]["_id"] = true;
+  filter["body"]["devices"][0]["modules"][0]["module_name"] = true;
+  filter["body"]["devices"][0]["modules"][0]["type"] = true;
+  
+  DynamicJsonDocument doc(1024);
+  DeserializationError error = deserializeJson(doc, deviceFile, DeserializationOption::Filter(filter));
+  deviceFile.close();
+  
+  if (error) {
+    Serial.print(F("[NETATMO] Error parsing device data: "));
+    Serial.println(error.c_str());
+    return;
+  }
+  
+  // Extract device info
+  JsonArray devices = doc["body"]["devices"];
+  if (devices.size() > 0) {
+    JsonObject device = devices[0];
+    const char* deviceId = device["_id"];
+    const char* stationName = device["station_name"];
+    
+    Serial.print(F("[NETATMO] Found device: "));
+    Serial.print(deviceId);
+    Serial.print(F(" ("));
+    Serial.print(stationName);
+    Serial.println(F(")"));
+    
+    // Save device ID if not already set
+    if (strlen(netatmoDeviceId) == 0) {
+      strlcpy(netatmoDeviceId, deviceId, sizeof(netatmoDeviceId));
+      Serial.print(F("[NETATMO] Set device ID: "));
+      Serial.println(netatmoDeviceId);
+    }
+    
+    // Extract module info
+    JsonArray modules = device["modules"];
+    for (JsonObject module : modules) {
+      const char* moduleId = module["_id"];
+      const char* moduleName = module["module_name"];
+      const char* moduleType = module["type"];
+      
+      Serial.print(F("[NETATMO] Found module: "));
+      Serial.print(moduleId);
+      Serial.print(F(" ("));
+      Serial.print(moduleName);
+      Serial.print(F("), type: "));
+      Serial.println(moduleType);
+      
+      // Save outdoor module ID if not already set
+      if (strcmp(moduleType, "NAModule1") == 0 && strlen(netatmoModuleId) == 0) {
+        strlcpy(netatmoModuleId, moduleId, sizeof(netatmoModuleId));
+        Serial.print(F("[NETATMO] Set outdoor module ID: "));
+        Serial.println(netatmoModuleId);
+      }
+      
+      // Save indoor module ID if not already set
+      if (strcmp(moduleType, "NAModule4") == 0 && strlen(netatmoIndoorModuleId) == 0) {
+        strlcpy(netatmoIndoorModuleId, moduleId, sizeof(netatmoIndoorModuleId));
+        Serial.print(F("[NETATMO] Set indoor module ID: "));
+        Serial.println(netatmoIndoorModuleId);
+      }
+    }
+    
+    // Save the updated device and module IDs to config
+    saveTokensToConfig();
+  }
+}
+// Function to be called from loop() to process pending stations data fetch
+void processFetchStationsData() {
+  if (!fetchStationsDataPending) {
+    return;
+  }
+  
+  // Clear the flag immediately to prevent repeated attempts if this fails
+  fetchStationsDataPending = false;
+  
+  // Call the fetch stations data function
+  fetchStationsData();
 }

@@ -1185,10 +1185,21 @@ void fetchStationsData() {
   Serial.println(F("[NETATMO] Request details:"));
   Serial.print(F("URL: "));
   Serial.println(apiUrl);
-  Serial.print(F("Authorization: Bearer "));
-  Serial.print(netatmoAccessToken[0]);
-  Serial.print(F("..."));
-  Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  Serial.print(F("Method: GET"));
+  Serial.println();
+  Serial.println(F("Headers:"));
+  Serial.print(F("  Authorization: Bearer "));
+  // Print first 5 chars and last 5 chars of token with ... in between
+  if (strlen(netatmoAccessToken) > 10) {
+    Serial.print(String(netatmoAccessToken).substring(0, 5));
+    Serial.print(F("..."));
+    Serial.println(String(netatmoAccessToken).substring(strlen(netatmoAccessToken) - 5));
+  } else {
+    Serial.print(netatmoAccessToken[0]);
+    Serial.print(F("..."));
+    Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  }
+  Serial.println(F("  Accept: application/json"));
   
   // Now try the HTTPS connection
   Serial.println(F("[NETATMO] Initializing HTTPS connection..."));
@@ -1245,13 +1256,20 @@ void fetchStationsData() {
     return;
   }
   
-  // Log response headers
+  // Log response headers in detail
   Serial.println(F("[NETATMO] Response headers:"));
   for (int i = 0; i < https.headers(); i++) {
+    Serial.print(F("  "));
     Serial.print(https.headerName(i));
     Serial.print(F(": "));
     Serial.println(https.header(i));
   }
+  
+  // Log content length and type
+  Serial.print(F("[NETATMO] Content-Length: "));
+  Serial.println(https.getSize());
+  Serial.print(F("[NETATMO] Content-Type: "));
+  Serial.println(https.header("Content-Type"));
   
   // Create the devices directory if it doesn't exist
   if (!LittleFS.exists("/devices")) {
@@ -1335,6 +1353,14 @@ void fetchStationsData() {
   
   // Report memory status after API call
   Serial.println(F("[MEMORY] Memory status after API call:"));
+  printMemoryStats();
+  
+  // Defragment heap after API call and before extracting device info
+  Serial.println(F("[MEMORY] Defragmenting heap after API call"));
+  defragmentHeap();
+  
+  // Report memory status after defragmentation
+  Serial.println(F("[MEMORY] Memory status after post-API defragmentation:"));
   printMemoryStats();
   
   // Now extract the device and module IDs for easy access
@@ -1546,10 +1572,21 @@ void fetchStationsDataFallback() {
   Serial.println(F("[NETATMO] Fallback request details:"));
   Serial.print(F("URL: "));
   Serial.println(apiUrl);
-  Serial.print(F("Authorization: Bearer "));
-  Serial.print(netatmoAccessToken[0]);
-  Serial.print(F("..."));
-  Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  Serial.print(F("Method: GET"));
+  Serial.println();
+  Serial.println(F("Headers:"));
+  Serial.print(F("  Authorization: Bearer "));
+  // Print first 5 chars and last 5 chars of token with ... in between
+  if (strlen(netatmoAccessToken) > 10) {
+    Serial.print(String(netatmoAccessToken).substring(0, 5));
+    Serial.print(F("..."));
+    Serial.println(String(netatmoAccessToken).substring(strlen(netatmoAccessToken) - 5));
+  } else {
+    Serial.print(netatmoAccessToken[0]);
+    Serial.print(F("..."));
+    Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  }
+  Serial.println(F("  Accept: application/json"));
   
   // Now try the HTTPS connection
   Serial.println(F("[NETATMO] Initializing HTTPS connection..."));
@@ -1586,13 +1623,20 @@ void fetchStationsDataFallback() {
     return;
   }
   
-  // Log response headers
+  // Log response headers in detail
   Serial.println(F("[NETATMO] Response headers:"));
   for (int i = 0; i < https.headers(); i++) {
+    Serial.print(F("  "));
     Serial.print(https.headerName(i));
     Serial.print(F(": "));
     Serial.println(https.header(i));
   }
+  
+  // Log content length and type
+  Serial.print(F("[NETATMO] Content-Length: "));
+  Serial.println(https.getSize());
+  Serial.print(F("[NETATMO] Content-Type: "));
+  Serial.println(https.header("Content-Type"));
   
   // Create the devices directory if it doesn't exist
   if (!LittleFS.exists("/devices")) {
@@ -1676,6 +1720,14 @@ void fetchStationsDataFallback() {
   
   // Report memory status after API call
   Serial.println(F("[MEMORY] Memory status after fallback API call:"));
+  printMemoryStats();
+  
+  // Defragment heap after API call and before extracting device info
+  Serial.println(F("[MEMORY] Defragmenting heap after fallback API call"));
+  defragmentHeap();
+  
+  // Report memory status after defragmentation
+  Serial.println(F("[MEMORY] Memory status after post-API defragmentation:"));
   printMemoryStats();
   
   // Now extract the device and module IDs for easy access

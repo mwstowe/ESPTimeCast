@@ -76,7 +76,10 @@ void forceGarbageCollection() {
   Serial.println(F("[MEMORY] Forcing garbage collection"));
   ESP.resetHeap();
 }
-  Serial.println(F("[MEMORY] Forcing garbage collection"));
+
+// Safe garbage collection function
+void safeGarbageCollection() {
+  Serial.println(F("[MEMORY] Safe garbage collection"));
   
   // Allocate and free small blocks with delays instead of yields
   for (int i = 0; i < 5; i++) {

@@ -18,6 +18,14 @@
 
 #include "src/Config.h"
 #include "src/Logger.h"
+
+// Forward declarations
+void processFetchStationsData();
+void processProxyRequest();
+bool refreshNetatmoToken();
+void extractDeviceInfo();
+void fetchStationsDataWithDump();
+void fetchStationsDataFallback();
 #include "src/NetatmoHandler.h"
 
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
@@ -164,6 +172,7 @@ char netatmoPassword[64] = "";
 char netatmoAccessToken[256] = "";
 char netatmoRefreshToken[256] = "";
 char netatmoDeviceId[64] = "";
+char netatmoStationId[64] = ""; // Station ID for Netatmo
 char netatmoModuleId[64] = "";
 char netatmoIndoorModuleId[64] = ""; // New: Module ID for indoor temperature from Netatmo
 char mdnsHostname[32] = "esptime"; // Default mDNS hostname
@@ -1804,3 +1813,12 @@ void safeGarbageCollection();
 extern char netatmoStationId[64];
 extern char netatmoModuleId[64];
 extern char netatmoIndoorModuleId[64];
+// Function to check if we should handle web requests
+bool shouldHandleWebRequest() {
+  // If an API call is in progress, we should defer web requests
+  if (apiCallInProgress) {
+    Serial.println(F("[WEBSERVER] API call in progress, deferring web request"));
+    return false;
+  }
+  return true;
+}

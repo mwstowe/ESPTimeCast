@@ -1874,6 +1874,10 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
 void fetchStationsDataImproved() {
   Serial.println(F("[NETATMO] Fetching stations data (improved version)"));
   
+  // Force log the token at the very beginning to make sure it works
+  Serial.println(F("DIRECT TOKEN LOGGING AT START:"));
+  logApiRequest("https://api.netatmo.com/api/homesdata", netatmoAccessToken);
+  
   // Log the full token
   logFullToken();
   

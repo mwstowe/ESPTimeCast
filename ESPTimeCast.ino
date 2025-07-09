@@ -59,6 +59,7 @@ void defragmentHeap();
 void forceGarbageCollection();
 bool shouldDefragment();
 void debugNetatmoToken();
+void logFullToken();
 void simpleNetatmoCall();
 void processSaveCredentials();
 

@@ -872,10 +872,24 @@ void processTokenExchange() {
   const char* accessToken = doc["access_token"];
   const char* refreshToken = doc["refresh_token"];
   
+  // Log the FULL tokens received from the API
+  Serial.println(F("[NETATMO] RECEIVED TOKENS FROM API:"));
+  Serial.print(F("[NETATMO] Access Token: "));
+  Serial.println(accessToken);
+  Serial.print(F("[NETATMO] Refresh Token: "));
+  Serial.println(refreshToken);
+  
   // Save the tokens
   Serial.println(F("[NETATMO] Saving tokens"));
   strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
   strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
+  
+  // Log the tokens after saving to verify they were saved correctly
+  Serial.println(F("[NETATMO] TOKENS AFTER SAVING:"));
+  Serial.print(F("[NETATMO] Access Token: "));
+  Serial.println(netatmoAccessToken);
+  Serial.print(F("[NETATMO] Refresh Token: "));
+  Serial.println(netatmoRefreshToken);
   
   // Set flag to save tokens in main loop instead of saving directly
   saveCredentialsPending = true;
@@ -1853,8 +1867,8 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
 void fetchStationsDataImproved() {
   Serial.println(F("[NETATMO] Fetching stations data (improved version)"));
   
-  // Debug token issues
-  debugNetatmoToken();
+  // Log the full token
+  logFullToken();
   
   // Set flag to indicate API call is in progress
   apiCallInProgress = true;

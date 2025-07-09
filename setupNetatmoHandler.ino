@@ -183,21 +183,41 @@ void setupNetatmoHandler() {
     }
     
     // Generate authorization URL with minimal memory usage
-    String redirectUri = "http://" + WiFi.localIP().toString() + "/api/netatmo/callback";
-    String authUrl = "https://api.netatmo.com/oauth2/authorize";
+    // Store the URL in a static variable to avoid stack issues
+    static String authUrl;
+    authUrl = "https://api.netatmo.com/oauth2/authorize";
     authUrl += "?client_id=";
     authUrl += urlEncode(netatmoClientId);
     authUrl += "&redirect_uri=";
+    
+    // Build the redirect URI directly
+    String redirectUri = "http://";
+    redirectUri += WiFi.localIP().toString();
+    redirectUri += "/api/netatmo/callback";
+    
     authUrl += urlEncode(redirectUri.c_str());
     authUrl += "&scope=read_station%20read_homecoach%20access_camera%20read_presence%20read_thermostat&state=state&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
     Serial.println(authUrl);
     
-    Serial.println(F("[NETATMO] Redirecting to auth page"));
-    request->redirect(authUrl);
+    // Use a simpler response with a meta refresh instead of a redirect
+    String html = F("<!DOCTYPE html>");
+    html += F("<html><head>");
+    html += F("<meta http-equiv='refresh' content='0;url=");
+    html += authUrl;
+    html += F("'>");
+    html += F("<title>Redirecting...</title>");
+    html += F("</head><body>");
+    html += F("<p>Redirecting to Netatmo authorization page...</p>");
+    html += F("<p>If you are not redirected, <a href='");
+    html += authUrl;
+    html += F("'>click here</a>.</p>");
+    html += F("</body></html>");
+    
+    request->send(200, "text/html", html);
+    Serial.println(F("[NETATMO] Auth page sent"));
   });
-  
   // Endpoint to handle OAuth callback
   server.on("/api/netatmo/callback", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling OAuth callback"));
@@ -227,24 +247,26 @@ void setupNetatmoHandler() {
     Serial.print(F("[NETATMO] Received code: "));
     Serial.println(code);
     
-    // Store the code for later processing
+    // Store the code for later processing in the main loop
+    // This avoids deep stack issues during the callback
     pendingCode = code;
     tokenExchangePending = true;
     
     // Simplified HTML response to minimize memory usage
-    String html = F("<!DOCTYPE html>");
-    html += F("<html><head>");
-    html += F("<meta charset='UTF-8'>");
-    html += F("<title>ESPTimeCast - Authorization</title>");
-    html += F("<style>body{font-family:Arial;text-align:center;margin:50px}</style>");
-    html += F("</head><body>");
-    html += F("<h1>Authorization Successful</h1>");
-    html += F("<p>Exchanging code for tokens...</p>");
-    html += F("<p>The device will reboot automatically after token exchange.</p>");
-    html += F("<p>After reboot, please navigate to <a href='/netatmo.html'>Netatmo Settings</a> to configure your devices.</p>");
-    html += F("</body></html>");
+    static const char SUCCESS_HTML[] PROGMEM = 
+      "<!DOCTYPE html>"
+      "<html><head>"
+      "<meta charset='UTF-8'>"
+      "<title>ESPTimeCast - Authorization</title>"
+      "<style>body{font-family:Arial;text-align:center;margin:50px}</style>"
+      "</head><body>"
+      "<h1>Authorization Successful</h1>"
+      "<p>Exchanging code for tokens...</p>"
+      "<p>The device will reboot automatically after token exchange.</p>"
+      "<p>After reboot, please navigate to <a href='/netatmo.html'>Netatmo Settings</a> to configure your devices.</p>"
+      "</body></html>";
     
-    request->send(200, "text/html", html);
+    request->send_P(200, "text/html", SUCCESS_HTML);
   });
   
   // Endpoint to get the access token

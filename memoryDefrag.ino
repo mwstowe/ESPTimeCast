@@ -73,11 +73,9 @@ void defragmentHeap() {
 
 // Function to force garbage collection with safer yield handling
 void forceGarbageCollection() {
-  safeGarbageCollection();
+  Serial.println(F("[MEMORY] Forcing garbage collection"));
+  ESP.resetHeap();
 }
-
-// Safer implementation of garbage collection that avoids excessive yields
-void safeGarbageCollection() {
   Serial.println(F("[MEMORY] Forcing garbage collection"));
   
   // Allocate and free small blocks with delays instead of yields
@@ -103,4 +101,9 @@ bool shouldDefragment() {
   
   // Check both fragmentation and stack space
   return (fragmentation > 50 || freeStack < 2048);
+}
+// Safe garbage collection function
+void safeGarbageCollection() {
+  Serial.println(F("[MEMORY] Forcing garbage collection"));
+  ESP.resetHeap();
 }

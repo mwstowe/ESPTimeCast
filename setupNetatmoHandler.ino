@@ -6,6 +6,11 @@ static bool fetchStationsDataPending = false;
 static String deviceData = "";
 bool apiCallInProgress = false; // Flag to track API call status - not static so it can be accessed from other files
 
+// Netatmo device IDs
+char netatmoStationId[64] = "";
+char netatmoModuleId[64] = "";
+char netatmoIndoorModuleId[64] = "";
+
 // Helper function to URL encode a string (memory-efficient version)
 String urlEncode(const char* input) {
   const char *hex = "0123456789ABCDEF";

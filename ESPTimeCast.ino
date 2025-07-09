@@ -1217,20 +1217,6 @@ void saveTokensToConfig() {
   Serial.println(F("[MEMORY] Memory status after saving config:"));
   printMemoryStats();
 }
-  if (verifyFile) {
-    DynamicJsonDocument verifyDoc(2048);
-    DeserializationError verifyError = deserializeJson(verifyDoc, verifyFile);
-    verifyFile.close();
-    
-    if (!verifyError) {
-      Serial.print(F("[CONFIG] Verified netatmoClientId: '"));
-      Serial.print(verifyDoc["netatmoClientId"].as<String>());
-      Serial.println(F("'"));
-      Serial.print(F("[CONFIG] Verified netatmoClientSecret exists: "));
-      Serial.println(verifyDoc.containsKey("netatmoClientSecret") ? "Yes" : "No");
-    }
-  }
-}
 
 // Function to fetch outdoor temperature from Netatmo
 void fetchOutdoorTemperature(bool roundToInteger = true) {
@@ -1804,3 +1790,17 @@ bool shouldHandleWebRequest() {
   }
   return true;
 }
+// Function declarations
+bool shouldHandleWebRequest();
+void processFetchStationsData();
+void processProxyRequest();
+void extractDeviceInfo();
+void fetchStationsDataWithDump();
+void fetchStationsDataFallback();
+bool refreshNetatmoToken();
+void safeGarbageCollection();
+
+// External variable declarations
+extern char netatmoStationId[64];
+extern char netatmoModuleId[64];
+extern char netatmoIndoorModuleId[64];

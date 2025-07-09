@@ -1150,6 +1150,14 @@ void fetchStationsData() {
   Serial.println(F("[MEMORY] Memory status before API call:"));
   printMemoryStats();
   
+  // Defragment heap before making the API call
+  Serial.println(F("[MEMORY] Defragmenting heap before API call"));
+  defragmentHeap();
+  
+  // Report memory status after defragmentation
+  Serial.println(F("[MEMORY] Memory status after defragmentation:"));
+  printMemoryStats();
+  
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
@@ -1181,29 +1189,6 @@ void fetchStationsData() {
   Serial.print(netatmoAccessToken[0]);
   Serial.print(F("..."));
   Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
-  
-  // Try to resolve the hostname first
-  IPAddress ip;
-  Serial.println(F("[NETATMO] Attempting DNS resolution for api.netatmo.com..."));
-  bool resolved = WiFi.hostByName("api.netatmo.com", ip);
-  if (!resolved) {
-    Serial.println(F("[NETATMO] DNS resolution failed"));
-    return;
-  }
-  
-  Serial.print(F("[NETATMO] DNS resolved to: "));
-  Serial.println(ip.toString());
-  
-  // Try a direct TCP connection first to test connectivity
-  WiFiClient testClient;
-  Serial.println(F("[NETATMO] Testing TCP connection to port 443..."));
-  if (!testClient.connect(ip, 443)) {
-    Serial.println(F("[NETATMO] TCP connection to port 443 failed"));
-    return;
-  }
-  
-  Serial.println(F("[NETATMO] TCP connection successful, closing test connection"));
-  testClient.stop();
   
   // Now try the HTTPS connection
   Serial.println(F("[NETATMO] Initializing HTTPS connection..."));
@@ -1526,6 +1511,14 @@ void fetchStationsDataFallback() {
   Serial.println(F("[MEMORY] Memory status before fallback API call:"));
   printMemoryStats();
   
+  // Defragment heap before making the API call
+  Serial.println(F("[MEMORY] Defragmenting heap before fallback API call"));
+  defragmentHeap();
+  
+  // Report memory status after defragmentation
+  Serial.println(F("[MEMORY] Memory status after defragmentation:"));
+  printMemoryStats();
+  
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
@@ -1557,18 +1550,6 @@ void fetchStationsDataFallback() {
   Serial.print(netatmoAccessToken[0]);
   Serial.print(F("..."));
   Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
-  
-  // Try to resolve the hostname first
-  IPAddress ip;
-  Serial.println(F("[NETATMO] Attempting DNS resolution for api.netatmo.com..."));
-  bool resolved = WiFi.hostByName("api.netatmo.com", ip);
-  if (!resolved) {
-    Serial.println(F("[NETATMO] DNS resolution failed"));
-    return;
-  }
-  
-  Serial.print(F("[NETATMO] DNS resolved to: "));
-  Serial.println(ip.toString());
   
   // Now try the HTTPS connection
   Serial.println(F("[NETATMO] Initializing HTTPS connection..."));

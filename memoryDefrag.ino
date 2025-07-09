@@ -105,8 +105,3 @@ bool shouldDefragment() {
   // Check both fragmentation and stack space
   return (fragmentation > 50 || freeStack < 2048);
 }
-// Safe garbage collection function
-void safeGarbageCollection() {
-  Serial.println(F("[MEMORY] Forcing garbage collection"));
-  ESP.resetHeap();
-}

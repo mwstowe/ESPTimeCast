@@ -18,6 +18,7 @@
 
 #include "src/Config.h"
 #include "src/Logger.h"
+#include "src/NetatmoHandler.h"
 
 // Forward declarations
 void processFetchStationsData();
@@ -26,7 +27,6 @@ bool refreshNetatmoToken();
 void extractDeviceInfo();
 void fetchStationsDataWithDump();
 void fetchStationsDataFallback();
-#include "src/NetatmoHandler.h"
 
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
 #include "tz_lookup.h" // Timezone lookup, do not duplicate mapping here!
@@ -1800,7 +1800,6 @@ bool shouldHandleWebRequest() {
   return true;
 }
 // Function declarations
-bool shouldHandleWebRequest();
 void processFetchStationsData();
 void processProxyRequest();
 void extractDeviceInfo();
@@ -1813,12 +1812,3 @@ void safeGarbageCollection();
 extern char netatmoStationId[64];
 extern char netatmoModuleId[64];
 extern char netatmoIndoorModuleId[64];
-// Function to check if we should handle web requests
-bool shouldHandleWebRequest() {
-  // If an API call is in progress, we should defer web requests
-  if (apiCallInProgress) {
-    Serial.println(F("[WEBSERVER] API call in progress, deferring web request"));
-    return false;
-  }
-  return true;
-}

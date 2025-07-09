@@ -633,62 +633,27 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Processing token exchange"));
   
-  // Defragment heap before token exchange to ensure enough contiguous memory
-  Serial.println(F("[NETATMO] Checking memory before token exchange"));
-  printMemoryStats();
-  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;
   pendingCode = "";
   
-  // Add a small delay before proceeding to allow system to stabilize
-  delay(100);
-  
-  if (shouldDefragment()) {
-    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting heap"));
-    defragmentHeap();
-    
-    // Add another delay after defragmentation
-    delay(100);
-  }
+  // Skip memory checks and defragmentation to avoid yield issues
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
   }
   
-  // Debug WiFi status
-  Serial.print(F("[NETATMO] WiFi RSSI: "));
-  Serial.println(WiFi.RSSI());
-  Serial.print(F("[NETATMO] WiFi IP: "));
-  Serial.println(WiFi.localIP());
-  
-  // Try a basic connectivity test first
-  Serial.println(F("[NETATMO] Testing basic connectivity to api.netatmo.com"));
-  WiFiClient testClient;
-  if (testClient.connect("api.netatmo.com", 80)) {
-    Serial.println(F("[NETATMO] Basic connectivity test successful"));
-    testClient.stop();
-  } else {
-    Serial.println(F("[NETATMO] Basic connectivity test failed"));
-  }
-  
   // Memory optimization: Use static client to reduce stack usage
   static BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
   
-  // Instead of setInsecure(), try setting specific SSL parameters
-  // These are more compatible with older servers
-  client.setBufferSizes(1024, 1024); // Smaller buffer sizes
-  client.setX509Time(1577836800); // Jan 1, 2020 - avoid time validation issues
-  
-  // Set a specific cipher suite that's more compatible
-  // ECDHE-RSA-AES128-GCM-SHA256 is widely supported
-  static const uint16_t ciphersuites[] = {0xC02F};
-  client.setCiphers(ciphersuites, 1);
+  // Minimize memory usage by setting smaller buffer sizes
+  client.setBufferSizes(512, 512); // Minimum buffer sizes
   
   HTTPClient https;
-  https.setTimeout(15000); // Increased timeout to 15 seconds
+  https.setTimeout(10000); // 10 second timeout
   
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
   if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
@@ -697,120 +662,41 @@ void processTokenExchange() {
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  https.addHeader("Accept", "application/json");
-  https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
   
-  // Memory optimization: Build the POST data in chunks
-  String postData = "grant_type=authorization_code";
-  postData += "&client_id=";
-  postData += urlEncode(netatmoClientId);
-  postData += "&client_secret=";
-  postData += urlEncode(netatmoClientSecret);
-  postData += "&code=";
-  postData += urlEncode(code.c_str());
-  postData += "&redirect_uri=";
-  
-  // Memory optimization: Build the redirect URI directly
+  // Build the redirect URI directly to minimize string operations
   String redirectUri = "http://";
   redirectUri += WiFi.localIP().toString();
   redirectUri += "/api/netatmo/callback";
-  postData += urlEncode(redirectUri.c_str());
+  
+  // Build the POST data in chunks to minimize memory usage
+  // Use static buffers to avoid heap fragmentation
+  static char postData[512]; // Static buffer for POST data
+  memset(postData, 0, sizeof(postData));
+  
+  // Build the POST data manually to minimize memory usage
+  strcat(postData, "grant_type=authorization_code");
+  strcat(postData, "&client_id=");
+  strcat(postData, netatmoClientId);
+  strcat(postData, "&client_secret=");
+  strcat(postData, netatmoClientSecret);
+  strcat(postData, "&code=");
+  strncat(postData, code.c_str(), 100); // Limit code length
+  strcat(postData, "&redirect_uri=");
+  
+  // Add the redirect URI - this is a simplified version without full URL encoding
+  // but should work for most cases
+  char encodedUri[128];
+  snprintf(encodedUri, sizeof(encodedUri), "http%%3A%%2F%%2F%s%%2Fapi%%2Fnetatmo%%2Fcallback", 
+           WiFi.localIP().toString().c_str());
+  strcat(postData, encodedUri);
   
   Serial.println(F("[NETATMO] Sending token request"));
-  Serial.print(F("[NETATMO] POST data: "));
-  Serial.println(postData);
-  
-  // Print memory before sending request
-  Serial.println(F("[NETATMO] Memory before sending request:"));
-  printMemoryStats();
-  
   int httpCode = https.POST(postData);
-  
-  // Print memory after sending request
-  Serial.println(F("[NETATMO] Memory after sending request:"));
-  printMemoryStats();
   
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
-    
-    // Get more detailed error information if available
-    if (httpCode > 0) {
-      String payload = https.getString();
-      Serial.print(F("[NETATMO] Error response: "));
-      Serial.println(payload);
-    } else {
-      Serial.print(F("[NETATMO] Connection error: "));
-      Serial.println(https.errorToString(httpCode));
-    }
-    
     https.end();
-    
-    // Try a different approach with a different SSL configuration
-    Serial.println(F("[NETATMO] Trying with minimal SSL configuration"));
-    
-    static BearSSL::WiFiClientSecure client2;
-    client2.setInsecure(); // Minimal SSL validation
-    
-    HTTPClient https2;
-    https2.setTimeout(15000);
-    
-    if (!https2.begin(client2, "https://api.netatmo.com/oauth2/token")) {
-      Serial.println(F("[NETATMO] Error - Failed to connect with second approach"));
-      return;
-    }
-    
-    https2.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    
-    Serial.println(F("[NETATMO] Sending token request with second approach"));
-    int httpCode2 = https2.POST(postData);
-    
-    if (httpCode2 != HTTP_CODE_OK) {
-      Serial.print(F("[NETATMO] Error with second approach - HTTP code: "));
-      Serial.println(httpCode2);
-      https2.end();
-      return;
-    }
-    
-    String response = https2.getString();
-    https2.end();
-    
-    Serial.println(F("[NETATMO] Second approach successful, parsing response"));
-    
-    // Memory optimization: Use a smaller JSON buffer
-    StaticJsonDocument<384> doc;
-    DeserializationError error = deserializeJson(doc, response);
-    
-    if (error) {
-      Serial.print(F("[NETATMO] JSON parse error: "));
-      Serial.println(error.c_str());
-      return;
-    }
-    
-    // Extract the tokens
-    if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
-      Serial.println(F("[NETATMO] Missing tokens in response"));
-      return;
-    }
-    
-    // Memory optimization: Extract tokens directly as strings
-    const char* accessToken = doc["access_token"];
-    const char* refreshToken = doc["refresh_token"];
-    
-    // Save the tokens
-    Serial.println(F("[NETATMO] Saving tokens"));
-    strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
-    strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
-    
-    // Set flag to save tokens in main loop instead of saving directly
-    saveCredentialsPending = true;
-    
-    Serial.println(F("[NETATMO] Token exchange complete with second approach"));
-    
-    // Schedule a reboot after token exchange is complete
-    Serial.println(F("[NETATMO] Scheduling reboot to apply new tokens"));
-    rebootPending = true;
-    rebootTime = millis() + 2000; // Reboot in 2 seconds
     return;
   }
   

@@ -1403,6 +1403,14 @@ void fetchStationsData() {
 void extractDeviceInfo() {
   Serial.println(F("[NETATMO] Extracting device info"));
   
+  // Report memory status before extraction
+  Serial.println(F("[MEMORY] Memory status before extracting device info:"));
+  printMemoryStats();
+  
+  // Defragment heap before extraction
+  Serial.println(F("[MEMORY] Defragmenting heap before extraction"));
+  defragmentHeap();
+  
   if (!LittleFS.exists("/devices/netatmo_devices.json")) {
     Serial.println(F("[NETATMO] Error - Device data file not found"));
     return;
@@ -1415,7 +1423,7 @@ void extractDeviceInfo() {
   }
   
   // Use a streaming parser to avoid loading the entire file into memory
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(1024); // Reduced size
   DeserializationError error = deserializeJson(doc, deviceFile);
   deviceFile.close();
   
@@ -1547,8 +1555,21 @@ void extractDeviceInfo() {
     Serial.println(F("[NETATMO] Unknown response format"));
   }
   
+  // Report memory status before saving config
+  Serial.println(F("[MEMORY] Memory status before saving config:"));
+  printMemoryStats();
+  
   // Save the updated device and module IDs to config
-  saveTokensToConfig();
+  // But only if we have valid IDs to avoid unnecessary writes
+  if (strlen(netatmoStationId) > 0 || strlen(netatmoModuleId) > 0 || strlen(netatmoIndoorModuleId) > 0) {
+    saveTokensToConfig();
+  } else {
+    Serial.println(F("[NETATMO] No device IDs to save, skipping config update"));
+  }
+  
+  // Report memory status after extraction
+  Serial.println(F("[MEMORY] Memory status after device extraction:"));
+  printMemoryStats();
 }
 // Function to be called from loop() to process pending stations data fetch
 void processFetchStationsData() {

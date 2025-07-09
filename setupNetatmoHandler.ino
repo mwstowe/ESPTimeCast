@@ -633,25 +633,12 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Processing token exchange"));
   
-  // Defragment heap before token exchange to ensure enough contiguous memory
-  Serial.println(F("[NETATMO] Checking memory before token exchange"));
-  printMemoryStats();
-  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;
   pendingCode = "";
   
-  // Add a small delay before proceeding to allow system to stabilize
-  delay(100);
-  
-  if (shouldDefragment()) {
-    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting heap"));
-    defragmentHeap();
-    
-    // Add another delay after defragmentation
-    delay(100);
-  }
+  // Skip memory checks and defragmentation to avoid yield issues
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
@@ -673,24 +660,26 @@ void processTokenExchange() {
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
-  // Memory optimization: Build the POST data in chunks
-  String postData = "grant_type=authorization_code";
-  postData += "&client_id=";
-  postData += urlEncode(netatmoClientId);
-  postData += "&client_secret=";
-  postData += urlEncode(netatmoClientSecret);
-  postData += "&code=";
-  postData += urlEncode(code.c_str());
-  postData += "&redirect_uri=";
+  // Memory optimization: Build the POST data in smaller chunks
+  // and send directly to avoid storing the entire string
+  https.beginRequest();
+  https.sendRequest("POST", "grant_type=authorization_code");
+  https.sendRequest("&client_id=");
+  https.sendRequest(urlEncode(netatmoClientId).c_str());
+  https.sendRequest("&client_secret=");
+  https.sendRequest(urlEncode(netatmoClientSecret).c_str());
+  https.sendRequest("&code=");
+  https.sendRequest(urlEncode(code.c_str()).c_str());
+  https.sendRequest("&redirect_uri=");
   
   // Memory optimization: Build the redirect URI directly
   String redirectUri = "http://";
   redirectUri += WiFi.localIP().toString();
   redirectUri += "/api/netatmo/callback";
-  postData += urlEncode(redirectUri.c_str());
+  https.sendRequest(urlEncode(redirectUri.c_str()).c_str());
   
   Serial.println(F("[NETATMO] Sending token request"));
-  int httpCode = https.POST(postData);
+  int httpCode = https.endRequest();
   
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
@@ -699,6 +688,15 @@ void processTokenExchange() {
     return;
   }
   
+  // Memory optimization: Process the response in smaller chunks
+  // Get the response
+  String response = https.getString();
+  https.end();
+  
+  Serial.println(F("[NETATMO] Parsing response"));
+  
+  // Memory optimization: Use a smaller JSON buffer
+  StaticJsonDocument<384> doc;
   // Memory optimization: Process the response in smaller chunks
   // Get the response
   String response = https.getString();
@@ -731,7 +729,9 @@ void processTokenExchange() {
   strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
   strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
   
-  saveTokensToConfig();
+  // Set flag to save tokens in main loop
+  saveCredentialsPending = true;
+  
   Serial.println(F("[NETATMO] Token exchange complete"));
   
   // Schedule a reboot after token exchange is complete

@@ -60,6 +60,7 @@ void forceGarbageCollection();
 bool shouldDefragment();
 void debugNetatmoToken();
 void logFullToken();
+void logApiRequest(const char* url, const char* token);
 void simpleNetatmoCall();
 void processSaveCredentials();
 

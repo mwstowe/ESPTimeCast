@@ -46,6 +46,10 @@ bool refreshNetatmoToken() {
     return false;
   }
   
+  // Log the token refresh request
+  Serial.println(F("[NETATMO] Token refresh URL: https://api.netatmo.com/oauth2/token"));
+  Serial.print(F("[NETATMO] Using refresh token: "));
+  Serial.println(netatmoRefreshToken);
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   // Build the POST data
@@ -58,6 +62,9 @@ bool refreshNetatmoToken() {
   postData += urlEncode(netatmoRefreshToken);
   
   // Make the request
+  // Log the POST data
+  Serial.print(F("[NETATMO] Token refresh POST data: "));
+  Serial.println(postData);
   int httpCode = https.POST(postData);
   yield(); // Allow the watchdog to be fed
   
@@ -1947,6 +1954,8 @@ void fetchStationsDataImproved() {
   authHeader += netatmoAccessToken;
   https.addHeader("Authorization", authHeader);
   https.addHeader("Accept", "application/json");
+  // Log the complete API request
+  logApiRequest(apiUrl.c_str(), netatmoAccessToken);
   
   // Make the request with yield to avoid watchdog issues
   Serial.println(F("[NETATMO] Sending request..."));

@@ -1233,8 +1233,8 @@ void fetchStationsData() {
   HTTPClient https;
   https.setTimeout(10000); // Reduce timeout to 10 seconds
   
-  // Use homesdata endpoint instead of getstationsdata
-  String apiUrl = "https://api.netatmo.com/api/homesdata";
+  // Use getstationsdata endpoint for weather stations
+  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
   Serial.print(F("[NETATMO] Fetching from: "));
   Serial.println(apiUrl);
   
@@ -1888,7 +1888,7 @@ void fetchStationsDataImproved() {
   
   // Force log the token at the very beginning to make sure it works
   Serial.println(F("DIRECT TOKEN LOGGING AT START:"));
-  logApiRequest("https://api.netatmo.com/api/homesdata", netatmoAccessToken);
+  logApiRequest("https://api.netatmo.com/api/getstationsdata", netatmoAccessToken);
   
   // Log the full token
   logFullToken();
@@ -1932,8 +1932,8 @@ void fetchStationsDataImproved() {
   HTTPClient https;
   https.setTimeout(10000); // Reduce timeout to 10 seconds
   
-  // Use homesdata endpoint instead of getstationsdata
-  String apiUrl = "https://api.netatmo.com/api/homesdata";
+  // Use getstationsdata endpoint for weather stations
+  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
   Serial.print(F("[NETATMO] Fetching from: "));
   Serial.println(apiUrl);
   

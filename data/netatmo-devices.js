@@ -54,20 +54,8 @@ function fetchNetatmoDevices() {
           .then(data => {
             console.log("Received stations data");
             
-            // Process the device data
-            let devices = [];
-            
-            if (data.body && data.body.devices) {
-              console.log("Using standard format (body.devices)");
-              devices = data.body.devices;
-            } else if (data.devices) {
-              console.log("Using alternative format (devices)");
-              devices = data.devices;
-            } else {
-              console.error("Unexpected data format");
-              showStatus("Unexpected data format from API", "error");
-              return;
-            }
+            // Process the device data using our helper function
+            let devices = processNetatmoData(data);
             
             if (!devices || devices.length === 0) {
               console.log("No devices found in response");
@@ -117,18 +105,8 @@ function fetchNetatmoDevices() {
           console.log("Using existing stations data");
           showStatus("Using existing stations data", "warning");
           
-          // Process the device data
-          let devices = [];
-          
-          if (data.body && data.body.devices) {
-            console.log("Using standard format (body.devices)");
-            devices = data.body.devices;
-          } else if (data.devices) {
-            console.log("Using alternative format (devices)");
-            devices = data.devices;
-          } else {
-            throw new Error("Unexpected data format");
-          }
+          // Process the device data using our helper function
+          let devices = processNetatmoData(data);
           
           if (!devices || devices.length === 0) {
             throw new Error("No devices found");
@@ -514,4 +492,52 @@ function initMockData() {
       console.error(`Error initializing mock data: ${error.message}`);
       showStatus(`Failed to initialize mock data: ${error.message}`, "error");
     });
+}
+// Function to process Netatmo data
+function processNetatmoData(data) {
+  let devices = [];
+  
+  // Check if we have a homesdata response
+  if (data.body && data.body.homes && data.body.homes.length > 0) {
+    console.log("Processing homesdata response");
+    
+    const home = data.body.homes[0];
+    console.log("Found home:", home.name);
+    
+    // Find all modules of type NAMain (weather stations)
+    const modules = home.modules || [];
+    const mainStations = modules.filter(module => module.type === "NAMain");
+    
+    mainStations.forEach(station => {
+      console.log("Found main station:", station.name);
+      
+      // Create a device object for the station
+      const device = {
+        _id: station.id,
+        station_name: station.name,
+        type: station.type,
+        modules: []
+      };
+      
+      // Find all modules connected to this station
+      modules.forEach(module => {
+        if (module.bridge === station.id) {
+          device.modules.push({
+            _id: module.id,
+            module_name: module.name,
+            type: module.type
+          });
+        }
+      });
+      
+      devices.push(device);
+    });
+  }
+  // Check if we have a getstationsdata response
+  else if (data.body && data.body.devices) {
+    console.log("Processing getstationsdata response");
+    devices = data.body.devices;
+  }
+  
+  return devices;
 }

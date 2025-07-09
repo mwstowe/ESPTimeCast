@@ -1163,7 +1163,8 @@ void fetchStationsData() {
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
-  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
+  // Use homesdata endpoint instead of getstationsdata
+  String apiUrl = "https://api.netatmo.com/api/homesdata";
   Serial.print(F("[NETATMO] Fetching from: "));
   Serial.println(apiUrl);
   
@@ -1291,15 +1292,8 @@ void extractDeviceInfo() {
   }
   
   // Use a streaming parser to avoid loading the entire file into memory
-  DynamicJsonDocument filter(256);
-  filter["body"]["devices"][0]["_id"] = true;
-  filter["body"]["devices"][0]["station_name"] = true;
-  filter["body"]["devices"][0]["modules"][0]["_id"] = true;
-  filter["body"]["devices"][0]["modules"][0]["module_name"] = true;
-  filter["body"]["devices"][0]["modules"][0]["type"] = true;
-  
-  DynamicJsonDocument doc(1024);
-  DeserializationError error = deserializeJson(doc, deviceFile, DeserializationOption::Filter(filter));
+  DynamicJsonDocument doc(2048);
+  DeserializationError error = deserializeJson(doc, deviceFile);
   deviceFile.close();
   
   if (error) {
@@ -1308,58 +1302,130 @@ void extractDeviceInfo() {
     return;
   }
   
-  // Extract device info
-  JsonArray devices = doc["body"]["devices"];
-  if (devices.size() > 0) {
-    JsonObject device = devices[0];
-    const char* deviceId = device["_id"];
-    const char* stationName = device["station_name"];
+  // Check if we have a homesdata response
+  if (doc.containsKey("body") && doc["body"].containsKey("homes")) {
+    Serial.println(F("[NETATMO] Processing homesdata response"));
     
-    Serial.print(F("[NETATMO] Found device: "));
-    Serial.print(deviceId);
-    Serial.print(F(" ("));
-    Serial.print(stationName);
-    Serial.println(F(")"));
-    
-    // Save device ID if not already set
-    if (strlen(netatmoDeviceId) == 0) {
-      strlcpy(netatmoDeviceId, deviceId, sizeof(netatmoDeviceId));
-      Serial.print(F("[NETATMO] Set device ID: "));
-      Serial.println(netatmoDeviceId);
-    }
-    
-    // Extract module info
-    JsonArray modules = device["modules"];
-    for (JsonObject module : modules) {
-      const char* moduleId = module["_id"];
-      const char* moduleName = module["module_name"];
-      const char* moduleType = module["type"];
+    JsonArray homes = doc["body"]["homes"];
+    if (homes.size() > 0) {
+      JsonObject home = homes[0];
       
-      Serial.print(F("[NETATMO] Found module: "));
-      Serial.print(moduleId);
+      Serial.print(F("[NETATMO] Found home: "));
+      Serial.println(home["name"].as<String>());
+      
+      // Look for modules of type NAMain (weather stations)
+      JsonArray modules = home["modules"];
+      
+      for (JsonObject module : modules) {
+        const char* moduleType = module["type"];
+        const char* moduleId = module["id"];
+        const char* moduleName = module["name"];
+        
+        Serial.print(F("[NETATMO] Found module: "));
+        Serial.print(moduleId);
+        Serial.print(F(" ("));
+        Serial.print(moduleName);
+        Serial.print(F("), type: "));
+        Serial.println(moduleType);
+        
+        // Save main station ID
+        if (strcmp(moduleType, "NAMain") == 0 && strlen(netatmoDeviceId) == 0) {
+          strlcpy(netatmoDeviceId, moduleId, sizeof(netatmoDeviceId));
+          Serial.print(F("[NETATMO] Set main station ID: "));
+          Serial.println(netatmoDeviceId);
+          
+          // Find modules connected to this station
+          for (JsonObject subModule : modules) {
+            // Check if this module is connected to the main station
+            if (subModule.containsKey("bridge") && strcmp(subModule["bridge"], moduleId) == 0) {
+              const char* subModuleType = subModule["type"];
+              const char* subModuleId = subModule["id"];
+              const char* subModuleName = subModule["name"];
+              
+              Serial.print(F("[NETATMO] Found connected module: "));
+              Serial.print(subModuleId);
+              Serial.print(F(" ("));
+              Serial.print(subModuleName);
+              Serial.print(F("), type: "));
+              Serial.println(subModuleType);
+              
+              // Save outdoor module ID
+              if (strcmp(subModuleType, "NAModule1") == 0 && strlen(netatmoModuleId) == 0) {
+                strlcpy(netatmoModuleId, subModuleId, sizeof(netatmoModuleId));
+                Serial.print(F("[NETATMO] Set outdoor module ID: "));
+                Serial.println(netatmoModuleId);
+              }
+              
+              // Save indoor module ID
+              if (strcmp(subModuleType, "NAModule4") == 0 && strlen(netatmoIndoorModuleId) == 0) {
+                strlcpy(netatmoIndoorModuleId, subModuleId, sizeof(netatmoIndoorModuleId));
+                Serial.print(F("[NETATMO] Set indoor module ID: "));
+                Serial.println(netatmoIndoorModuleId);
+              }
+            }
+          }
+        }
+      }
+    }
+  } 
+  // Check if we have a getstationsdata response
+  else if (doc.containsKey("body") && doc["body"].containsKey("devices")) {
+    Serial.println(F("[NETATMO] Processing getstationsdata response"));
+    
+    JsonArray devices = doc["body"]["devices"];
+    if (devices.size() > 0) {
+      JsonObject device = devices[0];
+      const char* deviceId = device["_id"];
+      const char* stationName = device["station_name"];
+      
+      Serial.print(F("[NETATMO] Found device: "));
+      Serial.print(deviceId);
       Serial.print(F(" ("));
-      Serial.print(moduleName);
-      Serial.print(F("), type: "));
-      Serial.println(moduleType);
+      Serial.print(stationName);
+      Serial.println(F(")"));
       
-      // Save outdoor module ID if not already set
-      if (strcmp(moduleType, "NAModule1") == 0 && strlen(netatmoModuleId) == 0) {
-        strlcpy(netatmoModuleId, moduleId, sizeof(netatmoModuleId));
-        Serial.print(F("[NETATMO] Set outdoor module ID: "));
-        Serial.println(netatmoModuleId);
+      // Save device ID if not already set
+      if (strlen(netatmoDeviceId) == 0) {
+        strlcpy(netatmoDeviceId, deviceId, sizeof(netatmoDeviceId));
+        Serial.print(F("[NETATMO] Set device ID: "));
+        Serial.println(netatmoDeviceId);
       }
       
-      // Save indoor module ID if not already set
-      if (strcmp(moduleType, "NAModule4") == 0 && strlen(netatmoIndoorModuleId) == 0) {
-        strlcpy(netatmoIndoorModuleId, moduleId, sizeof(netatmoIndoorModuleId));
-        Serial.print(F("[NETATMO] Set indoor module ID: "));
-        Serial.println(netatmoIndoorModuleId);
+      // Extract module info
+      JsonArray modules = device["modules"];
+      for (JsonObject module : modules) {
+        const char* moduleId = module["_id"];
+        const char* moduleName = module["module_name"];
+        const char* moduleType = module["type"];
+        
+        Serial.print(F("[NETATMO] Found module: "));
+        Serial.print(moduleId);
+        Serial.print(F(" ("));
+        Serial.print(moduleName);
+        Serial.print(F("), type: "));
+        Serial.println(moduleType);
+        
+        // Save outdoor module ID if not already set
+        if (strcmp(moduleType, "NAModule1") == 0 && strlen(netatmoModuleId) == 0) {
+          strlcpy(netatmoModuleId, moduleId, sizeof(netatmoModuleId));
+          Serial.print(F("[NETATMO] Set outdoor module ID: "));
+          Serial.println(netatmoModuleId);
+        }
+        
+        // Save indoor module ID if not already set
+        if (strcmp(moduleType, "NAModule4") == 0 && strlen(netatmoIndoorModuleId) == 0) {
+          strlcpy(netatmoIndoorModuleId, moduleId, sizeof(netatmoIndoorModuleId));
+          Serial.print(F("[NETATMO] Set indoor module ID: "));
+          Serial.println(netatmoIndoorModuleId);
+        }
       }
     }
-    
-    // Save the updated device and module IDs to config
-    saveTokensToConfig();
+  } else {
+    Serial.println(F("[NETATMO] Unknown response format"));
   }
+  
+  // Save the updated device and module IDs to config
+  saveTokensToConfig();
 }
 // Function to be called from loop() to process pending stations data fetch
 void processFetchStationsData() {

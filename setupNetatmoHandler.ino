@@ -57,11 +57,13 @@ bool refreshNetatmoToken() {
   
   // Make the request
   int httpCode = https.POST(postData);
+  yield(); // Allow the watchdog to be fed
   
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
     String errorPayload = https.getString();
+    yield(); // Allow the watchdog to be fed
     Serial.print(F("[NETATMO] Error payload: "));
     Serial.println(errorPayload);
     https.end();
@@ -70,6 +72,7 @@ bool refreshNetatmoToken() {
   
   // Get the response
   String response = https.getString();
+  yield(); // Allow the watchdog to be fed
   https.end();
   
   // Parse the response
@@ -508,100 +511,21 @@ void setupNetatmoHandler() {
       endpoint = request->getParam("endpoint")->value();
     }
     
-    // Create a new client for the API call
-    static BearSSL::WiFiClientSecure client;
-    client.setInsecure(); // Skip certificate validation to save memory
-    
-    HTTPClient https;
-    https.setTimeout(10000); // 10 second timeout
-    
-    String apiUrl = "https://api.netatmo.com/api/" + endpoint;
-    Serial.print(F("[NETATMO] Proxying request to: "));
-    Serial.println(apiUrl);
-    
-    if (!https.begin(client, apiUrl)) {
-      Serial.println(F("[NETATMO] Error - Failed to connect"));
-      request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API\"}");
+    // Check if there's already a pending request
+    if (proxyPending) {
+      request->send(429, "application/json", "{\"error\":\"Another request is already in progress\"}");
       return;
     }
     
-    // Add authorization header
-    String authHeader = "Bearer ";
-    authHeader += netatmoAccessToken;
-    https.addHeader("Authorization", authHeader);
-    https.addHeader("Accept", "application/json");
+    // Set up the deferred request
+    proxyPending = true;
+    proxyEndpoint = endpoint;
+    proxyRequest = request;
     
-    // Make the request
-    int httpCode = https.GET();
+    // The actual request will be processed in the loop() function via processProxyRequest()
+    // This prevents blocking the web server and avoids watchdog timeouts
     
-    if (httpCode != HTTP_CODE_OK) {
-      Serial.print(F("[NETATMO] Error - HTTP code: "));
-      Serial.println(httpCode);
-      String errorPayload = https.getString();
-      Serial.print(F("[NETATMO] Error payload: "));
-      Serial.println(errorPayload);
-      https.end();
-      
-      // If we get a 401 or 403, try to refresh the token
-      if (httpCode == 401 || httpCode == 403) {
-        Serial.println(F("[NETATMO] Token expired, trying to refresh"));
-        
-        // Try to refresh the token
-        if (refreshNetatmoToken()) {
-          Serial.println(F("[NETATMO] Token refreshed, retrying request"));
-          
-          // Retry the request with the new token
-          HTTPClient https2;
-          https2.setTimeout(10000);
-          
-          if (!https2.begin(client, apiUrl)) {
-            Serial.println(F("[NETATMO] Error - Failed to connect on retry"));
-            request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API on retry\"}");
-            return;
-          }
-          
-          // Add authorization header with new token
-          String newAuthHeader = "Bearer ";
-          newAuthHeader += netatmoAccessToken;
-          https2.addHeader("Authorization", newAuthHeader);
-          https2.addHeader("Accept", "application/json");
-          
-          // Make the request again
-          int httpCode2 = https2.GET();
-          
-          if (httpCode2 != HTTP_CODE_OK) {
-            Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
-            Serial.println(httpCode2);
-            String errorPayload2 = https2.getString();
-            Serial.print(F("[NETATMO] Error payload on retry: "));
-            Serial.println(errorPayload2);
-            https2.end();
-            request->send(httpCode2, "application/json", errorPayload2);
-            return;
-          }
-          
-          // Get the response
-          String payload2 = https2.getString();
-          https2.end();
-          
-          // Send the response back to the client
-          request->send(200, "application/json", payload2);
-          return;
-        } else {
-          Serial.println(F("[NETATMO] Failed to refresh token"));
-        }
-      }
-      
-      request->send(httpCode, "application/json", errorPayload);
-      return;
-    }
-    
-    // Get the response
-    String payload = https.getString();
-    https.end();
-    
-    // Send the response back to the client
-    request->send(200, "application/json", payload);
+    // Note: We don't call request->send() here because we'll do that in processProxyRequest()
   });
   
   // Add a debug endpoint to check token status

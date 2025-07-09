@@ -1538,6 +1538,10 @@ void loop() {
   // Process any pending Netatmo device fetches
   processFetchDevices();
   
+  // Process any pending Netatmo proxy requests
+  processProxyRequest();
+  
+  // Process any pending credential saves
   // Process any pending credential saves
   processSaveCredentials();
 

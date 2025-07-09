@@ -4,7 +4,7 @@ static bool tokenExchangePending = false;
 static bool fetchDevicesPending = false;
 static bool fetchStationsDataPending = false;
 static String deviceData = "";
-static bool apiCallInProgress = false; // Flag to track API call status
+bool apiCallInProgress = false; // Flag to track API call status - not static so it can be accessed from other files
 
 // Helper function to URL encode a string (memory-efficient version)
 String urlEncode(const char* input) {

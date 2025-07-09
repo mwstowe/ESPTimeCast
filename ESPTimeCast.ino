@@ -1793,6 +1793,9 @@ void loop() {
   yield();
 }
 
+// External declarations for variables defined in other files
+extern bool apiCallInProgress;  // Flag to track API call status
+
 // Function to check if we should handle web requests
 bool shouldHandleWebRequest() {
   // If an API call is in progress, we should defer web requests
@@ -1802,5 +1805,3 @@ bool shouldHandleWebRequest() {
   }
   return true;
 }
-// External declarations for variables defined in other files
-extern bool apiCallInProgress;  // Flag to track API call status

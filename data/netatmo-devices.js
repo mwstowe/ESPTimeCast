@@ -53,14 +53,20 @@ function fetchNetatmoDevices() {
       if (!response.ok) {
         // Get more detailed error information
         return response.text().then(text => {
-          console.error(`API error (${response.status}):`, text);
-          throw new Error(`API error: ${response.status} ${response.statusText}`);
+          try {
+            const errorObj = JSON.parse(text);
+            console.error(`API error (${response.status}):`, errorObj);
+            throw new Error(`API error: ${response.status} ${errorObj.error || response.statusText}`);
+          } catch (e) {
+            console.error(`API error (${response.status}):`, text);
+            throw new Error(`API error: ${response.status} ${response.statusText}`);
+          }
         });
       }
       return response.json();
     })
     .then(data => {
-      console.log("Received device data from Netatmo API:", data);
+      console.log("Received device data from Netatmo API");
       
       // Check if we have a valid response
       if (!data) {
@@ -69,60 +75,10 @@ function fetchNetatmoDevices() {
         return;
       }
       
-      // Add more detailed logging
-      console.log("Response data type:", typeof data);
-      if (typeof data === 'object') {
-        console.log("Response keys:", Object.keys(data));
-        if (data.body) {
-          console.log("Body keys:", Object.keys(data.body));
-        }
-      }
-      
       // Handle the homes format from the homesdata endpoint
       let devices = [];
       
-      if (data.body && data.body.homes && data.body.homes.length > 0) {
-        console.log("Using homes format from homesdata endpoint");
-        
-        // Extract the home
-        const home = data.body.homes[0];
-        console.log("Home:", home);
-        
-        // Find weather stations (NAMain type)
-        const weatherStations = home.modules.filter(module => module.type === "NAMain");
-        console.log("Weather stations found:", weatherStations);
-        
-        if (weatherStations.length > 0) {
-          // Process each weather station
-          weatherStations.forEach(station => {
-            console.log("Processing station:", station);
-            
-            // Create a device object for the station
-            const device = {
-              _id: station.id,
-              station_name: station.name || home.name,
-              type: station.type,
-              modules: []
-            };
-            
-            // Add all modules that belong to this station
-            home.modules.forEach(module => {
-              if (module.id !== station.id && module.bridge === station.id) {
-                device.modules.push({
-                  _id: module.id,
-                  module_name: module.name,
-                  type: module.type
-                });
-              }
-            });
-            
-            devices.push(device);
-          });
-        } else {
-          console.log("No weather stations found in home");
-          showStatus("No weather stations found", "warning");
-        }
-      } else if (data.body && data.body.devices) {
+      if (data.body && data.body.devices) {
         // Standard format from getstationsdata
         console.log("Using standard format (body.devices)");
         devices = data.body.devices;
@@ -130,13 +86,18 @@ function fetchNetatmoDevices() {
         // Alternative format
         console.log("Using alternative format (devices)");
         devices = data.devices;
+      } else if (data.status === "success") {
+        // Our simplified response from the backend
+        showStatus("Devices fetched successfully. Please reload the page to see them.", "success");
+        setTimeout(() => {
+          window.location.reload();
+        }, 3000);
+        return;
       } else {
-        console.error("Unexpected data format:", data);
+        console.error("Unexpected data format");
         showStatus("Unexpected data format from API", "error");
         return;
       }
-      
-      console.log("Extracted devices:", devices);
       
       if (!devices || devices.length === 0) {
         console.log("No devices found in response");
@@ -149,7 +110,6 @@ function fetchNetatmoDevices() {
       
       // Populate device dropdown
       devices.forEach(device => {
-        console.log("Adding device to dropdown:", device);
         const option = document.createElement('option');
         option.value = device._id || device.id;
         option.textContent = device.station_name || device.name || device._id || device.id;
@@ -342,12 +302,41 @@ function updateTokenStatus(accessToken) {
     tokenStatus.className = 'token-status token-expired';
   }
 }
+// Function to load API keys
+function loadApiKeys() {
+  console.log("Loading API keys...");
+  
+  fetch('/api/netatmo/get-credentials')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("API keys loaded:", data);
+      
+      // Update the input fields
+      const clientIdInput = document.getElementById('netatmoClientId');
+      if (clientIdInput && data.clientId) {
+        clientIdInput.value = data.clientId;
+        clientIdInput.placeholder = "Your Netatmo API Client ID";
+      }
+    })
+    .catch(error => {
+      console.error(`Error loading API keys: ${error.message}`);
+    });
+}
+
 // Initialize the page when it loads
 document.addEventListener('DOMContentLoaded', function() {
   console.log("Netatmo devices page loaded");
   
+  // Load API keys
+  loadApiKeys();
+  
   // Check if we have an access token
-  fetch('/api/netatmo/token')
+  fetch('/api/netatmo/token-status')
     .then(response => {
       if (response.ok) {
         return response.json();
@@ -356,12 +345,9 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     })
     .then(data => {
-      if (data.access_token) {
+      if (data.hasAccessToken) {
         console.log("Found access token");
-        updateTokenStatus(data.access_token);
-        
-        // Fetch devices
-        fetchNetatmoDevices();
+        updateTokenStatus("valid-token");
       }
     })
     .catch(error => {

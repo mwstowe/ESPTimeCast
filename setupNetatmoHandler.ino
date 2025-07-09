@@ -303,18 +303,19 @@ void setupNetatmoHandler() {
     pendingCode = code;
     tokenExchangePending = true;
     
-    // Simplified HTML response to minimize memory usage
+    // Simplified HTML response with auto-redirect to minimize memory usage
     static const char SUCCESS_HTML[] PROGMEM = 
       "<!DOCTYPE html>"
       "<html><head>"
       "<meta charset='UTF-8'>"
+      "<meta http-equiv='refresh' content='5;url=/netatmo.html'>"
       "<title>ESPTimeCast - Authorization</title>"
       "<style>body{font-family:Arial;text-align:center;margin:50px}</style>"
       "</head><body>"
       "<h1>Authorization Successful</h1>"
       "<p>Exchanging code for tokens...</p>"
-      "<p>The device will reboot automatically after token exchange.</p>"
-      "<p>After reboot, please navigate to <a href='/netatmo.html'>Netatmo Settings</a> to configure your devices.</p>"
+      "<p>You will be redirected to the Netatmo settings page in 5 seconds.</p>"
+      "<p>If not redirected, <a href='/netatmo.html'>click here</a>.</p>"
       "</body></html>";
     
     request->send_P(200, "text/html", SUCCESS_HTML);

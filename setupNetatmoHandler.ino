@@ -2221,18 +2221,8 @@ void fetchStationsDataWithDump() {
     return;
   }
   
-  // Create a new client for the API call
-  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation to save memory
-  client->setBufferSizes(512, 512); // Reduce buffer sizes
-  
-  HTTPClient https;
-  https.setTimeout(10000); // 10 second timeout
-  
-  // Use homesdata endpoint
+  // DUMP FULL REQUEST - BEFORE creating the client or making the call
   String apiUrl = "https://api.netatmo.com/api/homesdata";
-  
-  // DUMP FULL REQUEST
   Serial.println(F("========== FULL REQUEST =========="));
   Serial.print(F("GET "));
   Serial.print(apiUrl);
@@ -2242,6 +2232,14 @@ void fetchStationsDataWithDump() {
   Serial.println(netatmoAccessToken); // Print full token for debugging
   Serial.println(F("Accept: application/json"));
   Serial.println(F("=================================="));
+  
+  // Create a new client for the API call AFTER logging the request
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
+  client->setBufferSizes(512, 512); // Reduce buffer sizes
+  
+  HTTPClient https;
+  https.setTimeout(10000); // 10 second timeout
   
   if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));

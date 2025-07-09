@@ -105,8 +105,20 @@ bool refreshNetatmoToken() {
   const char* refreshToken = doc["refresh_token"];
   
   Serial.println(F("[NETATMO] Saving new tokens"));
-  strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
-  strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
+  
+  // URL-encode the pipe character in the tokens
+  String encodedAccessToken = encodeToken(accessToken);
+  String encodedRefreshToken = encodeToken(refreshToken);
+  
+  // Log the original and encoded tokens
+  Serial.println(F("[NETATMO] Original access token: "));
+  Serial.println(accessToken);
+  Serial.println(F("[NETATMO] Encoded access token: "));
+  Serial.println(encodedAccessToken);
+  
+  // Save the encoded tokens
+  strlcpy(netatmoAccessToken, encodedAccessToken.c_str(), sizeof(netatmoAccessToken));
+  strlcpy(netatmoRefreshToken, encodedRefreshToken.c_str(), sizeof(netatmoRefreshToken));
   
   saveTokensToConfig();
   return true;

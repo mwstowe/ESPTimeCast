@@ -11,7 +11,13 @@ int logDetailedApiRequest(HTTPClient &https, const String &apiUrl) {
   Serial.println(F("Request Headers:"));
   // We can't directly access the headers, but we know what we're adding
   Serial.print(F("  Authorization: Bearer "));
+  
+  // Show both the original and encoded token
   Serial.println(netatmoAccessToken);
+  Serial.print(F("  Encoded token: "));
+  String encodedToken = netatmoAccessToken;
+  encodedToken.replace("|", "%7C");
+  Serial.println(encodedToken);
   Serial.println(F("  Accept: application/json"));
   
   // Make the request and log the response

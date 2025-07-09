@@ -1,6 +1,6 @@
-// Function to try different authorization header formats
+// Function to try different authorization header formats - simplified version
 void tryDifferentAuthHeaders() {
-  Serial.println(F("[NETATMO] Trying different authorization header formats"));
+  Serial.println(F("[AUTH] Testing different authorization methods"));
   
   // Create a new client for the API call with minimal buffer sizes
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
@@ -32,13 +32,11 @@ void tryDifferentAuthHeaders() {
   };
   
   for (int i = 0; i < 5; i++) {
-    Serial.print(F("[NETATMO] Trying format "));
-    Serial.print(i + 1);
-    Serial.print(F(": "));
-    Serial.println(formats[i]);
+    Serial.print(F("[AUTH] Testing format "));
+    Serial.println(i + 1);
     
     if (!https.begin(*client, apiUrl)) {
-      Serial.println(F("[NETATMO] Error - Failed to connect"));
+      Serial.println(F("[AUTH] Connection failed"));
       continue;
     }
     
@@ -50,37 +48,19 @@ void tryDifferentAuthHeaders() {
     int httpCode = https.GET();
     yield(); // Allow the watchdog to be fed
     
-    Serial.print(F("[NETATMO] HTTP response code: "));
+    Serial.print(F("[AUTH] Response code: "));
     Serial.println(httpCode);
     
     // Check if we got a successful response
     if (httpCode == HTTP_CODE_OK) {
-      Serial.println(F("[NETATMO] Success! Found working format:"));
-      Serial.println(formats[i]);
-      
-      // Log the response
-      String payload = https.getString();
-      Serial.println(F("[NETATMO] Response:"));
-      Serial.println(payload);
-      
-      // Save the working format for future use
-      Serial.println(F("[NETATMO] Saving working format for future use"));
-      // TODO: Save the working format
-      
+      Serial.println(F("[AUTH] Success with format ") + String(i + 1));
       https.end();
       return;
-    } else {
-      // Log the error
-      String payload = https.getString();
-      Serial.print(F("[NETATMO] Error - HTTP code: "));
-      Serial.println(httpCode);
-      Serial.print(F("[NETATMO] Error payload: "));
-      Serial.println(payload);
     }
     
     https.end();
     delay(1000); // Wait a bit before trying the next format
   }
   
-  Serial.println(F("[NETATMO] All formats failed"));
+  Serial.println(F("[AUTH] All formats failed"));
 }

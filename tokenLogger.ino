@@ -1,18 +1,18 @@
-// Function to log the token when the API call is made
+// Function to log the token when the API call is made - simplified version
 void logToken() {
-  Serial.println(F("!!!!! TOKEN LOGGER CALLED !!!!!"));
-  Serial.print(F("Access token length: "));
-  Serial.println(strlen(netatmoAccessToken));
-  Serial.print(F("FULL ACCESS TOKEN: "));
-  Serial.println(netatmoAccessToken);
-  Serial.println(F("!!!!! TOKEN LOGGER END !!!!!"));
+  // Simplified logging - just log the first 5 and last 5 chars
+  Serial.print(F("[TOKEN] "));
+  if (strlen(netatmoAccessToken) > 10) {
+    Serial.print(String(netatmoAccessToken).substring(0, 5));
+    Serial.print(F("..."));
+    Serial.println(String(netatmoAccessToken).substring(strlen(netatmoAccessToken) - 5));
+  } else {
+    Serial.println(F("(token too short)"));
+  }
 }
 
-// Hook into the loop function to log the token periodically
+// Hook into the loop function to log the token periodically - disabled
 void logTokenPeriodically() {
-  static unsigned long lastTokenLog = 0;
-  if (millis() - lastTokenLog > 5000) { // Log every 5 seconds
-    lastTokenLog = millis();
-    logToken();
-  }
+  // Disabled to reduce logging
+  return;
 }

@@ -1853,6 +1853,9 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
 void fetchStationsDataImproved() {
   Serial.println(F("[NETATMO] Fetching stations data (improved version)"));
   
+  // Debug token issues
+  debugNetatmoToken();
+  
   // Set flag to indicate API call is in progress
   apiCallInProgress = true;
   

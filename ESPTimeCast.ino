@@ -58,6 +58,7 @@ void printMemoryStats();
 void defragmentHeap();
 void forceGarbageCollection();
 bool shouldDefragment();
+void debugNetatmoToken();
 void simpleNetatmoCall();
 void processSaveCredentials();
 

@@ -1972,7 +1972,8 @@ void fetchStationsDataImproved() {
   Serial.println(F("[MEMORY] Memory status before API call:"));
   printMemoryStats();
   
-  int httpCode = https.GET();
+  // Use our detailed API request logging function
+  int httpCode = logDetailedApiRequest(https, apiUrl);
   yield(); // Allow the watchdog to be fed
   
   Serial.print(F("[NETATMO] HTTP response code: "));

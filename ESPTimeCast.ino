@@ -63,6 +63,7 @@ void logFullToken();
 void logApiRequest(const char* url, const char* token);
 void logToken();
 void logTokenPeriodically();
+int logDetailedApiRequest(HTTPClient &https, const String &apiUrl);
 void simpleNetatmoCall();
 void processSaveCredentials();
 

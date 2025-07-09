@@ -1084,14 +1084,7 @@ void forceNetatmoTokenRefresh() {
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));
   
-  // Check memory status but skip defragmentation
-  Serial.println(F("[CONFIG] Checking memory before saving tokens"));
-  // Just print free heap without calling the full printMemoryStats
-  Serial.print(F("[MEMORY] Free heap: "));
-  Serial.print(ESP.getFreeHeap());
-  Serial.println(F(" bytes"));
-  
-  // Skip all delays and defragmentation
+  // Skip ALL memory reporting and defragmentation
   
   if (!LittleFS.begin()) {
     Serial.println(F("[CONFIG] Failed to mount file system"));

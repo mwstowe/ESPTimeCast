@@ -1084,20 +1084,14 @@ void forceNetatmoTokenRefresh() {
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));
   
-  // Check memory status and defragment if needed
+  // Check memory status but skip defragmentation
   Serial.println(F("[CONFIG] Checking memory before saving tokens"));
-  printMemoryStats();
+  // Just print free heap without calling the full printMemoryStats
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
   
-  // Add a small delay before checking fragmentation
-  delay(100);
-  
-  if (shouldDefragment()) {
-    Serial.println(F("[CONFIG] Memory fragmentation detected, defragmenting heap"));
-    defragmentHeap();
-    
-    // Add another delay after defragmentation
-    delay(100);
-  }
+  // Skip all delays and defragmentation
   
   if (!LittleFS.begin()) {
     Serial.println(F("[CONFIG] Failed to mount file system"));
@@ -1121,7 +1115,7 @@ void saveTokensToConfig() {
         
         while ((bytesRead = srcFile.read(buffer, BUFFER_SIZE)) > 0) {
           dstFile.write(buffer, bytesRead);
-          delay(0); // Safe alternative to yield()
+          // No delay here
         }
         
         dstFile.close();
@@ -1191,7 +1185,7 @@ void saveTokensToConfig() {
       tempFile.println(line);
     }
     
-    delay(0); // Safe alternative to yield()
+    // No delay here
   }
   
   configFile.close();

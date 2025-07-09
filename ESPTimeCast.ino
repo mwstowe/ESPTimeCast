@@ -49,7 +49,6 @@ void defragmentHeap();
 void forceGarbageCollection();
 bool shouldDefragment();
 void processSaveCredentials();
-void processTokenResponse(String response);
 
 // Function to create default config.json
 void createDefaultConfig() {

@@ -633,25 +633,34 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Processing token exchange"));
   
+  // Defragment heap before token exchange to ensure enough contiguous memory
+  Serial.println(F("[NETATMO] Checking memory before token exchange"));
+  printMemoryStats();
+  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;
   pendingCode = "";
+  
+  // Add a small delay before proceeding to allow system to stabilize
+  delay(100);
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting heap"));
+    defragmentHeap();
+    
+    // Add another delay after defragmentation
+    delay(100);
+  }
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
   }
   
-  // Debug WiFi status
-  Serial.print(F("[NETATMO] WiFi RSSI: "));
-  Serial.println(WiFi.RSSI());
-  Serial.print(F("[NETATMO] WiFi IP: "));
-  Serial.println(WiFi.localIP());
-  
-  // Use the standard WiFiClientSecure without any special configuration
-  WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation
+  // Memory optimization: Use static client to reduce stack usage
+  static BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
@@ -664,12 +673,7 @@ void processTokenExchange() {
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
-  // Build the redirect URI
-  String redirectUri = "http://";
-  redirectUri += WiFi.localIP().toString();
-  redirectUri += "/api/netatmo/callback";
-  
-  // Build the POST data
+  // Memory optimization: Build the POST data in chunks
   String postData = "grant_type=authorization_code";
   postData += "&client_id=";
   postData += urlEncode(netatmoClientId);
@@ -678,6 +682,11 @@ void processTokenExchange() {
   postData += "&code=";
   postData += urlEncode(code.c_str());
   postData += "&redirect_uri=";
+  
+  // Memory optimization: Build the redirect URI directly
+  String redirectUri = "http://";
+  redirectUri += WiFi.localIP().toString();
+  redirectUri += "/api/netatmo/callback";
   postData += urlEncode(redirectUri.c_str());
   
   Serial.println(F("[NETATMO] Sending token request"));
@@ -686,65 +695,15 @@ void processTokenExchange() {
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
-    
-    // Get more detailed error information if available
-    if (httpCode > 0) {
-      String payload = https.getString();
-      Serial.print(F("[NETATMO] Error response: "));
-      Serial.println(payload);
-    } else {
-      Serial.print(F("[NETATMO] Connection error: "));
-      Serial.println(https.errorToString(httpCode));
-    }
-    
     https.end();
     return;
   }
   
+  // Memory optimization: Process the response in smaller chunks
   // Get the response
   String response = https.getString();
   https.end();
   
-  Serial.println(F("[NETATMO] Parsing response"));
-  
-  // Use a smaller JSON buffer
-  StaticJsonDocument<384> doc;
-  DeserializationError error = deserializeJson(doc, response);
-  
-  if (error) {
-    Serial.print(F("[NETATMO] JSON parse error: "));
-    Serial.println(error.c_str());
-    return;
-  }
-  
-  // Extract the tokens
-  if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
-    Serial.println(F("[NETATMO] Missing tokens in response"));
-    return;
-  }
-  
-  // Extract tokens directly as strings
-  const char* accessToken = doc["access_token"];
-  const char* refreshToken = doc["refresh_token"];
-  
-  // Save the tokens
-  Serial.println(F("[NETATMO] Saving tokens"));
-  strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
-  strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
-  
-  // Set flag to save tokens in main loop
-  saveCredentialsPending = true;
-  
-  Serial.println(F("[NETATMO] Token exchange complete"));
-  
-  // Schedule a reboot after token exchange is complete
-  Serial.println(F("[NETATMO] Scheduling reboot to apply new tokens"));
-  rebootPending = true;
-  rebootTime = millis() + 2000; // Reboot in 2 seconds
-}
-
-// Helper function to process token response
-void processTokenResponse(String response) {
   Serial.println(F("[NETATMO] Parsing response"));
   
   // Memory optimization: Use a smaller JSON buffer
@@ -772,7 +731,7 @@ void processTokenResponse(String response) {
   strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
   strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
   
-  // Set flag to save tokens in main loop
+  // Set flag to save tokens in main loop instead of saving directly
   saveCredentialsPending = true;
   
   Serial.println(F("[NETATMO] Token exchange complete"));

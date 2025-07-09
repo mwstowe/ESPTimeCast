@@ -903,8 +903,8 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Token exchange complete"));
   
-  // Immediately fetch stations data
-  fetchStationsData();
+  // Immediately fetch stations data using the improved function
+  fetchStationsDataImproved();
 }
 
 // Function to be called from loop() to fetch Netatmo devices
@@ -1295,7 +1295,7 @@ void fetchStationsData() {
       // Try to refresh the token
       if (refreshNetatmoToken()) {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
-        fetchStationsData(); // Recursive call after token refresh
+        fetchStationsDataImproved(); // Use improved function after token refresh
       } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
       }

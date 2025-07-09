@@ -883,7 +883,7 @@ void processTokenExchange() {
   Serial.println(F("[NETATMO] Token exchange complete"));
   
   // Immediately fetch stations data
-  fetchStationsData();
+  fetchStationsDataWithDump();
 }
 
 // Function to be called from loop() to fetch Netatmo devices
@@ -1274,7 +1274,7 @@ void fetchStationsData() {
       // Try to refresh the token
       if (refreshNetatmoToken()) {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
-        fetchStationsData(); // Recursive call after token refresh
+        fetchStationsDataWithDump(); // Recursive call after token refresh
       } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
       }
@@ -2200,6 +2200,10 @@ void dumpFullResponse(HTTPClient& https) {
 }
 // Function to fetch stations data with full request/response dump
 void fetchStationsDataWithDump() {
+  Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
+  Serial.println(F("!!! USING NEW DUMP FUNCTION - SHOULD SEE REQUEST !!!"));
+  Serial.println(F("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
+  
   Serial.println(F("[NETATMO] Fetching stations data with full dump"));
   
   // Set flag to indicate API call is in progress

@@ -428,12 +428,41 @@ function connectNetatmo() {
   })
   .then(data => {
     console.log('Credentials saved:', data);
-    showStatus('Credentials saved, redirecting to Netatmo...', 'success');
     
-    // Wait a moment before redirecting
-    setTimeout(() => {
-      window.location.href = '/api/netatmo/auth';
-    }, 1000);
+    // Get the auth URL instead of redirecting directly
+    return fetch('/api/netatmo/get-auth-url');
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Failed to get auth URL');
+    }
+    return response.json();
+  })
+  .then(data => {
+    if (data.url) {
+      showStatus('Credentials saved. Click the button below to authorize.', 'success');
+      
+      // Create an authorization button
+      const authContainer = document.getElementById('authContainer') || document.createElement('div');
+      authContainer.id = 'authContainer';
+      authContainer.style.textAlign = 'center';
+      authContainer.style.marginTop = '20px';
+      
+      authContainer.innerHTML = `
+        <p>Click the button below to authorize ESPTimeCast with your Netatmo account:</p>
+        <a href="${data.url}" target="_blank" class="button" style="display: inline-block; background-color: var(--accent-color); color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; font-weight: 500; margin-top: 10px;">
+          Authorize with Netatmo
+        </a>
+      `;
+      
+      // Add the container after the form group
+      const formGroup = document.querySelector('.form-group');
+      if (formGroup && !document.getElementById('authContainer')) {
+        formGroup.parentNode.insertBefore(authContainer, formGroup.nextSibling);
+      }
+    } else {
+      throw new Error('No authorization URL received');
+    }
   })
   .catch(error => {
     console.error('Error connecting to Netatmo:', error);

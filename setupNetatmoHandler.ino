@@ -166,6 +166,45 @@ void setupNetatmoHandler() {
     Serial.println(F("[NETATMO] Credentials saved"));
   });
   
+  // Endpoint to get auth URL without redirecting
+  server.on("/api/netatmo/get-auth-url", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get auth URL request"));
+    
+    // Debug output to check client ID and secret
+    Serial.print(F("[NETATMO] Client ID length: "));
+    Serial.println(strlen(netatmoClientId));
+    Serial.print(F("[NETATMO] Client Secret length: "));
+    Serial.println(strlen(netatmoClientSecret));
+    
+    if (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0) {
+      Serial.println(F("[NETATMO] Error - No credentials"));
+      request->send(400, "application/json", "{\"error\":\"Missing credentials\"}");
+      return;
+    }
+    
+    // Generate authorization URL with minimal memory usage
+    String redirectUri = "http://";
+    redirectUri += WiFi.localIP().toString();
+    redirectUri += "/api/netatmo/callback";
+    
+    String authUrl = "https://api.netatmo.com/oauth2/authorize";
+    authUrl += "?client_id=";
+    authUrl += urlEncode(netatmoClientId);
+    authUrl += "&redirect_uri=";
+    authUrl += urlEncode(redirectUri.c_str());
+    authUrl += "&scope=read_station%20read_homecoach&state=state&response_type=code";
+    
+    Serial.print(F("[NETATMO] Auth URL: "));
+    Serial.println(authUrl);
+    
+    // Return the URL as JSON
+    String response = "{\"url\":\"";
+    response += authUrl;
+    response += "\"}";
+    
+    request->send(200, "application/json", response);
+  });
+  
   // Endpoint to initiate OAuth flow
   server.on("/api/netatmo/auth", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling auth request"));

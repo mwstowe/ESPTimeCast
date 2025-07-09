@@ -2283,6 +2283,25 @@ void fetchStationsDataWithDump() {
     // Get the response as a string
     String payload = https.getString();
     Serial.println(payload);
+    
+    // Create the devices directory if it doesn't exist
+    if (!LittleFS.exists("/devices")) {
+      LittleFS.mkdir("/devices");
+    }
+    
+    // Save the response to a file
+    File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "w");
+    if (deviceFile) {
+      Serial.println(F("[NETATMO] Saving response to file..."));
+      deviceFile.print(payload);
+      deviceFile.close();
+      Serial.println(F("[NETATMO] Response saved to file"));
+      
+      // Extract device info
+      extractDeviceInfo();
+    } else {
+      Serial.println(F("[NETATMO] Error - Failed to open file for writing"));
+    }
   } else {
     Serial.println(F("[NETATMO] Error - No response body"));
   }

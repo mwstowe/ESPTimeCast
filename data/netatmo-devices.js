@@ -89,18 +89,46 @@ function fetchNetatmoDevices() {
           hideStatus();
         }, 3000);
         throw new Error("Token refreshed. Please try again.");
+      } else if (data.status === "initiated") {
+        // The fetch was initiated but not completed yet
+        showStatus("Device fetch initiated. Please wait...", "loading");
+        
+        // Poll for completion
+        return new Promise((resolve, reject) => {
+          let attempts = 0;
+          const maxAttempts = 10;
+          
+          const checkStatus = () => {
+            attempts++;
+            console.log(`Checking for device data (attempt ${attempts}/${maxAttempts})...`);
+            
+            fetch('/api/netatmo/saved-devices')
+              .then(response => {
+                if (response.ok) {
+                  resolve(response.json());
+                } else if (attempts < maxAttempts) {
+                  // Wait and try again
+                  setTimeout(checkStatus, 2000);
+                } else {
+                  reject(new Error("Timed out waiting for device data"));
+                }
+              })
+              .catch(error => {
+                if (attempts < maxAttempts) {
+                  // Wait and try again
+                  setTimeout(checkStatus, 2000);
+                } else {
+                  reject(error);
+                }
+              });
+          };
+          
+          // Start polling after a short delay
+          setTimeout(checkStatus, 2000);
+        });
       } else {
         throw new Error(data.message || "Unknown error");
       }
-    })
-    .then(response => {
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Device data not found. Please try fetching again.");
-        }
-        throw new Error(`Failed to load device data: ${response.status} ${response.statusText}`);
-      }
-      return response.json();
     })
     .then(data => {
       console.log("Loaded device data from file");
@@ -150,6 +178,65 @@ function fetchNetatmoDevices() {
     .catch(error => {
       console.error(`Error fetching devices: ${error.message}`);
       showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
+      
+      // Check if we already have saved device data we can use as fallback
+      console.log("Checking for saved device data as fallback...");
+      
+      fetch('/api/netatmo/saved-devices')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("No saved device data available");
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log("Found saved device data to use as fallback");
+          showStatus("Using previously saved device data as fallback", "warning");
+          
+          // Process the device data
+          let devices = [];
+          
+          if (data.body && data.body.devices) {
+            console.log("Using standard format (body.devices)");
+            devices = data.body.devices;
+          } else if (data.devices) {
+            console.log("Using alternative format (devices)");
+            devices = data.devices;
+          } else {
+            throw new Error("Invalid saved device data format");
+          }
+          
+          if (!devices || devices.length === 0) {
+            throw new Error("No devices in saved data");
+          }
+          
+          // Store devices in global variable
+          window.netatmoDevices = devices;
+          
+          // Populate device dropdown
+          devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device._id || device.id;
+            option.textContent = device.station_name || device.name || device._id || device.id;
+            deviceSelect.appendChild(option);
+          });
+          
+          // Restore previous selections if they exist
+          if (currentDeviceId) {
+            deviceSelect.value = currentDeviceId;
+            loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+          }
+          
+          console.log(`Found ${devices.length} Netatmo devices in saved data`);
+          setTimeout(() => {
+            showStatus(`Found ${devices.length} Netatmo devices (from saved data)`, "success");
+            setTimeout(hideStatus, 3000);
+          }, 2000);
+        })
+        .catch(fallbackError => {
+          console.error("Fallback error:", fallbackError.message);
+          // No fallback available, show original error
+        });
     });
 }
 // Function to connect to Netatmo

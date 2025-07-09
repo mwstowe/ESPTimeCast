@@ -824,11 +824,10 @@ void processFetchDevices() {
   client->setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
-  https.setTimeout(5000); // Reduced timeout to avoid watchdog issues
+  https.setTimeout(10000); // Increase timeout to 10 seconds
   
-  // Instead of fetching the full station data, let's just get the device list
-  // which is much smaller and less memory intensive
-  String apiUrl = "https://api.netatmo.com/api/devicelist";
+  // Use getstationsdata endpoint which we know works
+  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
   Serial.print(F("[NETATMO] Fetching device list from: "));
   Serial.println(apiUrl);
   
@@ -852,6 +851,29 @@ void processFetchDevices() {
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
+    
+    // Get more detailed error information for connection issues
+    if (httpCode == -1) {
+      Serial.print(F("[NETATMO] Connection error: "));
+      Serial.println(https.errorToString(httpCode));
+      
+      // Check if we can ping the API server
+      Serial.println(F("[NETATMO] Attempting to ping api.netatmo.com..."));
+      IPAddress ip;
+      bool resolved = WiFi.hostByName("api.netatmo.com", ip);
+      
+      if (resolved) {
+        Serial.print(F("[NETATMO] DNS resolution successful. IP: "));
+        Serial.println(ip.toString());
+        deviceData = "{\"error\":\"Connection failed. DNS resolved to " + ip.toString() + "\"}";
+      } else {
+        Serial.println(F("[NETATMO] DNS resolution failed"));
+        deviceData = F("{\"error\":\"Connection failed. DNS resolution failed.\"}");
+      }
+      
+      https.end();
+      return;
+    }
     
     // Get error payload with yield - use streaming to avoid memory issues
     String errorPayload = "";
@@ -931,8 +953,13 @@ void processFetchDevices() {
   const size_t bufSize = 256;
   uint8_t buf[bufSize];
   int totalRead = 0;
+  int expectedSize = https.getSize();
   
-  while (https.connected() && (totalRead < https.getSize())) {
+  Serial.print(F("[NETATMO] Expected response size: "));
+  Serial.print(expectedSize);
+  Serial.println(F(" bytes"));
+  
+  while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
     // Read available data
     size_t available = stream->available();
     if (available) {
@@ -944,12 +971,22 @@ void processFetchDevices() {
         // Write to file
         deviceFile.write(buf, bytesRead);
         totalRead += bytesRead;
+        
+        // Print progress every 1KB
+        if (totalRead % 1024 == 0) {
+          Serial.print(F("[NETATMO] Read "));
+          Serial.print(totalRead);
+          Serial.println(F(" bytes"));
+        }
       }
       
       yield(); // Allow the watchdog to be fed
+    } else if (totalRead >= expectedSize && expectedSize > 0) {
+      // We've read all the data
+      break;
     } else {
       // No data available, wait a bit
-      delay(1);
+      delay(10);
       yield();
     }
   }

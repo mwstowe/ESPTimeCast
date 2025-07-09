@@ -609,6 +609,62 @@ void setupNetatmoHandler() {
     request->send(200, "application/json", response);
   });
   
+  // Add an endpoint to trigger device fetch
+  server.on("/api/netatmo/fetch-devices", HTTP_POST, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling fetch devices request"));
+    
+    // Check if we have a valid access token
+    if (strlen(netatmoAccessToken) == 0) {
+      Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
+      return;
+    }
+    
+    // Set the flag to fetch devices in the main loop
+    fetchDevicesPending = true;
+    
+    // Send a response indicating that the fetch has been initiated
+    request->send(200, "application/json", "{\"status\":\"initiated\",\"message\":\"Device fetch initiated\"}");
+  });
+  
+  // Add an endpoint to retrieve the saved device data
+  server.on("/api/netatmo/saved-devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling saved devices request"));
+    
+    // Check if the file exists
+    if (!LittleFS.exists("/devices/netatmo_devices.json")) {
+      Serial.println(F("[NETATMO] Device data file not found"));
+      request->send(404, "application/json", "{\"error\":\"Device data not found\"}");
+      return;
+    }
+    
+    // Open the file
+    File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "r");
+    if (!deviceFile) {
+      Serial.println(F("[NETATMO] Failed to open device data file"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open device data file\"}");
+      return;
+    }
+    
+    // Create a response stream
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    
+    // Stream the file content to the response
+    const size_t bufSize = 256;
+    uint8_t buf[bufSize];
+    
+    while (deviceFile.available()) {
+      size_t bytesRead = deviceFile.read(buf, bufSize);
+      if (bytesRead > 0) {
+        response->write(buf, bytesRead);
+      }
+      yield(); // Allow the watchdog to be fed
+    }
+    
+    deviceFile.close();
+    request->send(response);
+  });
+  
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
 }
 
@@ -770,8 +826,10 @@ void processFetchDevices() {
   HTTPClient https;
   https.setTimeout(5000); // Reduced timeout to avoid watchdog issues
   
-  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
-  Serial.print(F("[NETATMO] Fetching devices from: "));
+  // Instead of fetching the full station data, let's just get the device list
+  // which is much smaller and less memory intensive
+  String apiUrl = "https://api.netatmo.com/api/devicelist";
+  Serial.print(F("[NETATMO] Fetching device list from: "));
   Serial.println(apiUrl);
   
   if (!https.begin(*client, apiUrl)) {
@@ -829,98 +887,85 @@ void processFetchDevices() {
       // Try to refresh the token
       if (refreshNetatmoToken()) {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
-        
-        // Create a new client for the retry
-        std::unique_ptr<BearSSL::WiFiClientSecure> client2(new BearSSL::WiFiClientSecure);
-        client2->setInsecure(); // Skip certificate validation to save memory
-        
-        HTTPClient https2;
-        https2.setTimeout(5000); // Reduced timeout
-        
-        if (!https2.begin(*client2, apiUrl)) {
-          Serial.println(F("[NETATMO] Error - Failed to connect on retry"));
-          deviceData = F("{\"error\":\"Failed to connect to Netatmo API on retry\"}");
-          return;
-        }
-        
-        // Add authorization header with new token
-        String newAuthHeader = "Bearer ";
-        newAuthHeader += netatmoAccessToken;
-        https2.addHeader("Authorization", newAuthHeader);
-        https2.addHeader("Accept", "application/json");
-        
-        // Make the request again with yield
-        Serial.println(F("[NETATMO] Sending retry request..."));
-        int httpCode2 = https2.GET();
-        yield(); // Allow the watchdog to be fed
-        
-        if (httpCode2 != HTTP_CODE_OK) {
-          Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
-          Serial.println(httpCode2);
-          
-          // Get error payload with yield - use streaming to avoid memory issues
-          String errorPayload2 = "";
-          if (https2.getSize() > 0) {
-            const size_t bufSize = 128;
-            char buf[bufSize];
-            WiFiClient* stream = https2.getStreamPtr();
-            
-            // Read first chunk only for error message
-            size_t len = stream->available();
-            if (len > bufSize) len = bufSize;
-            if (len > 0) {
-              int c = stream->readBytes(buf, len);
-              if (c > 0) {
-                buf[c] = 0;
-                errorPayload2 = String(buf);
-              }
-            }
-          } else {
-            errorPayload2 = https2.getString();
-          }
-          
-          yield(); // Allow the watchdog to be fed
-          
-          Serial.print(F("[NETATMO] Error payload on retry: "));
-          Serial.println(errorPayload2);
-          https2.end();
-          deviceData = "{\"error\":\"API error: " + String(httpCode2) + "\"}";
-          return;
-        }
-        
-        // Process the response in chunks to avoid memory issues
-        Serial.println(F("[NETATMO] Reading response..."));
-        
-        // Create a minimal JSON structure to start with
-        deviceData = "{\"body\":{\"devices\":[]}}";
-        
-        // We'll just set a success flag since we can't process the full JSON in memory
-        deviceData = "{\"status\":\"success\",\"message\":\"Use the proxy endpoint for detailed data\"}";
-        
-        https2.end();
-        Serial.println(F("[NETATMO] Device data fetched successfully (after token refresh)"));
-        return;
+        deviceData = F("{\"status\":\"token_refreshed\",\"message\":\"Token refreshed. Please try again.\"}");
       } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
         deviceData = F("{\"error\":\"Failed to refresh token\"}");
       }
+    } else {
+      deviceData = "{\"error\":\"API error: " + String(httpCode) + "\"}";
     }
-    
-    deviceData = "{\"error\":\"API error: " + String(httpCode) + "\"}";
     return;
   }
   
-  // Process the response in chunks to avoid memory issues
-  Serial.println(F("[NETATMO] Reading response..."));
+  // Instead of trying to parse the response in memory, let's save it to a file
+  // and then parse it in smaller chunks
   
-  // Create a minimal JSON structure to start with
-  deviceData = "{\"body\":{\"devices\":[]}}";
+  // First, check if we have enough space
+  FSInfo fs_info;
+  LittleFS.info(fs_info);
   
-  // We'll just set a success flag since we can't process the full JSON in memory
-  deviceData = "{\"status\":\"success\",\"message\":\"Use the proxy endpoint for detailed data\"}";
+  if (fs_info.totalBytes - fs_info.usedBytes < https.getSize() * 2) {
+    Serial.println(F("[NETATMO] Not enough space to save device data"));
+    deviceData = F("{\"error\":\"Not enough space to save device data\"}");
+    https.end();
+    return;
+  }
   
+  // Create the devices directory if it doesn't exist
+  if (!LittleFS.exists("/devices")) {
+    LittleFS.mkdir("/devices");
+  }
+  
+  // Open a file to save the raw response
+  File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "w");
+  if (!deviceFile) {
+    Serial.println(F("[NETATMO] Failed to open file for writing"));
+    deviceData = F("{\"error\":\"Failed to open file for writing\"}");
+    https.end();
+    return;
+  }
+  
+  // Stream the response directly to the file
+  WiFiClient* stream = https.getStreamPtr();
+  const size_t bufSize = 256;
+  uint8_t buf[bufSize];
+  int totalRead = 0;
+  
+  while (https.connected() && (totalRead < https.getSize())) {
+    // Read available data
+    size_t available = stream->available();
+    if (available) {
+      // Read up to buffer size
+      size_t readBytes = available > bufSize ? bufSize : available;
+      int bytesRead = stream->readBytes(buf, readBytes);
+      
+      if (bytesRead > 0) {
+        // Write to file
+        deviceFile.write(buf, bytesRead);
+        totalRead += bytesRead;
+      }
+      
+      yield(); // Allow the watchdog to be fed
+    } else {
+      // No data available, wait a bit
+      delay(1);
+      yield();
+    }
+  }
+  
+  deviceFile.close();
   https.end();
-  Serial.println(F("[NETATMO] Device data fetched successfully"));
+  
+  Serial.print(F("[NETATMO] Device data saved to file, bytes: "));
+  Serial.println(totalRead);
+  
+  // Set a success response
+  deviceData = "{\"status\":\"success\",\"message\":\"Device data saved to file\",\"bytes\":" + String(totalRead) + "}";
+  
+  // Print memory stats after processing
+  Serial.println(F("[NETATMO] Memory stats after fetch devices:"));
+  printMemoryStats();
 }
 
 // Function to be called from loop() to process pending credential saves

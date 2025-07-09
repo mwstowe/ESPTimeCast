@@ -59,19 +59,16 @@ function fetchNetatmoDevices() {
         throw new Error("No access token available");
       }
       
-      // Use the proxy endpoint to avoid CORS issues
-      return fetch('/api/netatmo/proxy?endpoint=getstationsdata');
+      // Step 1: Trigger the device fetch to save to file
+      return fetch('/api/netatmo/fetch-devices', { method: 'POST' });
     })
     .then(response => {
       if (!response.ok) {
-        // Get more detailed error information
         return response.text().then(text => {
           try {
             const errorObj = JSON.parse(text);
-            console.error(`API error (${response.status}):`, errorObj);
-            throw new Error(`API error: ${response.status} ${errorObj.error || response.statusText}`);
+            throw new Error(`API error: ${errorObj.error || response.statusText}`);
           } catch (e) {
-            console.error(`API error (${response.status}):`, text);
             throw new Error(`API error: ${response.status} ${response.statusText}`);
           }
         });
@@ -79,33 +76,44 @@ function fetchNetatmoDevices() {
       return response.json();
     })
     .then(data => {
-      console.log("Received device data from Netatmo API");
+      console.log("Device fetch initiated:", data);
       
-      // Check if we have a valid response
-      if (!data) {
-        console.error("No data received from API");
-        showStatus("No data received from API", "error");
-        return;
+      if (data.status === "success") {
+        showStatus("Devices saved to file. Loading device data...", "loading");
+        
+        // Step 2: Retrieve the saved device data
+        return fetch('/api/netatmo/saved-devices');
+      } else if (data.status === "token_refreshed") {
+        showStatus("Token refreshed. Please try again.", "warning");
+        setTimeout(() => {
+          hideStatus();
+        }, 3000);
+        throw new Error("Token refreshed. Please try again.");
+      } else {
+        throw new Error(data.message || "Unknown error");
       }
+    })
+    .then(response => {
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error("Device data not found. Please try fetching again.");
+        }
+        throw new Error(`Failed to load device data: ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("Loaded device data from file");
       
-      // Handle the homes format from the homesdata endpoint
+      // Process the device data
       let devices = [];
       
       if (data.body && data.body.devices) {
-        // Standard format from getstationsdata
         console.log("Using standard format (body.devices)");
         devices = data.body.devices;
       } else if (data.devices) {
-        // Alternative format
         console.log("Using alternative format (devices)");
         devices = data.devices;
-      } else if (data.status === "success") {
-        // Our simplified response from the backend
-        showStatus("Devices fetched successfully. Please reload the page to see them.", "success");
-        setTimeout(() => {
-          window.location.reload();
-        }, 3000);
-        return;
       } else {
         console.error("Unexpected data format");
         showStatus("Unexpected data format from API", "error");

@@ -29,6 +29,7 @@ void extractDeviceInfo();
 void fetchStationsDataWithDump();
 void fetchStationsDataFallback();
 void processSaveCredentials();
+void fetchStationsDataImproved();
 
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
 #include "tz_lookup.h" // Timezone lookup, do not duplicate mapping here!
@@ -67,6 +68,8 @@ int logDetailedApiRequest(HTTPClient &https, const String &apiUrl);
 String encodeToken(const char* token);
 void patchFetchStationsDataImproved();
 void tryDifferentAuthHeaders();
+bool isInvalidTokenError(const String &errorPayload);
+void setupHttpClientWithTimeout(HTTPClient &https);
 void simpleNetatmoCall();
 void processSaveCredentials();
 
@@ -1464,10 +1467,16 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
       if (errorPayload.indexOf("The request is blocked") > 0) {
         handleBlockedRequest(errorPayload);
       }
-      // If we get a 403 error (Forbidden), the token is expired
+      // If we get a 403 error (Forbidden), the token is expired or invalid
       if (httpCode == 403 || httpCode == 401) {
-        Serial.println(F("[NETATMO] 403/401 error - token expired or invalid"));
-        forceNetatmoTokenRefresh();  // Force token refresh on next API call
+        // Check if the error payload indicates an invalid token
+        if (isInvalidTokenError(errorPayload)) {
+          Serial.println(F("[NETATMO] 403/401 error - invalid access token, need new API keys"));
+          // Don't try to refresh, need new API keys
+        } else {
+          Serial.println(F("[NETATMO] 403/401 error - token expired"));
+          forceNetatmoTokenRefresh();  // Force token refresh on next API call
+        }
       }
       
       outdoorTempAvailable = false;

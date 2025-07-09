@@ -88,9 +88,19 @@ void processProxyRequest() {
     Serial.println(errorPayload);
     https.end();
     
-    // If we get a 401 or 403, try to refresh the token
+    // If we get a 401 or 403, check if it's an invalid token error
     if (httpCode == 401 || httpCode == 403) {
-      Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+      // Check if the error payload indicates an invalid token
+      if (isInvalidTokenError(errorPayload)) {
+        Serial.println(F("[NETATMO] Token is invalid, need new API keys"));
+        String errorResponse = "{\"error\":\"invalid_token\",\"message\":\"Invalid API keys. Please reconfigure Netatmo credentials.\"}";
+        proxyRequest->send(401, "application/json", errorResponse);
+        proxyPending = false;
+        proxyRequest = nullptr;
+        return;
+      } else {
+        Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+      }
       
       // Try to refresh the token
       if (refreshNetatmoToken()) {

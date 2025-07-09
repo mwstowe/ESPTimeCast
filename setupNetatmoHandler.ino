@@ -1035,17 +1035,23 @@ void processFetchDevices() {
     Serial.println(errorPayload);
     https.end();
     
-    // If we get a 401 or 403, try to refresh the token
+    // If we get a 401 or 403, check if it's an invalid token error
     if (httpCode == 401 || httpCode == 403) {
-      Serial.println(F("[NETATMO] Token expired, trying to refresh"));
-      
-      // Try to refresh the token
-      if (refreshNetatmoToken()) {
-        Serial.println(F("[NETATMO] Token refreshed, retrying request"));
-        deviceData = F("{\"status\":\"token_refreshed\",\"message\":\"Token refreshed. Please try again.\"}");
+      // Check if the error payload indicates an invalid token
+      if (isInvalidTokenError(errorPayload)) {
+        Serial.println(F("[NETATMO] Token is invalid, need new API keys"));
+        deviceData = F("{\"status\":\"invalid_token\",\"message\":\"Invalid API keys. Please reconfigure Netatmo credentials.\"}");
       } else {
-        Serial.println(F("[NETATMO] Failed to refresh token"));
-        deviceData = F("{\"error\":\"Failed to refresh token\"}");
+        Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+        
+        // Try to refresh the token
+        if (refreshNetatmoToken()) {
+          Serial.println(F("[NETATMO] Token refreshed, retrying request"));
+          deviceData = F("{\"status\":\"token_refreshed\",\"message\":\"Token refreshed. Please try again.\"}");
+        } else {
+          Serial.println(F("[NETATMO] Failed to refresh token"));
+          deviceData = F("{\"error\":\"Failed to refresh token\"}");
+        }
       }
     } else {
       deviceData = "{\"error\":\"API error: " + String(httpCode) + "\"}";
@@ -1300,9 +1306,14 @@ void fetchStationsData() {
     Serial.println(errorPayload);
     https.end();
     
-    // If we get a 401 or 403, try to refresh the token
+    // If we get a 401 or 403, check if it's an invalid token error
     if (httpCode == 401 || httpCode == 403) {
-      Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+      // Check if the error payload indicates an invalid token
+      if (isInvalidTokenError(errorPayload)) {
+        Serial.println(F("[NETATMO] Token is invalid, trying to refresh"));
+      } else {
+        Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+      }
       
       // Try to refresh the token
       if (refreshNetatmoToken()) {
@@ -1802,18 +1813,17 @@ void fetchStationsDataFallback() {
 // Function to handle chunked transfers more effectively
 bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
   WiFiClient* stream = https.getStreamPtr();
-  const size_t bufSize = 128; // Smaller buffer size to save memory
+  const size_t bufSize = 64; // Even smaller buffer size to save memory
   uint8_t buf[bufSize];
   int totalRead = 0;
-  int expectedSize = https.getSize();
   bool previewCaptured = false;
   
   // Set a timeout for reading data
   unsigned long startTime = millis();
-  const unsigned long timeout = 10000; // 10 second timeout
+  const unsigned long timeout = 15000; // 15 second timeout
   
   // Set a maximum size to read to avoid OOM
-  const int maxBytesToRead = 8192; // 8KB max to avoid OOM
+  const int maxBytesToRead = 16384; // 16KB max to avoid OOM
   
   Serial.println(F("[NETATMO] Starting to read response data..."));
   
@@ -1871,9 +1881,15 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
       // No more data and disconnected
       break;
     } else {
-      // No data available, wait a bit
-      delay(5);
+      // No data available, wait a bit and feed the watchdog
+      delay(1);
       yield();
+      
+      // If we've been waiting for data for too long, break
+      if (millis() - startTime > 2000) { // 2 seconds with no data
+        Serial.println(F("[NETATMO] No data received for 2 seconds, assuming transfer complete"));
+        break;
+      }
     }
   }
   
@@ -2017,18 +2033,24 @@ void fetchStationsDataImproved() {
     Serial.println(errorPayload);
     https.end();
     
-    // If we get a 401 or 403, try to refresh the token
+    // If we get a 401 or 403, check if it's an invalid token error
     if (httpCode == 401 || httpCode == 403) {
-      Serial.println(F("[NETATMO] Token expired, trying to refresh"));
-      
-      // Try to refresh the token
-      if (refreshNetatmoToken()) {
-        Serial.println(F("[NETATMO] Token refreshed, retrying request"));
-        apiCallInProgress = false; // Reset flag before recursive call
-        fetchStationsDataImproved(); // Recursive call after token refresh
+      // Check if the error payload indicates an invalid token
+      if (isInvalidTokenError(errorPayload)) {
+        Serial.println(F("[NETATMO] Token is invalid, need new API keys"));
+        deviceData = F("{\"status\":\"invalid_token\",\"message\":\"Invalid API keys. Please reconfigure Netatmo credentials.\"}");
       } else {
-        Serial.println(F("[NETATMO] Failed to refresh token"));
-        apiCallInProgress = false; // Reset flag
+        Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+        
+        // Try to refresh the token
+        if (refreshNetatmoToken()) {
+          Serial.println(F("[NETATMO] Token refreshed, retrying request"));
+          apiCallInProgress = false; // Reset flag before recursive call
+          fetchStationsDataImproved(); // Recursive call after token refresh
+        } else {
+          Serial.println(F("[NETATMO] Failed to refresh token"));
+          apiCallInProgress = false; // Reset flag
+        }
       }
     } else {
       apiCallInProgress = false; // Reset flag

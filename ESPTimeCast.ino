@@ -528,6 +528,21 @@ void setupWebServer() {
       return;
     }
     
+    // Debug: Print the values of netatmoClientId and netatmoClientSecret
+    Serial.print(F("[WEBSERVER] netatmoClientId in config: "));
+    if (doc.containsKey("netatmoClientId")) {
+      Serial.println(doc["netatmoClientId"].as<String>());
+    } else {
+      Serial.println(F("(not found)"));
+    }
+    
+    Serial.print(F("[WEBSERVER] netatmoClientSecret in config: "));
+    if (doc.containsKey("netatmoClientSecret")) {
+      Serial.println(F("(present but not shown)"));
+    } else {
+      Serial.println(F("(not found)"));
+    }
+    
     doc[F("mode")] = isAPMode ? "ap" : "sta";
     String response;
     serializeJson(doc, response);

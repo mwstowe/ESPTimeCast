@@ -167,6 +167,12 @@ void setupNetatmoHandler() {
     request->send(200, "application/json", "{\"success\":true}");
     
     Serial.println(F("[NETATMO] Credentials saved to memory, will be written to config in main loop"));
+    
+    // Debug: Print the current values
+    Serial.print(F("[NETATMO] Current netatmoClientId: "));
+    Serial.println(netatmoClientId);
+    Serial.print(F("[NETATMO] Current netatmoClientSecret length: "));
+    Serial.println(strlen(netatmoClientSecret));
   });
   
   // Endpoint to get auth URL without redirecting
@@ -779,6 +785,16 @@ void processSaveCredentials() {
   
   Serial.println(F("[NETATMO] Processing pending credential save"));
   
+  // Debug: Print the current values before saving
+  Serial.print(F("[NETATMO] Saving netatmoClientId: "));
+  Serial.println(netatmoClientId);
+  Serial.print(F("[NETATMO] Saving netatmoClientSecret length: "));
+  Serial.println(strlen(netatmoClientSecret));
+  Serial.print(F("[NETATMO] Saving netatmoAccessToken length: "));
+  Serial.println(strlen(netatmoAccessToken));
+  Serial.print(F("[NETATMO] Saving netatmoRefreshToken length: "));
+  Serial.println(strlen(netatmoRefreshToken));
+  
   // Clear the flag immediately to prevent repeated attempts if this fails
   saveCredentialsPending = false;
   
@@ -786,4 +802,30 @@ void processSaveCredentials() {
   saveTokensToConfig();
   
   Serial.println(F("[NETATMO] Credentials saved to config file"));
+  
+  // Debug: Verify the values were saved by reading the config file
+  if (LittleFS.begin()) {
+    File f = LittleFS.open("/config.json", "r");
+    if (f) {
+      DynamicJsonDocument doc(2048);
+      DeserializationError err = deserializeJson(doc, f);
+      f.close();
+      
+      if (!err) {
+        Serial.print(F("[NETATMO] Verified netatmoClientId in config: "));
+        if (doc.containsKey("netatmoClientId")) {
+          Serial.println(doc["netatmoClientId"].as<String>());
+        } else {
+          Serial.println(F("(not found)"));
+        }
+        
+        Serial.print(F("[NETATMO] Verified netatmoClientSecret in config: "));
+        if (doc.containsKey("netatmoClientSecret")) {
+          Serial.println(F("(present but not shown)"));
+        } else {
+          Serial.println(F("(not found)"));
+        }
+      }
+    }
+  }
 }

@@ -700,8 +700,9 @@ void processTokenExchange() {
   client.setInsecure(); // Skip certificate validation
   client.setTimeout(20000); // 20 second timeout
   
-  // Enable SSL debugging
-  client.setDebugOutput(true);
+  // Enable SSL debugging (not available in BearSSL::WiFiClientSecure)
+  // Debug output will be visible in Serial monitor
+  Serial.println(F("[NETATMO] SSL debugging not available in BearSSL::WiFiClientSecure"));
   
   Serial.println(F("[NETATMO] Memory before connection:"));
   Serial.print(F("[MEMORY] Free heap: "));
@@ -713,8 +714,7 @@ void processTokenExchange() {
     Serial.println(F("[NETATMO] Direct connection failed"));
     
     // Try to get more info about the failure
-    Serial.print(F("[NETATMO] Last SSL error: "));
-    Serial.println(client.getLastSSLError());
+    Serial.println(F("[NETATMO] SSL error details not available in BearSSL::WiFiClientSecure"));
     
     // Try a non-SSL connection to check basic connectivity
     WiFiClient plainClient;

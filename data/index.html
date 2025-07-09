@@ -302,12 +302,8 @@ window.onload = function() {
       return response.json();
     })
     .then(data => {
-      // Update status
-      statusDiv.className = 'status success';
-      statusDiv.textContent = 'Configuration loaded successfully!';
-      setTimeout(() => {
-        statusDiv.style.display = 'none';
-      }, 3000);
+      // Hide the status div immediately instead of showing success message
+      statusDiv.style.display = 'none';
       
       // Set AP mode flag
       isAPMode = (data.mode === "ap");

@@ -61,6 +61,8 @@ bool shouldDefragment();
 void debugNetatmoToken();
 void logFullToken();
 void logApiRequest(const char* url, const char* token);
+void logToken();
+void logTokenPeriodically();
 void simpleNetatmoCall();
 void processSaveCredentials();
 
@@ -1599,6 +1601,9 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED && !isAPMode) {
     MDNS.update();
   }
+  
+  // Log the token periodically
+  logTokenPeriodically();
   
   // Process any pending Netatmo token exchanges
   processTokenExchange();

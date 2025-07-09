@@ -645,43 +645,10 @@ void processTokenExchange() {
   Serial.print(ESP.getMaxFreeBlockSize());
   Serial.println(F(" bytes"));
   
-  // Perform a gentle defragmentation if needed
-  if (ESP.getHeapFragmentation() > 30 || ESP.getMaxFreeBlockSize() < 20000) {
-    Serial.println(F("[NETATMO] Performing gentle heap defragmentation"));
-    
-    // Allocate and free a block to help defragment
-    size_t blockSize = ESP.getMaxFreeBlockSize() * 0.7; // 70% of largest block
-    if (blockSize > 1024) {
-      char* block = (char*)malloc(blockSize);
-      if (block) {
-        // Touch the memory to ensure it's physically allocated
-        memset(block, 0, blockSize);
-        free(block);
-        Serial.println(F("[NETATMO] Defragmentation complete"));
-      } else {
-        Serial.println(F("[NETATMO] Failed to allocate block for defragmentation"));
-      }
-    }
-    
-    // Print memory stats after defragmentation
-    Serial.println(F("[NETATMO] Memory status after defragmentation:"));
-    Serial.print(F("[MEMORY] Free heap: "));
-    Serial.print(ESP.getFreeHeap());
-    Serial.println(F(" bytes"));
-    Serial.print(F("[MEMORY] Heap fragmentation: "));
-    Serial.print(ESP.getHeapFragmentation());
-    Serial.println(F("%"));
-    Serial.print(F("[MEMORY] Largest free block: "));
-    Serial.print(ESP.getMaxFreeBlockSize());
-    Serial.println(F(" bytes"));
-  }
-  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;
   pendingCode = "";
-  
-  // Skip memory checks and defragmentation to avoid yield issues
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
@@ -694,46 +661,35 @@ void processTokenExchange() {
   Serial.print(F("[NETATMO] WiFi IP: "));
   Serial.println(WiFi.localIP());
   
-  // Try with a completely different approach using a direct TCP connection
-  // This avoids the SSL/TLS overhead that might be causing issues
+  // Try using the HTTPClient with axTLS instead of BearSSL
+  Serial.println(F("[NETATMO] Trying HTTPClient with axTLS"));
+  
+  // Force use of axTLS instead of BearSSL
+  #define USE_AXTLS
+  #include <ESP8266WiFi.h>
+  
+  // Create a WiFiClientSecure that uses axTLS
   WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation
   client.setTimeout(20000); // 20 second timeout
   
-  // Enable SSL debugging (not available in BearSSL::WiFiClientSecure)
-  // Debug output will be visible in Serial monitor
-  Serial.println(F("[NETATMO] SSL debugging not available in BearSSL::WiFiClientSecure"));
-  
-  Serial.println(F("[NETATMO] Memory before connection:"));
+  Serial.println(F("[NETATMO] Memory before HTTPClient:"));
   Serial.print(F("[MEMORY] Free heap: "));
   Serial.print(ESP.getFreeHeap());
   Serial.println(F(" bytes"));
   
-  Serial.println(F("[NETATMO] Connecting directly to api.netatmo.com:443"));
-  if (!client.connect("api.netatmo.com", 443)) {
-    Serial.println(F("[NETATMO] Direct connection failed"));
-    
-    // Try to get more info about the failure
-    Serial.println(F("[NETATMO] SSL error details not available in BearSSL::WiFiClientSecure"));
-    
-    // Try a non-SSL connection to check basic connectivity
-    WiFiClient plainClient;
-    Serial.println(F("[NETATMO] Trying plain connection to api.netatmo.com:80 to check connectivity"));
-    if (plainClient.connect("api.netatmo.com", 80)) {
-      Serial.println(F("[NETATMO] Plain connection succeeded - issue is likely with SSL"));
-      plainClient.stop();
-    } else {
-      Serial.println(F("[NETATMO] Plain connection also failed - issue might be with DNS or network"));
-    }
-    
+  HTTPClient https;
+  https.setTimeout(20000); // 20 second timeout
+  
+  Serial.println(F("[NETATMO] Connecting to token endpoint"));
+  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
   }
   
-  Serial.println(F("[NETATMO] Connected! Building request"));
-  Serial.println(F("[NETATMO] Memory after connection:"));
-  Serial.print(F("[MEMORY] Free heap: "));
-  Serial.print(ESP.getFreeHeap());
-  Serial.println(F(" bytes"));
+  https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  https.addHeader("Accept", "application/json");
+  https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
   
   // Build the redirect URI
   String redirectUri = "http://";
@@ -751,146 +707,128 @@ void processTokenExchange() {
   postData += "&redirect_uri=";
   postData += urlEncode(redirectUri.c_str());
   
-  // Build the HTTP request manually
-  String request = "POST /oauth2/token HTTP/1.1\r\n";
-  request += "Host: api.netatmo.com\r\n";
-  request += "Connection: close\r\n";
-  request += "Content-Type: application/x-www-form-urlencoded\r\n";
-  request += "Accept: application/json\r\n";
-  request += "Content-Length: " + String(postData.length()) + "\r\n";
-  request += "\r\n";
-  request += postData;
+  Serial.println(F("[NETATMO] Sending token request"));
+  Serial.print(F("[NETATMO] POST data: "));
+  Serial.println(postData);
   
-  Serial.println(F("[NETATMO] Sending direct request"));
   Serial.println(F("[NETATMO] Memory before sending:"));
   Serial.print(F("[MEMORY] Free heap: "));
   Serial.print(ESP.getFreeHeap());
   Serial.println(F(" bytes"));
   
-  client.print(request);
-  
-  // Wait for the response
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 20000) {
-      Serial.println(F("[NETATMO] Direct request timeout"));
-      client.stop();
-      return;
-    }
-    delay(10); // Small delay to avoid watchdog issues
-  }
+  int httpCode = https.POST(postData);
   
   Serial.println(F("[NETATMO] Memory after sending:"));
   Serial.print(F("[MEMORY] Free heap: "));
   Serial.print(ESP.getFreeHeap());
   Serial.println(F(" bytes"));
   
-  // Read the response headers
-  Serial.println(F("[NETATMO] Reading response headers"));
-  String headers = "";
-  String line = "";
-  bool headerDone = false;
-  
-  while (client.available() && !headerDone) {
-    line = client.readStringUntil('\n');
-    if (line == "\r") {
-      headerDone = true;
-    } else {
-      headers += line + "\n";
-    }
-  }
-  
-  Serial.println(F("[NETATMO] Response headers:"));
-  Serial.println(headers);
-  
-  // Read the response body
-  Serial.println(F("[NETATMO] Reading response body"));
-  String response = "";
-  while (client.available()) {
-    char c = client.read();
-    response += c;
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
     
-    // Yield occasionally to avoid watchdog issues
-    if (response.length() % 100 == 0) {
-      delay(0);
+    // Get more detailed error information if available
+    if (httpCode > 0) {
+      String payload = https.getString();
+      Serial.print(F("[NETATMO] Error response: "));
+      Serial.println(payload);
+    } else {
+      Serial.print(F("[NETATMO] Connection error: "));
+      Serial.println(https.errorToString(httpCode));
     }
-  }
-  
-  client.stop();
-  
-  Serial.println(F("[NETATMO] Response received"));
-  Serial.print(F("[NETATMO] Response length: "));
-  Serial.println(response.length());
-  Serial.println(F("[NETATMO] Memory after receiving:"));
-  Serial.print(F("[MEMORY] Free heap: "));
-  Serial.print(ESP.getFreeHeap());
-  Serial.println(F(" bytes"));
-  
-  // Check if we got a valid JSON response
-  if (response.indexOf("{") != 0) {
-    Serial.println(F("[NETATMO] Invalid JSON response"));
-    Serial.println(response);
+    
+    https.end();
+    
+    // If HTTPClient fails, try direct TCP connection as fallback
+    Serial.println(F("[NETATMO] HTTPClient failed, trying direct TCP connection"));
+    
+    // Create a new client for direct connection
+    WiFiClientSecure directClient;
+    directClient.setInsecure();
+    directClient.setTimeout(20000);
+    
+    Serial.println(F("[NETATMO] Connecting directly to api.netatmo.com:443"));
+    if (!directClient.connect("api.netatmo.com", 443)) {
+      Serial.println(F("[NETATMO] Direct connection failed"));
+      return;
+    }
+    
+    Serial.println(F("[NETATMO] Connected! Sending direct request"));
+    
+    // Build the HTTP request manually
+    String request = "POST /oauth2/token HTTP/1.1\r\n";
+    request += "Host: api.netatmo.com\r\n";
+    request += "Connection: close\r\n";
+    request += "Content-Type: application/x-www-form-urlencoded\r\n";
+    request += "Accept: application/json\r\n";
+    request += "Content-Length: " + String(postData.length()) + "\r\n";
+    request += "\r\n";
+    request += postData;
+    
+    directClient.print(request);
+    
+    // Wait for the response
+    unsigned long timeout = millis();
+    while (directClient.available() == 0) {
+      if (millis() - timeout > 20000) {
+        Serial.println(F("[NETATMO] Direct request timeout"));
+        directClient.stop();
+        return;
+      }
+      delay(10);
+    }
+    
+    // Read the response headers
+    Serial.println(F("[NETATMO] Reading response headers"));
+    String headers = "";
+    String line = "";
+    bool headerDone = false;
+    
+    while (directClient.available() && !headerDone) {
+      line = directClient.readStringUntil('\n');
+      if (line == "\r") {
+        headerDone = true;
+      } else {
+        headers += line + "\n";
+      }
+    }
+    
+    Serial.println(F("[NETATMO] Response headers:"));
+    Serial.println(headers);
+    
+    // Read the response body
+    Serial.println(F("[NETATMO] Reading response body"));
+    String response = "";
+    while (directClient.available()) {
+      char c = directClient.read();
+      response += c;
+      
+      // Yield occasionally to avoid watchdog issues
+      if (response.length() % 100 == 0) {
+        delay(0);
+      }
+    }
+    
+    directClient.stop();
+    
+    Serial.println(F("[NETATMO] Response received"));
+    Serial.print(F("[NETATMO] Response length: "));
+    Serial.println(response.length());
+    
+    // Check if we got a valid JSON response
+    if (response.indexOf("{") != 0) {
+      Serial.println(F("[NETATMO] Invalid JSON response"));
+      Serial.println(response);
+      return;
+    }
+    
+    processTokenResponse(response);
     return;
   }
   
-  // Try an alternative approach if the direct connection fails
-  if (response.length() == 0 || response.indexOf("{") != 0) {
-    Serial.println(F("[NETATMO] Direct connection failed, trying HTTPClient approach"));
-    
-    // Memory optimization: Use static client to reduce stack usage
-    static BearSSL::WiFiClientSecure httpsClient;
-    httpsClient.setInsecure(); // Skip certificate validation to save memory
-    httpsClient.setTimeout(15000); // Increase timeout to 15 seconds
-    
-    HTTPClient https;
-    https.setTimeout(15000); // Increase timeout to 15 seconds
-    
-    Serial.println(F("[NETATMO] Connecting to token endpoint via HTTPClient"));
-    if (!https.begin(httpsClient, "https://api.netatmo.com/oauth2/token")) {
-      Serial.println(F("[NETATMO] Error - Failed to connect"));
-      return;
-    }
-    
-    https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    https.addHeader("Accept", "application/json");
-    https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
-    
-    // Rebuild the POST data
-    String httpPostData = "grant_type=authorization_code";
-    httpPostData += "&client_id=";
-    httpPostData += urlEncode(netatmoClientId);
-    httpPostData += "&client_secret=";
-    httpPostData += urlEncode(netatmoClientSecret);
-    httpPostData += "&code=";
-    httpPostData += urlEncode(code.c_str());
-    httpPostData += "&redirect_uri=";
-    httpPostData += urlEncode(redirectUri.c_str());
-    
-    Serial.println(F("[NETATMO] Sending token request via HTTPClient"));
-    int httpCode = https.POST(httpPostData);
-    
-    if (httpCode != HTTP_CODE_OK) {
-      Serial.print(F("[NETATMO] Error - HTTP code: "));
-      Serial.println(httpCode);
-      
-      // Get more detailed error information if available
-      if (httpCode > 0) {
-        String payload = https.getString();
-        Serial.print(F("[NETATMO] Error response: "));
-        Serial.println(payload);
-      } else {
-        Serial.print(F("[NETATMO] Connection error: "));
-        Serial.println(https.errorToString(httpCode));
-      }
-      
-      https.end();
-      return;
-    }
-    
-    // Get the response
-    response = https.getString();
-    https.end();
-  }
+  // Memory optimization: Process the response in smaller chunks
+  String response = https.getString();
+  https.end();
   
   Serial.println(F("[NETATMO] Memory before JSON parsing:"));
   Serial.print(F("[MEMORY] Free heap: "));

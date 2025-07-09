@@ -3,7 +3,7 @@ static bool proxyPending = false;
 static String proxyEndpoint = "";
 static AsyncWebServerRequest* proxyRequest = nullptr;
 
-// Function to process deferred proxy requests
+// Function to process deferred proxy requests with memory optimization
 void processProxyRequest() {
   if (!proxyPending || proxyRequest == nullptr) {
     return;
@@ -19,9 +19,10 @@ void processProxyRequest() {
   proxyEndpoint = "";
   
   // Create a new client for the API call
-  static BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
   
+  // Use a smaller buffer size for the HTTP client
   HTTPClient https;
   https.setTimeout(5000); // Reduced timeout to avoid watchdog issues
   
@@ -29,7 +30,7 @@ void processProxyRequest() {
   Serial.print(F("[NETATMO] Proxying request to: "));
   Serial.println(apiUrl);
   
-  if (!https.begin(client, apiUrl)) {
+  if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API\"}");
     return;
@@ -50,8 +51,27 @@ void processProxyRequest() {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
     
-    // Get error payload with yield
-    String errorPayload = https.getString();
+    // Get error payload with yield - use streaming to avoid memory issues
+    String errorPayload = "";
+    if (https.getSize() > 0) {
+      const size_t bufSize = 128;
+      char buf[bufSize];
+      WiFiClient* stream = https.getStreamPtr();
+      
+      // Read first chunk only for error message
+      size_t len = stream->available();
+      if (len > bufSize) len = bufSize;
+      if (len > 0) {
+        int c = stream->readBytes(buf, len);
+        if (c > 0) {
+          buf[c] = 0;
+          errorPayload = String(buf);
+        }
+      }
+    } else {
+      errorPayload = https.getString();
+    }
+    
     yield(); // Allow the watchdog to be fed
     
     Serial.print(F("[NETATMO] Error payload: "));
@@ -67,13 +87,13 @@ void processProxyRequest() {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
         
         // Create a new client for the retry
-        static BearSSL::WiFiClientSecure client2;
-        client2.setInsecure(); // Skip certificate validation to save memory
+        std::unique_ptr<BearSSL::WiFiClientSecure> client2(new BearSSL::WiFiClientSecure);
+        client2->setInsecure(); // Skip certificate validation to save memory
         
         HTTPClient https2;
         https2.setTimeout(5000); // Reduced timeout
         
-        if (!https2.begin(client2, apiUrl)) {
+        if (!https2.begin(*client2, apiUrl)) {
           Serial.println(F("[NETATMO] Error - Failed to connect on retry"));
           request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API on retry\"}");
           return;
@@ -94,8 +114,27 @@ void processProxyRequest() {
           Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
           Serial.println(httpCode2);
           
-          // Get error payload with yield
-          String errorPayload2 = https2.getString();
+          // Get error payload with yield - use streaming to avoid memory issues
+          String errorPayload2 = "";
+          if (https2.getSize() > 0) {
+            const size_t bufSize = 128;
+            char buf[bufSize];
+            WiFiClient* stream = https2.getStreamPtr();
+            
+            // Read first chunk only for error message
+            size_t len = stream->available();
+            if (len > bufSize) len = bufSize;
+            if (len > 0) {
+              int c = stream->readBytes(buf, len);
+              if (c > 0) {
+                buf[c] = 0;
+                errorPayload2 = String(buf);
+              }
+            }
+          } else {
+            errorPayload2 = https2.getString();
+          }
+          
           yield(); // Allow the watchdog to be fed
           
           Serial.print(F("[NETATMO] Error payload on retry: "));
@@ -105,16 +144,40 @@ void processProxyRequest() {
           return;
         }
         
-        // Get the response with yield
-        Serial.println(F("[NETATMO] Reading response..."));
-        String payload2 = https2.getString();
-        yield(); // Allow the watchdog to be fed
+        // Stream the response directly to the client to avoid memory issues
+        WiFiClient* stream = https2.getStreamPtr();
+        AsyncResponseStream *response = request->beginResponseStream("application/json");
+        
+        // Use a small buffer to stream the data
+        const size_t bufSize = 256;
+        uint8_t buf[bufSize];
+        int totalRead = 0;
+        
+        while (https2.connected() && (totalRead < https2.getSize())) {
+          // Read available data
+          size_t available = stream->available();
+          if (available) {
+            // Read up to buffer size
+            size_t readBytes = available > bufSize ? bufSize : available;
+            int bytesRead = stream->readBytes(buf, readBytes);
+            
+            if (bytesRead > 0) {
+              // Write to response
+              response->write(buf, bytesRead);
+              totalRead += bytesRead;
+            }
+            
+            yield(); // Allow the watchdog to be fed
+          } else {
+            // No data available, wait a bit
+            delay(1);
+            yield();
+          }
+        }
         
         https2.end();
-        
-        // Send the response back to the client
-        Serial.println(F("[NETATMO] Sending response to client..."));
-        request->send(200, "application/json", payload2);
+        request->send(response);
+        Serial.println(F("[NETATMO] Response streamed to client after token refresh"));
         return;
       } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
@@ -125,14 +188,38 @@ void processProxyRequest() {
     return;
   }
   
-  // Get the response with yield
-  Serial.println(F("[NETATMO] Reading response..."));
-  String payload = https.getString();
-  yield(); // Allow the watchdog to be fed
+  // Stream the response directly to the client to avoid memory issues
+  WiFiClient* stream = https.getStreamPtr();
+  AsyncResponseStream *response = request->beginResponseStream("application/json");
+  
+  // Use a small buffer to stream the data
+  const size_t bufSize = 256;
+  uint8_t buf[bufSize];
+  int totalRead = 0;
+  
+  while (https.connected() && (totalRead < https.getSize())) {
+    // Read available data
+    size_t available = stream->available();
+    if (available) {
+      // Read up to buffer size
+      size_t readBytes = available > bufSize ? bufSize : available;
+      int bytesRead = stream->readBytes(buf, readBytes);
+      
+      if (bytesRead > 0) {
+        // Write to response
+        response->write(buf, bytesRead);
+        totalRead += bytesRead;
+      }
+      
+      yield(); // Allow the watchdog to be fed
+    } else {
+      // No data available, wait a bit
+      delay(1);
+      yield();
+    }
+  }
   
   https.end();
-  
-  // Send the response back to the client
-  Serial.println(F("[NETATMO] Sending response to client..."));
-  request->send(200, "application/json", payload);
+  request->send(response);
+  Serial.println(F("[NETATMO] Response streamed to client"));
 }

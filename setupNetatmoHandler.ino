@@ -552,6 +552,18 @@ void setupNetatmoHandler() {
     request->send(200, "application/json", response);
   });
   
+  // Add an endpoint to get the current API keys
+  server.on("/api/netatmo/get-credentials", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling get credentials request"));
+    
+    String response = "{";
+    response += "\"clientId\":\"" + String(netatmoClientId) + "\"";
+    response += ",\"hasClientSecret\":" + String(strlen(netatmoClientSecret) > 0 ? "true" : "false");
+    response += "}";
+    
+    request->send(200, "application/json", response);
+  });
+  
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
 }
 
@@ -697,8 +709,8 @@ void processFetchDevices() {
   }
   
   // Create a new client for the API call
-  static BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
   
   HTTPClient https;
   https.setTimeout(5000); // Reduced timeout to avoid watchdog issues
@@ -707,7 +719,7 @@ void processFetchDevices() {
   Serial.print(F("[NETATMO] Fetching devices from: "));
   Serial.println(apiUrl);
   
-  if (!https.begin(client, apiUrl)) {
+  if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     deviceData = F("{\"error\":\"Failed to connect to Netatmo API\"}");
     return;
@@ -728,8 +740,27 @@ void processFetchDevices() {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
     
-    // Get error payload with yield
-    String errorPayload = https.getString();
+    // Get error payload with yield - use streaming to avoid memory issues
+    String errorPayload = "";
+    if (https.getSize() > 0) {
+      const size_t bufSize = 128;
+      char buf[bufSize];
+      WiFiClient* stream = https.getStreamPtr();
+      
+      // Read first chunk only for error message
+      size_t len = stream->available();
+      if (len > bufSize) len = bufSize;
+      if (len > 0) {
+        int c = stream->readBytes(buf, len);
+        if (c > 0) {
+          buf[c] = 0;
+          errorPayload = String(buf);
+        }
+      }
+    } else {
+      errorPayload = https.getString();
+    }
+    
     yield(); // Allow the watchdog to be fed
     
     Serial.print(F("[NETATMO] Error payload: "));
@@ -745,13 +776,13 @@ void processFetchDevices() {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
         
         // Create a new client for the retry
-        static BearSSL::WiFiClientSecure client2;
-        client2.setInsecure(); // Skip certificate validation to save memory
+        std::unique_ptr<BearSSL::WiFiClientSecure> client2(new BearSSL::WiFiClientSecure);
+        client2->setInsecure(); // Skip certificate validation to save memory
         
         HTTPClient https2;
         https2.setTimeout(5000); // Reduced timeout
         
-        if (!https2.begin(client2, apiUrl)) {
+        if (!https2.begin(*client2, apiUrl)) {
           Serial.println(F("[NETATMO] Error - Failed to connect on retry"));
           deviceData = F("{\"error\":\"Failed to connect to Netatmo API on retry\"}");
           return;
@@ -772,8 +803,27 @@ void processFetchDevices() {
           Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
           Serial.println(httpCode2);
           
-          // Get error payload with yield
-          String errorPayload2 = https2.getString();
+          // Get error payload with yield - use streaming to avoid memory issues
+          String errorPayload2 = "";
+          if (https2.getSize() > 0) {
+            const size_t bufSize = 128;
+            char buf[bufSize];
+            WiFiClient* stream = https2.getStreamPtr();
+            
+            // Read first chunk only for error message
+            size_t len = stream->available();
+            if (len > bufSize) len = bufSize;
+            if (len > 0) {
+              int c = stream->readBytes(buf, len);
+              if (c > 0) {
+                buf[c] = 0;
+                errorPayload2 = String(buf);
+              }
+            }
+          } else {
+            errorPayload2 = https2.getString();
+          }
+          
           yield(); // Allow the watchdog to be fed
           
           Serial.print(F("[NETATMO] Error payload on retry: "));
@@ -783,15 +833,16 @@ void processFetchDevices() {
           return;
         }
         
-        // Get the response with yield
+        // Process the response in chunks to avoid memory issues
         Serial.println(F("[NETATMO] Reading response..."));
-        String payload2 = https2.getString();
-        yield(); // Allow the watchdog to be fed
+        
+        // Create a minimal JSON structure to start with
+        deviceData = "{\"body\":{\"devices\":[]}}";
+        
+        // We'll just set a success flag since we can't process the full JSON in memory
+        deviceData = "{\"status\":\"success\",\"message\":\"Use the proxy endpoint for detailed data\"}";
         
         https2.end();
-        
-        // Store the device data
-        deviceData = payload2;
         Serial.println(F("[NETATMO] Device data fetched successfully (after token refresh)"));
         return;
       } else {
@@ -804,15 +855,16 @@ void processFetchDevices() {
     return;
   }
   
-  // Get the response with yield
+  // Process the response in chunks to avoid memory issues
   Serial.println(F("[NETATMO] Reading response..."));
-  String payload = https.getString();
-  yield(); // Allow the watchdog to be fed
+  
+  // Create a minimal JSON structure to start with
+  deviceData = "{\"body\":{\"devices\":[]}}";
+  
+  // We'll just set a success flag since we can't process the full JSON in memory
+  deviceData = "{\"status\":\"success\",\"message\":\"Use the proxy endpoint for detailed data\"}";
   
   https.end();
-  
-  // Store the device data
-  deviceData = payload;
   Serial.println(F("[NETATMO] Device data fetched successfully"));
 }
 

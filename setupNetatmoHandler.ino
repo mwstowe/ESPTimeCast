@@ -1146,6 +1146,10 @@ void processSaveCredentials() {
 void fetchStationsData() {
   Serial.println(F("[NETATMO] Fetching stations data"));
   
+  // Report memory status before API call
+  Serial.println(F("[MEMORY] Memory status before API call:"));
+  printMemoryStats();
+  
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
@@ -1159,15 +1163,50 @@ void fetchStationsData() {
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure(); // Skip certificate validation to save memory
+  client->setBufferSizes(1024, 1024); // Increase buffer sizes
   
   HTTPClient https;
-  https.setTimeout(10000); // 10 second timeout
+  https.setTimeout(15000); // Increase timeout to 15 seconds
   
   // Use homesdata endpoint instead of getstationsdata
   String apiUrl = "https://api.netatmo.com/api/homesdata";
   Serial.print(F("[NETATMO] Fetching from: "));
   Serial.println(apiUrl);
   
+  // Log the full request details
+  Serial.println(F("[NETATMO] Request details:"));
+  Serial.print(F("URL: "));
+  Serial.println(apiUrl);
+  Serial.print(F("Authorization: Bearer "));
+  Serial.print(netatmoAccessToken[0]);
+  Serial.print(F("..."));
+  Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  
+  // Try to resolve the hostname first
+  IPAddress ip;
+  Serial.println(F("[NETATMO] Attempting DNS resolution for api.netatmo.com..."));
+  bool resolved = WiFi.hostByName("api.netatmo.com", ip);
+  if (!resolved) {
+    Serial.println(F("[NETATMO] DNS resolution failed"));
+    return;
+  }
+  
+  Serial.print(F("[NETATMO] DNS resolved to: "));
+  Serial.println(ip.toString());
+  
+  // Try a direct TCP connection first to test connectivity
+  WiFiClient testClient;
+  Serial.println(F("[NETATMO] Testing TCP connection to port 443..."));
+  if (!testClient.connect(ip, 443)) {
+    Serial.println(F("[NETATMO] TCP connection to port 443 failed"));
+    return;
+  }
+  
+  Serial.println(F("[NETATMO] TCP connection successful, closing test connection"));
+  testClient.stop();
+  
+  // Now try the HTTPS connection
+  Serial.println(F("[NETATMO] Initializing HTTPS connection..."));
   if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
@@ -1183,6 +1222,9 @@ void fetchStationsData() {
   Serial.println(F("[NETATMO] Sending request..."));
   int httpCode = https.GET();
   yield(); // Allow the watchdog to be fed
+  
+  Serial.print(F("[NETATMO] HTTP response code: "));
+  Serial.println(httpCode);
   
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
@@ -1208,7 +1250,22 @@ void fetchStationsData() {
         Serial.println(F("[NETATMO] Failed to refresh token"));
       }
     }
+    
+    // Try the getstationsdata endpoint as a fallback
+    else if (httpCode == -1 || httpCode == 404) {
+      Serial.println(F("[NETATMO] Trying getstationsdata endpoint as fallback"));
+      fetchStationsDataFallback();
+    }
+    
     return;
+  }
+  
+  // Log response headers
+  Serial.println(F("[NETATMO] Response headers:"));
+  for (int i = 0; i < https.headers(); i++) {
+    Serial.print(https.headerName(i));
+    Serial.print(F(": "));
+    Serial.println(https.header(i));
   }
   
   // Create the devices directory if it doesn't exist
@@ -1235,6 +1292,10 @@ void fetchStationsData() {
   Serial.print(expectedSize);
   Serial.println(F(" bytes"));
   
+  // For logging the first part of the response
+  String responsePreview = "";
+  bool previewCaptured = false;
+  
   while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
     // Read available data
     size_t available = stream->available();
@@ -1247,6 +1308,16 @@ void fetchStationsData() {
         // Write to file
         deviceFile.write(buf, bytesRead);
         totalRead += bytesRead;
+        
+        // Capture the first part of the response for logging
+        if (!previewCaptured && responsePreview.length() < 500) {
+          for (int i = 0; i < bytesRead && responsePreview.length() < 500; i++) {
+            responsePreview += (char)buf[i];
+          }
+          if (responsePreview.length() >= 500) {
+            previewCaptured = true;
+          }
+        }
         
         // Print progress every 1KB
         if (totalRead % 1024 == 0) {
@@ -1272,6 +1343,14 @@ void fetchStationsData() {
   
   Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
   Serial.println(totalRead);
+  
+  // Log the first part of the response
+  Serial.println(F("[NETATMO] Response preview:"));
+  Serial.println(responsePreview);
+  
+  // Report memory status after API call
+  Serial.println(F("[MEMORY] Memory status after API call:"));
+  printMemoryStats();
   
   // Now extract the device and module IDs for easy access
   extractDeviceInfo();
@@ -1438,4 +1517,186 @@ void processFetchStationsData() {
   
   // Call the fetch stations data function
   fetchStationsData();
+}
+// Function to fetch stations data using getstationsdata endpoint as fallback
+void fetchStationsDataFallback() {
+  Serial.println(F("[NETATMO] Fetching stations data using fallback endpoint"));
+  
+  // Report memory status before API call
+  Serial.println(F("[MEMORY] Memory status before fallback API call:"));
+  printMemoryStats();
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    return;
+  }
+  
+  if (strlen(netatmoAccessToken) == 0) {
+    Serial.println(F("[NETATMO] Error - No access token"));
+    return;
+  }
+  
+  // Create a new client for the API call
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
+  client->setBufferSizes(1024, 1024); // Increase buffer sizes
+  
+  HTTPClient https;
+  https.setTimeout(15000); // Increase timeout to 15 seconds
+  
+  // Use getstationsdata endpoint as fallback
+  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
+  Serial.print(F("[NETATMO] Fetching from fallback endpoint: "));
+  Serial.println(apiUrl);
+  
+  // Log the full request details
+  Serial.println(F("[NETATMO] Fallback request details:"));
+  Serial.print(F("URL: "));
+  Serial.println(apiUrl);
+  Serial.print(F("Authorization: Bearer "));
+  Serial.print(netatmoAccessToken[0]);
+  Serial.print(F("..."));
+  Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  
+  // Try to resolve the hostname first
+  IPAddress ip;
+  Serial.println(F("[NETATMO] Attempting DNS resolution for api.netatmo.com..."));
+  bool resolved = WiFi.hostByName("api.netatmo.com", ip);
+  if (!resolved) {
+    Serial.println(F("[NETATMO] DNS resolution failed"));
+    return;
+  }
+  
+  Serial.print(F("[NETATMO] DNS resolved to: "));
+  Serial.println(ip.toString());
+  
+  // Now try the HTTPS connection
+  Serial.println(F("[NETATMO] Initializing HTTPS connection..."));
+  if (!https.begin(*client, apiUrl)) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    return;
+  }
+  
+  // Add authorization header
+  String authHeader = "Bearer ";
+  authHeader += netatmoAccessToken;
+  https.addHeader("Authorization", authHeader);
+  https.addHeader("Accept", "application/json");
+  
+  // Make the request with yield to avoid watchdog issues
+  Serial.println(F("[NETATMO] Sending fallback request..."));
+  int httpCode = https.GET();
+  yield(); // Allow the watchdog to be fed
+  
+  Serial.print(F("[NETATMO] HTTP response code: "));
+  Serial.println(httpCode);
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
+    
+    // Get error payload with yield
+    String errorPayload = https.getString();
+    yield(); // Allow the watchdog to be fed
+    
+    Serial.print(F("[NETATMO] Error payload: "));
+    Serial.println(errorPayload);
+    https.end();
+    return;
+  }
+  
+  // Log response headers
+  Serial.println(F("[NETATMO] Response headers:"));
+  for (int i = 0; i < https.headers(); i++) {
+    Serial.print(https.headerName(i));
+    Serial.print(F(": "));
+    Serial.println(https.header(i));
+  }
+  
+  // Create the devices directory if it doesn't exist
+  if (!LittleFS.exists("/devices")) {
+    LittleFS.mkdir("/devices");
+  }
+  
+  // Open a file to save the raw response
+  File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "w");
+  if (!deviceFile) {
+    Serial.println(F("[NETATMO] Failed to open file for writing"));
+    https.end();
+    return;
+  }
+  
+  // Stream the response directly to the file
+  WiFiClient* stream = https.getStreamPtr();
+  const size_t bufSize = 256;
+  uint8_t buf[bufSize];
+  int totalRead = 0;
+  int expectedSize = https.getSize();
+  
+  Serial.print(F("[NETATMO] Expected response size: "));
+  Serial.print(expectedSize);
+  Serial.println(F(" bytes"));
+  
+  // For logging the first part of the response
+  String responsePreview = "";
+  bool previewCaptured = false;
+  
+  while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
+    // Read available data
+    size_t available = stream->available();
+    if (available) {
+      // Read up to buffer size
+      size_t readBytes = available > bufSize ? bufSize : available;
+      int bytesRead = stream->readBytes(buf, readBytes);
+      
+      if (bytesRead > 0) {
+        // Write to file
+        deviceFile.write(buf, bytesRead);
+        totalRead += bytesRead;
+        
+        // Capture the first part of the response for logging
+        if (!previewCaptured && responsePreview.length() < 500) {
+          for (int i = 0; i < bytesRead && responsePreview.length() < 500; i++) {
+            responsePreview += (char)buf[i];
+          }
+          if (responsePreview.length() >= 500) {
+            previewCaptured = true;
+          }
+        }
+        
+        // Print progress every 1KB
+        if (totalRead % 1024 == 0) {
+          Serial.print(F("[NETATMO] Read "));
+          Serial.print(totalRead);
+          Serial.println(F(" bytes"));
+        }
+      }
+      
+      yield(); // Allow the watchdog to be fed
+    } else if (totalRead >= expectedSize && expectedSize > 0) {
+      // We've read all the data
+      break;
+    } else {
+      // No data available, wait a bit
+      delay(10);
+      yield();
+    }
+  }
+  
+  deviceFile.close();
+  https.end();
+  
+  Serial.print(F("[NETATMO] Fallback stations data saved to file, bytes: "));
+  Serial.println(totalRead);
+  
+  // Log the first part of the response
+  Serial.println(F("[NETATMO] Fallback response preview:"));
+  Serial.println(responsePreview);
+  
+  // Report memory status after API call
+  Serial.println(F("[MEMORY] Memory status after fallback API call:"));
+  printMemoryStats();
+  
+  // Now extract the device and module IDs for easy access
+  extractDeviceInfo();
 }

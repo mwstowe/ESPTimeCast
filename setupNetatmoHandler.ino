@@ -686,19 +686,134 @@ void processFetchDevices() {
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    deviceData = F("{\"error\":\"WiFi not connected\"}");
     return;
   }
   
   if (strlen(netatmoAccessToken) == 0) {
     Serial.println(F("[NETATMO] Error - No access token"));
+    deviceData = F("{\"error\":\"No access token\"}");
     return;
   }
   
-  // Memory optimization: Create a minimal response structure
-  // This is a placeholder that tells the JavaScript to use the API directly
-  deviceData = F("{\"redirect\":\"api\"}");
+  // Create a new client for the API call
+  static BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation to save memory
   
-  Serial.println(F("[NETATMO] Set redirect flag for client-side API call"));
+  HTTPClient https;
+  https.setTimeout(5000); // Reduced timeout to avoid watchdog issues
+  
+  String apiUrl = "https://api.netatmo.com/api/getstationsdata";
+  Serial.print(F("[NETATMO] Fetching devices from: "));
+  Serial.println(apiUrl);
+  
+  if (!https.begin(client, apiUrl)) {
+    Serial.println(F("[NETATMO] Error - Failed to connect"));
+    deviceData = F("{\"error\":\"Failed to connect to Netatmo API\"}");
+    return;
+  }
+  
+  // Add authorization header
+  String authHeader = "Bearer ";
+  authHeader += netatmoAccessToken;
+  https.addHeader("Authorization", authHeader);
+  https.addHeader("Accept", "application/json");
+  
+  // Make the request with yield to avoid watchdog issues
+  Serial.println(F("[NETATMO] Sending request..."));
+  int httpCode = https.GET();
+  yield(); // Allow the watchdog to be fed
+  
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Error - HTTP code: "));
+    Serial.println(httpCode);
+    
+    // Get error payload with yield
+    String errorPayload = https.getString();
+    yield(); // Allow the watchdog to be fed
+    
+    Serial.print(F("[NETATMO] Error payload: "));
+    Serial.println(errorPayload);
+    https.end();
+    
+    // If we get a 401 or 403, try to refresh the token
+    if (httpCode == 401 || httpCode == 403) {
+      Serial.println(F("[NETATMO] Token expired, trying to refresh"));
+      
+      // Try to refresh the token
+      if (refreshNetatmoToken()) {
+        Serial.println(F("[NETATMO] Token refreshed, retrying request"));
+        
+        // Create a new client for the retry
+        static BearSSL::WiFiClientSecure client2;
+        client2.setInsecure(); // Skip certificate validation to save memory
+        
+        HTTPClient https2;
+        https2.setTimeout(5000); // Reduced timeout
+        
+        if (!https2.begin(client2, apiUrl)) {
+          Serial.println(F("[NETATMO] Error - Failed to connect on retry"));
+          deviceData = F("{\"error\":\"Failed to connect to Netatmo API on retry\"}");
+          return;
+        }
+        
+        // Add authorization header with new token
+        String newAuthHeader = "Bearer ";
+        newAuthHeader += netatmoAccessToken;
+        https2.addHeader("Authorization", newAuthHeader);
+        https2.addHeader("Accept", "application/json");
+        
+        // Make the request again with yield
+        Serial.println(F("[NETATMO] Sending retry request..."));
+        int httpCode2 = https2.GET();
+        yield(); // Allow the watchdog to be fed
+        
+        if (httpCode2 != HTTP_CODE_OK) {
+          Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
+          Serial.println(httpCode2);
+          
+          // Get error payload with yield
+          String errorPayload2 = https2.getString();
+          yield(); // Allow the watchdog to be fed
+          
+          Serial.print(F("[NETATMO] Error payload on retry: "));
+          Serial.println(errorPayload2);
+          https2.end();
+          deviceData = "{\"error\":\"API error: " + String(httpCode2) + "\"}";
+          return;
+        }
+        
+        // Get the response with yield
+        Serial.println(F("[NETATMO] Reading response..."));
+        String payload2 = https2.getString();
+        yield(); // Allow the watchdog to be fed
+        
+        https2.end();
+        
+        // Store the device data
+        deviceData = payload2;
+        Serial.println(F("[NETATMO] Device data fetched successfully (after token refresh)"));
+        return;
+      } else {
+        Serial.println(F("[NETATMO] Failed to refresh token"));
+        deviceData = F("{\"error\":\"Failed to refresh token\"}");
+      }
+    }
+    
+    deviceData = "{\"error\":\"API error: " + String(httpCode) + "\"}";
+    return;
+  }
+  
+  // Get the response with yield
+  Serial.println(F("[NETATMO] Reading response..."));
+  String payload = https.getString();
+  yield(); // Allow the watchdog to be fed
+  
+  https.end();
+  
+  // Store the device data
+  deviceData = payload;
+  Serial.println(F("[NETATMO] Device data fetched successfully"));
 }
 
 // Function to be called from loop() to process pending credential saves

@@ -1,0 +1,26 @@
+{
+  "body": {
+    "devices": [
+      {
+        "_id": "70:ee:50:00:00:01",
+        "station_name": "Mock Weather Station",
+        "type": "NAMain",
+        "modules": [
+          {
+            "_id": "70:ee:50:00:00:02",
+            "module_name": "Mock Outdoor Module",
+            "type": "NAModule1"
+          },
+          {
+            "_id": "70:ee:50:00:00:03",
+            "module_name": "Mock Indoor Module",
+            "type": "NAModule4"
+          }
+        ]
+      }
+    ]
+  },
+  "status": "ok",
+  "time_exec": 0.1,
+  "time_server": 1625097600
+}

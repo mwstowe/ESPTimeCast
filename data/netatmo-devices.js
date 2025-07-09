@@ -40,7 +40,35 @@ function fetchNetatmoDevices() {
     })
     .then(memoryData => {
       console.log("Memory stats:", memoryData);
-      showStatus(`Memory optimized. Free heap: ${memoryData.freeHeap} bytes. Fetching devices...`, "loading");
+      showStatus(`Memory optimized. Free heap: ${memoryData.freeHeap} bytes. Testing connection...`, "loading");
+      
+      // Test connection to Netatmo API
+      return fetch('/api/netatmo/test-connection');
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(testResults => {
+      console.log("Connection test results:", testResults);
+      
+      // Check if TLS connection works
+      const tlsTest = testResults.tests.find(test => test.name === "TLS Connection");
+      const httpTest = testResults.tests.find(test => test.name === "HTTP GET");
+      
+      if (tlsTest && !tlsTest.success) {
+        showStatus("TLS connection to Netatmo API failed. Using mock data instead.", "warning");
+        console.log("Using mock data due to TLS connection failure");
+        return fetch('/api/netatmo/mock-devices');
+      }
+      
+      if (httpTest && !httpTest.success) {
+        showStatus("HTTP connection to Netatmo API failed. Using mock data instead.", "warning");
+        console.log("Using mock data due to HTTP connection failure");
+        return fetch('/api/netatmo/mock-devices');
+      }
       
       // Now check token status
       return fetch('/api/netatmo/token-status');
@@ -110,7 +138,20 @@ function fetchNetatmoDevices() {
                   // Wait and try again
                   setTimeout(checkStatus, 2000);
                 } else {
-                  reject(new Error("Timed out waiting for device data"));
+                  // Try mock data as a last resort
+                  console.log("Falling back to mock data after failed attempts");
+                  return fetch('/api/netatmo/mock-devices')
+                    .then(mockResponse => {
+                      if (mockResponse.ok) {
+                        showStatus("Using mock data after failed API attempts", "warning");
+                        resolve(mockResponse.json());
+                      } else {
+                        reject(new Error("Timed out waiting for device data and mock data unavailable"));
+                      }
+                    })
+                    .catch(error => {
+                      reject(error);
+                    });
                 }
               })
               .catch(error => {
@@ -118,7 +159,20 @@ function fetchNetatmoDevices() {
                   // Wait and try again
                   setTimeout(checkStatus, 2000);
                 } else {
-                  reject(error);
+                  // Try mock data as a last resort
+                  console.log("Falling back to mock data after error");
+                  fetch('/api/netatmo/mock-devices')
+                    .then(mockResponse => {
+                      if (mockResponse.ok) {
+                        showStatus("Using mock data after API errors", "warning");
+                        resolve(mockResponse.json());
+                      } else {
+                        reject(error);
+                      }
+                    })
+                    .catch(mockError => {
+                      reject(error);
+                    });
                 }
               });
           };
@@ -130,8 +184,22 @@ function fetchNetatmoDevices() {
         throw new Error(data.message || "Unknown error");
       }
     })
+    .catch(error => {
+      console.error(`Error in fetch chain: ${error.message}`);
+      
+      // Try to use mock data as fallback
+      showStatus(`API error: ${error.message}. Trying mock data...`, "warning");
+      
+      return fetch('/api/netatmo/mock-devices')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Mock data not available");
+          }
+          return response.json();
+        });
+    })
     .then(data => {
-      console.log("Loaded device data from file");
+      console.log("Processing device data");
       
       // Process the device data
       let devices = [];
@@ -176,67 +244,8 @@ function fetchNetatmoDevices() {
       setTimeout(hideStatus, 3000);
     })
     .catch(error => {
-      console.error(`Error fetching devices: ${error.message}`);
+      console.error(`Final error: ${error.message}`);
       showStatus(`Failed to fetch Netatmo devices: ${error.message}`, "error");
-      
-      // Check if we already have saved device data we can use as fallback
-      console.log("Checking for saved device data as fallback...");
-      
-      fetch('/api/netatmo/saved-devices')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("No saved device data available");
-          }
-          return response.json();
-        })
-        .then(data => {
-          console.log("Found saved device data to use as fallback");
-          showStatus("Using previously saved device data as fallback", "warning");
-          
-          // Process the device data
-          let devices = [];
-          
-          if (data.body && data.body.devices) {
-            console.log("Using standard format (body.devices)");
-            devices = data.body.devices;
-          } else if (data.devices) {
-            console.log("Using alternative format (devices)");
-            devices = data.devices;
-          } else {
-            throw new Error("Invalid saved device data format");
-          }
-          
-          if (!devices || devices.length === 0) {
-            throw new Error("No devices in saved data");
-          }
-          
-          // Store devices in global variable
-          window.netatmoDevices = devices;
-          
-          // Populate device dropdown
-          devices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device._id || device.id;
-            option.textContent = device.station_name || device.name || device._id || device.id;
-            deviceSelect.appendChild(option);
-          });
-          
-          // Restore previous selections if they exist
-          if (currentDeviceId) {
-            deviceSelect.value = currentDeviceId;
-            loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
-          }
-          
-          console.log(`Found ${devices.length} Netatmo devices in saved data`);
-          setTimeout(() => {
-            showStatus(`Found ${devices.length} Netatmo devices (from saved data)`, "success");
-            setTimeout(hideStatus, 3000);
-          }, 2000);
-        })
-        .catch(fallbackError => {
-          console.error("Fallback error:", fallbackError.message);
-          // No fallback available, show original error
-        });
     });
 }
 // Function to connect to Netatmo
@@ -509,3 +518,87 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+// Function to initialize mock data
+function initMockData() {
+  console.log("Initializing mock data...");
+  showStatus("Initializing mock data...", "loading");
+  
+  fetch('/api/netatmo/init-mock-data')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("Mock data initialized:", data);
+      showStatus("Mock data initialized. Loading devices...", "success");
+      
+      // Now load the mock data
+      return fetch('/api/netatmo/saved-devices');
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("Loaded mock device data");
+      
+      // Process the device data
+      let devices = [];
+      
+      if (data.body && data.body.devices) {
+        console.log("Using standard format (body.devices)");
+        devices = data.body.devices;
+      } else if (data.devices) {
+        console.log("Using alternative format (devices)");
+        devices = data.devices;
+      } else {
+        console.error("Unexpected data format");
+        showStatus("Unexpected data format from mock data", "error");
+        return;
+      }
+      
+      if (!devices || devices.length === 0) {
+        console.log("No devices found in mock data");
+        showStatus("No devices found in mock data", "error");
+        return;
+      }
+      
+      // Store devices in global variable
+      window.netatmoDevices = devices;
+      
+      // Get the device select element
+      const deviceSelect = document.getElementById('netatmoDeviceId');
+      const moduleSelect = document.getElementById('netatmoModuleId');
+      const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+      
+      if (!deviceSelect || !moduleSelect || !indoorModuleSelect) {
+        console.error("Device or module select elements not found");
+        return;
+      }
+      
+      // Clear existing options
+      deviceSelect.innerHTML = '<option value="">Select Device...</option>';
+      moduleSelect.innerHTML = '<option value="none">Not mapped</option>';
+      indoorModuleSelect.innerHTML = '<option value="none">Not mapped</option>';
+      
+      // Populate device dropdown
+      devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device._id || device.id;
+        option.textContent = device.station_name || device.name || device._id || device.id;
+        deviceSelect.appendChild(option);
+      });
+      
+      console.log(`Found ${devices.length} mock devices`);
+      showStatus(`Found ${devices.length} mock devices`, "success");
+      setTimeout(hideStatus, 3000);
+    })
+    .catch(error => {
+      console.error(`Error initializing mock data: ${error.message}`);
+      showStatus(`Failed to initialize mock data: ${error.message}`, "error");
+    });
+}

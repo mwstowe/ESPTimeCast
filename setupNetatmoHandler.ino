@@ -665,6 +665,182 @@ void setupNetatmoHandler() {
     request->send(response);
   });
   
+  // Add an endpoint to retrieve mock device data when API is unavailable
+  server.on("/api/netatmo/mock-devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling mock devices request"));
+    
+    // Check if the mock data file exists
+    if (!LittleFS.exists("/mock_netatmo_data.json")) {
+      Serial.println(F("[NETATMO] Mock data file not found"));
+      request->send(404, "application/json", "{\"error\":\"Mock data file not found\"}");
+      return;
+    }
+    
+    // Open the file
+    File mockFile = LittleFS.open("/mock_netatmo_data.json", "r");
+    if (!mockFile) {
+      Serial.println(F("[NETATMO] Failed to open mock data file"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open mock data file\"}");
+      return;
+    }
+    
+    // Create a response stream
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    
+    // Stream the file content to the response
+    const size_t bufSize = 256;
+    uint8_t buf[bufSize];
+    
+    while (mockFile.available()) {
+      size_t bytesRead = mockFile.read(buf, bufSize);
+      if (bytesRead > 0) {
+        response->write(buf, bytesRead);
+      }
+      yield(); // Allow the watchdog to be fed
+    }
+    
+    mockFile.close();
+    request->send(response);
+  });
+  
+  // Add an endpoint to test connectivity to Netatmo API
+  server.on("/api/netatmo/test-connection", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Testing connection to Netatmo API"));
+    
+    // Create a response object
+    AsyncResponseStream *response = request->beginResponseStream("application/json");
+    response->print("{\"tests\":[");
+    
+    // Test 1: DNS resolution
+    IPAddress ip;
+    bool dnsResolved = WiFi.hostByName("api.netatmo.com", ip);
+    
+    response->printf(
+      "{\"name\":\"DNS Resolution\",\"success\":%s,\"details\":\"%s\"}",
+      dnsResolved ? "true" : "false",
+      dnsResolved ? ip.toString().c_str() : "Failed to resolve hostname"
+    );
+    
+    // Test 2: TCP connection (port 80)
+    WiFiClient client;
+    bool tcpConnected = client.connect("api.netatmo.com", 80);
+    
+    response->printf(
+      ",{\"name\":\"TCP Connection (Port 80)\",\"success\":%s,\"details\":\"%s\"}",
+      tcpConnected ? "true" : "false",
+      tcpConnected ? "Connected successfully" : "Connection failed"
+    );
+    
+    if (tcpConnected) {
+      client.stop();
+    }
+    
+    // Test 3: TCP connection (port 443)
+    WiFiClient client2;
+    bool tcpConnected443 = client2.connect("api.netatmo.com", 443);
+    
+    response->printf(
+      ",{\"name\":\"TCP Connection (Port 443)\",\"success\":%s,\"details\":\"%s\"}",
+      tcpConnected443 ? "true" : "false",
+      tcpConnected443 ? "Connected successfully" : "Connection failed"
+    );
+    
+    if (tcpConnected443) {
+      client2.stop();
+    }
+    
+    // Test 4: TLS connection
+    std::unique_ptr<BearSSL::WiFiClientSecure> secureClient(new BearSSL::WiFiClientSecure);
+    secureClient->setInsecure(); // Skip certificate validation
+    
+    bool tlsConnected = secureClient->connect("api.netatmo.com", 443);
+    
+    response->printf(
+      ",{\"name\":\"TLS Connection\",\"success\":%s,\"details\":\"%s\"}",
+      tlsConnected ? "true" : "false",
+      tlsConnected ? "Connected successfully" : "Connection failed"
+    );
+    
+    if (tlsConnected) {
+      secureClient->stop();
+    }
+    
+    // Test 5: Simple HTTP request
+    HTTPClient http;
+    http.setTimeout(5000);
+    bool httpBegin = http.begin(*secureClient, "https://api.netatmo.com");
+    
+    response->printf(
+      ",{\"name\":\"HTTP Begin\",\"success\":%s,\"details\":\"%s\"}",
+      httpBegin ? "true" : "false",
+      httpBegin ? "HTTP client initialized" : "Failed to initialize HTTP client"
+    );
+    
+    if (httpBegin) {
+      int httpCode = http.GET();
+      
+      response->printf(
+        ",{\"name\":\"HTTP GET\",\"success\":%s,\"details\":\"HTTP code: %d\"}",
+        httpCode > 0 ? "true" : "false",
+        httpCode
+      );
+      
+      http.end();
+    }
+    
+    response->print("]}");
+    request->send(response);
+  });
+  
+  // Add an endpoint to initialize mock data
+  server.on("/api/netatmo/init-mock-data", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Initializing mock data"));
+    
+    // Check if the mock data file exists
+    if (!LittleFS.exists("/mock_netatmo_data.json")) {
+      Serial.println(F("[NETATMO] Mock data source file not found"));
+      request->send(404, "application/json", "{\"error\":\"Mock data source file not found\"}");
+      return;
+    }
+    
+    // Create the devices directory if it doesn't exist
+    if (!LittleFS.exists("/devices")) {
+      LittleFS.mkdir("/devices");
+    }
+    
+    // Copy the mock data file to the devices directory
+    File sourceFile = LittleFS.open("/mock_netatmo_data.json", "r");
+    File destFile = LittleFS.open("/devices/netatmo_devices.json", "w");
+    
+    if (!sourceFile || !destFile) {
+      Serial.println(F("[NETATMO] Failed to open files for copying"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open files for copying\"}");
+      return;
+    }
+    
+    // Copy the file
+    const size_t bufSize = 256;
+    uint8_t buf[bufSize];
+    int totalCopied = 0;
+    
+    while (sourceFile.available()) {
+      size_t bytesRead = sourceFile.read(buf, bufSize);
+      if (bytesRead > 0) {
+        destFile.write(buf, bytesRead);
+        totalCopied += bytesRead;
+      }
+      yield(); // Allow the watchdog to be fed
+    }
+    
+    sourceFile.close();
+    destFile.close();
+    
+    Serial.print(F("[NETATMO] Mock data copied to devices directory, bytes: "));
+    Serial.println(totalCopied);
+    
+    request->send(200, "application/json", "{\"status\":\"success\",\"message\":\"Mock data initialized\",\"bytes\":" + String(totalCopied) + "}");
+  });
+  
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
 }
 

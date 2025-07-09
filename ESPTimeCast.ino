@@ -74,7 +74,7 @@ void createDefaultConfig() {
   }
   
   // Create a minimal config first
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(1024); // Increased size to accommodate all fields
   doc[F("ssid")] = "";
   doc[F("password")] = "";
   doc[F("mdnsHostname")] = "esptime";
@@ -82,8 +82,28 @@ void createDefaultConfig() {
   doc[F("timeZone")] = "";
   doc[F("brightness")] = brightness;
   doc[F("flipDisplay")] = flipDisplay;
+  doc[F("twelveHourToggle")] = twelveHourToggle;
+  doc[F("showDayOfWeek")] = showDayOfWeek;
+  doc[F("showIndoorTemp")] = showIndoorTemp;
+  doc[F("showOutdoorTemp")] = showOutdoorTemp;
+  doc[F("clockDuration")] = 10000;
+  doc[F("weatherDuration")] = 5000;
+  doc[F("tempAdjust")] = tempAdjust;
+  doc[F("ntpServer1")] = ntpServer1;
+  doc[F("ntpServer2")] = ntpServer2;
+  
+  // Netatmo fields
   doc[F("netatmoClientId")] = "";
   doc[F("netatmoClientSecret")] = "";
+  doc[F("netatmoUsername")] = "";
+  doc[F("netatmoPassword")] = "";
+  doc[F("netatmoAccessToken")] = "";
+  doc[F("netatmoRefreshToken")] = "";
+  doc[F("netatmoDeviceId")] = "";
+  doc[F("netatmoModuleId")] = "";
+  doc[F("netatmoIndoorModuleId")] = "";
+  doc[F("useNetatmoOutdoor")] = useNetatmoOutdoor;
+  doc[F("prioritizeNetatmoIndoor")] = prioritizeNetatmoIndoor;
   
   // Write the minimal config
   File f = LittleFS.open("/config.json", "w");
@@ -1100,6 +1120,13 @@ void forceNetatmoTokenRefresh() {
 void saveTokensToConfig() {
   Serial.println(F("[CONFIG] Saving tokens to config.json"));
   
+  // Debug: Print the values being saved
+  Serial.print(F("[CONFIG] Saving netatmoClientId: '"));
+  Serial.print(netatmoClientId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Saving netatmoClientSecret length: "));
+  Serial.println(strlen(netatmoClientSecret));
+  
   // Skip ALL memory reporting and defragmentation
   
   if (!LittleFS.begin()) {
@@ -1133,81 +1160,63 @@ void saveTokensToConfig() {
     }
   }
   
-  // Ultra memory-efficient approach: Direct file modification
-  // Instead of parsing the entire JSON, we'll just replace the token values
+  // Try a different approach: Read the entire config into a JSON document,
+  // update the values, and write it back
   
-  // First, read the file to find the token positions
+  // Read the current config
   File configFile = LittleFS.open("/config.json", "r");
   if (!configFile) {
     Serial.println(F("[CONFIG] Failed to open config file for reading"));
     return;
   }
   
-  // Create a new temporary file
-  File tempFile = LittleFS.open("/config.tmp", "w");
-  if (!tempFile) {
-    Serial.println(F("[CONFIG] Failed to create temporary file"));
-    configFile.close();
+  // Parse the JSON
+  DynamicJsonDocument doc(2048);
+  DeserializationError error = deserializeJson(doc, configFile);
+  configFile.close();
+  
+  if (error) {
+    Serial.print(F("[CONFIG] Failed to parse config file: "));
+    Serial.println(error.c_str());
     return;
   }
   
-  // Process the file line by line
-  const int BUFFER_SIZE = 64; // Small buffer to reduce memory usage
-  char buffer[BUFFER_SIZE];
-  int bytesRead;
-  bool accessTokenFound = false;
-  bool refreshTokenFound = false;
-  bool clientIdFound = false;
-  bool clientSecretFound = false;
+  // Update the values
+  doc["netatmoAccessToken"] = netatmoAccessToken;
+  doc["netatmoRefreshToken"] = netatmoRefreshToken;
+  doc["netatmoClientId"] = netatmoClientId;
+  doc["netatmoClientSecret"] = netatmoClientSecret;
   
-  while ((bytesRead = configFile.readBytesUntil('\n', buffer, BUFFER_SIZE-1)) > 0) {
-    buffer[bytesRead] = '\0'; // Null terminate
-    String line = String(buffer);
-    
-    // Check for token fields and replace them
-    if (line.indexOf("\"netatmoAccessToken\"") >= 0 && !accessTokenFound) {
-      tempFile.print("  \"netatmoAccessToken\": \"");
-      tempFile.print(netatmoAccessToken);
-      tempFile.println("\",");
-      accessTokenFound = true;
-    }
-    else if (line.indexOf("\"netatmoRefreshToken\"") >= 0 && !refreshTokenFound) {
-      tempFile.print("  \"netatmoRefreshToken\": \"");
-      tempFile.print(netatmoRefreshToken);
-      tempFile.println("\",");
-      refreshTokenFound = true;
-    }
-    else if (line.indexOf("\"netatmoClientId\"") >= 0 && !clientIdFound) {
-      tempFile.print("  \"netatmoClientId\": \"");
-      tempFile.print(netatmoClientId);
-      tempFile.println("\",");
-      clientIdFound = true;
-    }
-    else if (line.indexOf("\"netatmoClientSecret\"") >= 0 && !clientSecretFound) {
-      tempFile.print("  \"netatmoClientSecret\": \"");
-      tempFile.print(netatmoClientSecret);
-      tempFile.println("\",");
-      clientSecretFound = true;
-    }
-    else {
-      // Write the line as is
-      tempFile.println(line);
-    }
-    
-    // No delay here
+  // Write the updated config back to the file
+  File outFile = LittleFS.open("/config.json", "w");
+  if (!outFile) {
+    Serial.println(F("[CONFIG] Failed to open config file for writing"));
+    return;
   }
   
-  configFile.close();
-  tempFile.close();
-  
-  // Replace the original file with the temporary file
-  if (LittleFS.exists("/config.json")) {
-    LittleFS.remove("/config.json");
+  if (serializeJson(doc, outFile) == 0) {
+    Serial.println(F("[CONFIG] Failed to write to config file"));
+  } else {
+    Serial.println(F("[CONFIG] Tokens saved successfully"));
   }
   
-  LittleFS.rename("/config.tmp", "/config.json");
+  outFile.close();
   
-  Serial.println(F("[CONFIG] Tokens saved successfully"));
+  // Verify the values were saved
+  File verifyFile = LittleFS.open("/config.json", "r");
+  if (verifyFile) {
+    DynamicJsonDocument verifyDoc(2048);
+    DeserializationError verifyError = deserializeJson(verifyDoc, verifyFile);
+    verifyFile.close();
+    
+    if (!verifyError) {
+      Serial.print(F("[CONFIG] Verified netatmoClientId: '"));
+      Serial.print(verifyDoc["netatmoClientId"].as<String>());
+      Serial.println(F("'"));
+      Serial.print(F("[CONFIG] Verified netatmoClientSecret exists: "));
+      Serial.println(verifyDoc.containsKey("netatmoClientSecret") ? "Yes" : "No");
+    }
+  }
 }
 
 // Function to fetch outdoor temperature from Netatmo

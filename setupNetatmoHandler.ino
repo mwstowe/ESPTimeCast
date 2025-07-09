@@ -308,13 +308,13 @@ void setupNetatmoHandler() {
       "<!DOCTYPE html>"
       "<html><head>"
       "<meta charset='UTF-8'>"
-      "<meta http-equiv='refresh' content='5;url=/netatmo.html'>"
+      "<meta http-equiv='refresh' content='3;url=/netatmo.html'>"
       "<title>ESPTimeCast - Authorization</title>"
       "<style>body{font-family:Arial;text-align:center;margin:50px}</style>"
       "</head><body>"
       "<h1>Authorization Successful</h1>"
       "<p>Exchanging code for tokens...</p>"
-      "<p>You will be redirected to the Netatmo settings page in 5 seconds.</p>"
+      "<p>You will be redirected to the Netatmo settings page in 3 seconds.</p>"
       "<p>If not redirected, <a href='/netatmo.html'>click here</a>.</p>"
       "</body></html>";
     
@@ -956,10 +956,8 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Token exchange complete"));
   
-  // Schedule a reboot after token exchange is complete
-  Serial.println(F("[NETATMO] Scheduling reboot to apply new tokens"));
-  rebootPending = true;
-  rebootTime = millis() + 2000; // Reboot in 2 seconds
+  // No reboot needed - tokens are already in memory and will be saved to config
+  Serial.println(F("[NETATMO] Tokens applied, no reboot needed"));
 }
 
 // Function to be called from loop() to fetch Netatmo devices

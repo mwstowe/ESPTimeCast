@@ -444,6 +444,13 @@ void setupWebServer() {
   
   server.on("/netatmo.html", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /netatmo.html"));
+    
+    // Check if we should handle this request
+    if (!shouldHandleWebRequest()) {
+      request->send(503, "text/plain", "Server busy, try again later");
+      return;
+    }
+    
     request->send(LittleFS, "/netatmo.html", "text/html");
   });
   
@@ -891,6 +898,13 @@ void setupWebServer() {
   // Add handler for netatmo-devices.js
   server.on("/netatmo-devices.js", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /netatmo-devices.js"));
+    
+    // Check if we should handle this request
+    if (!shouldHandleWebRequest()) {
+      request->send(503, "text/plain", "Server busy, try again later");
+      return;
+    }
+    
     request->send(LittleFS, "/netatmo-devices.js", "application/javascript");
   });
   
@@ -1779,3 +1793,14 @@ void loop() {
   yield();
 }
 
+// Function to check if we should handle web requests
+bool shouldHandleWebRequest() {
+  // If an API call is in progress, we should defer web requests
+  if (apiCallInProgress) {
+    Serial.println(F("[WEBSERVER] API call in progress, deferring web request"));
+    return false;
+  }
+  return true;
+}
+// External declarations for variables defined in other files
+extern bool apiCallInProgress;  // Flag to track API call status

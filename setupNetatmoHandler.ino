@@ -4,6 +4,7 @@ static bool tokenExchangePending = false;
 static bool fetchDevicesPending = false;
 static bool fetchStationsDataPending = false;
 static String deviceData = "";
+static bool apiCallInProgress = false; // Flag to track API call status
 
 // Helper function to URL encode a string (memory-efficient version)
 String urlEncode(const char* input) {
@@ -700,6 +701,13 @@ void setupNetatmoHandler() {
   server.on("/api/netatmo/refresh-stations", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling refresh stations request"));
     
+    // Check if an API call is already in progress
+    if (apiCallInProgress) {
+      Serial.println(F("[NETATMO] API call already in progress, deferring request"));
+      request->send(503, "application/json", "{\"error\":\"API call already in progress, try again later\"}");
+      return;
+    }
+    
     // Check if we have a valid access token
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
@@ -717,6 +725,13 @@ void setupNetatmoHandler() {
   // Add an endpoint to get stations data
   server.on("/api/netatmo/stations", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling get stations request"));
+    
+    // Check if an API call is in progress
+    if (apiCallInProgress) {
+      Serial.println(F("[NETATMO] API call in progress, deferring request"));
+      request->send(503, "application/json", "{\"error\":\"API call in progress, try again later\"}");
+      return;
+    }
     
     // Check if the file exists
     if (!LittleFS.exists("/devices/netatmo_devices.json")) {
@@ -1146,6 +1161,9 @@ void processSaveCredentials() {
 void fetchStationsData() {
   Serial.println(F("[NETATMO] Fetching stations data"));
   
+  // Set flag to indicate API call is in progress
+  apiCallInProgress = true;
+  
   // Report memory status before API call
   Serial.println(F("[MEMORY] Memory status before API call:"));
   printMemoryStats();
@@ -1160,21 +1178,27 @@ void fetchStationsData() {
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    apiCallInProgress = false; // Reset flag
     return;
   }
   
   if (strlen(netatmoAccessToken) == 0) {
     Serial.println(F("[NETATMO] Error - No access token"));
+    apiCallInProgress = false; // Reset flag
     return;
   }
   
-  // Create a new client for the API call
+  // Force garbage collection before creating the client
+  Serial.println(F("[MEMORY] Forcing garbage collection before creating HTTPS client"));
+  ESP.resetHeap();
+  
+  // Create a new client for the API call with minimal buffer sizes
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure(); // Skip certificate validation to save memory
-  client->setBufferSizes(1024, 1024); // Increase buffer sizes
+  client->setBufferSizes(512, 512); // Reduce buffer sizes to save memory
   
   HTTPClient https;
-  https.setTimeout(15000); // Increase timeout to 15 seconds
+  https.setTimeout(10000); // Reduce timeout to 10 seconds
   
   // Use homesdata endpoint instead of getstationsdata
   String apiUrl = "https://api.netatmo.com/api/homesdata";

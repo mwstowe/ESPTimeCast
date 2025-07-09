@@ -1547,6 +1547,11 @@ void loop() {
   processProxyRequest();
   
   // Process any pending credential saves
+  processSaveCredentials();
+  // Process any pending Netatmo proxy requests
+  processProxyRequest();
+  
+  // Process any pending credential saves
   // Process any pending credential saves
   processSaveCredentials();
 

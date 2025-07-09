@@ -633,6 +633,49 @@ void processTokenExchange() {
   
   Serial.println(F("[NETATMO] Processing token exchange"));
   
+  // Print detailed memory stats before we start
+  Serial.println(F("[NETATMO] Memory status before token exchange:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
+  Serial.print(F("[MEMORY] Heap fragmentation: "));
+  Serial.print(ESP.getHeapFragmentation());
+  Serial.println(F("%"));
+  Serial.print(F("[MEMORY] Largest free block: "));
+  Serial.print(ESP.getMaxFreeBlockSize());
+  Serial.println(F(" bytes"));
+  
+  // Perform a gentle defragmentation if needed
+  if (ESP.getHeapFragmentation() > 30 || ESP.getMaxFreeBlockSize() < 20000) {
+    Serial.println(F("[NETATMO] Performing gentle heap defragmentation"));
+    
+    // Allocate and free a block to help defragment
+    size_t blockSize = ESP.getMaxFreeBlockSize() * 0.7; // 70% of largest block
+    if (blockSize > 1024) {
+      char* block = (char*)malloc(blockSize);
+      if (block) {
+        // Touch the memory to ensure it's physically allocated
+        memset(block, 0, blockSize);
+        free(block);
+        Serial.println(F("[NETATMO] Defragmentation complete"));
+      } else {
+        Serial.println(F("[NETATMO] Failed to allocate block for defragmentation"));
+      }
+    }
+    
+    // Print memory stats after defragmentation
+    Serial.println(F("[NETATMO] Memory status after defragmentation:"));
+    Serial.print(F("[MEMORY] Free heap: "));
+    Serial.print(ESP.getFreeHeap());
+    Serial.println(F(" bytes"));
+    Serial.print(F("[MEMORY] Heap fragmentation: "));
+    Serial.print(ESP.getHeapFragmentation());
+    Serial.println(F("%"));
+    Serial.print(F("[MEMORY] Largest free block: "));
+    Serial.print(ESP.getMaxFreeBlockSize());
+    Serial.println(F(" bytes"));
+  }
+  
   // Clear the flag immediately to prevent repeated attempts if this fails
   tokenExchangePending = false;
   String code = pendingCode;
@@ -657,13 +700,40 @@ void processTokenExchange() {
   client.setInsecure(); // Skip certificate validation
   client.setTimeout(20000); // 20 second timeout
   
+  // Enable SSL debugging
+  client.setDebugOutput(true);
+  
+  Serial.println(F("[NETATMO] Memory before connection:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
+  
   Serial.println(F("[NETATMO] Connecting directly to api.netatmo.com:443"));
   if (!client.connect("api.netatmo.com", 443)) {
     Serial.println(F("[NETATMO] Direct connection failed"));
+    
+    // Try to get more info about the failure
+    Serial.print(F("[NETATMO] Last SSL error: "));
+    Serial.println(client.getLastSSLError());
+    
+    // Try a non-SSL connection to check basic connectivity
+    WiFiClient plainClient;
+    Serial.println(F("[NETATMO] Trying plain connection to api.netatmo.com:80 to check connectivity"));
+    if (plainClient.connect("api.netatmo.com", 80)) {
+      Serial.println(F("[NETATMO] Plain connection succeeded - issue is likely with SSL"));
+      plainClient.stop();
+    } else {
+      Serial.println(F("[NETATMO] Plain connection also failed - issue might be with DNS or network"));
+    }
+    
     return;
   }
   
   Serial.println(F("[NETATMO] Connected! Building request"));
+  Serial.println(F("[NETATMO] Memory after connection:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
   
   // Build the redirect URI
   String redirectUri = "http://";
@@ -692,6 +762,11 @@ void processTokenExchange() {
   request += postData;
   
   Serial.println(F("[NETATMO] Sending direct request"));
+  Serial.println(F("[NETATMO] Memory before sending:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
+  
   client.print(request);
   
   // Wait for the response
@@ -704,6 +779,11 @@ void processTokenExchange() {
     }
     delay(10); // Small delay to avoid watchdog issues
   }
+  
+  Serial.println(F("[NETATMO] Memory after sending:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
   
   // Read the response headers
   Serial.println(F("[NETATMO] Reading response headers"));
@@ -741,6 +821,10 @@ void processTokenExchange() {
   Serial.println(F("[NETATMO] Response received"));
   Serial.print(F("[NETATMO] Response length: "));
   Serial.println(response.length());
+  Serial.println(F("[NETATMO] Memory after receiving:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
   
   // Check if we got a valid JSON response
   if (response.indexOf("{") != 0) {
@@ -749,7 +833,76 @@ void processTokenExchange() {
     return;
   }
   
+  // Try an alternative approach if the direct connection fails
+  if (response.length() == 0 || response.indexOf("{") != 0) {
+    Serial.println(F("[NETATMO] Direct connection failed, trying HTTPClient approach"));
+    
+    // Memory optimization: Use static client to reduce stack usage
+    static BearSSL::WiFiClientSecure httpsClient;
+    httpsClient.setInsecure(); // Skip certificate validation to save memory
+    httpsClient.setTimeout(15000); // Increase timeout to 15 seconds
+    
+    HTTPClient https;
+    https.setTimeout(15000); // Increase timeout to 15 seconds
+    
+    Serial.println(F("[NETATMO] Connecting to token endpoint via HTTPClient"));
+    if (!https.begin(httpsClient, "https://api.netatmo.com/oauth2/token")) {
+      Serial.println(F("[NETATMO] Error - Failed to connect"));
+      return;
+    }
+    
+    https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+    https.addHeader("Accept", "application/json");
+    https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
+    
+    // Rebuild the POST data
+    String httpPostData = "grant_type=authorization_code";
+    httpPostData += "&client_id=";
+    httpPostData += urlEncode(netatmoClientId);
+    httpPostData += "&client_secret=";
+    httpPostData += urlEncode(netatmoClientSecret);
+    httpPostData += "&code=";
+    httpPostData += urlEncode(code.c_str());
+    httpPostData += "&redirect_uri=";
+    httpPostData += urlEncode(redirectUri.c_str());
+    
+    Serial.println(F("[NETATMO] Sending token request via HTTPClient"));
+    int httpCode = https.POST(httpPostData);
+    
+    if (httpCode != HTTP_CODE_OK) {
+      Serial.print(F("[NETATMO] Error - HTTP code: "));
+      Serial.println(httpCode);
+      
+      // Get more detailed error information if available
+      if (httpCode > 0) {
+        String payload = https.getString();
+        Serial.print(F("[NETATMO] Error response: "));
+        Serial.println(payload);
+      } else {
+        Serial.print(F("[NETATMO] Connection error: "));
+        Serial.println(https.errorToString(httpCode));
+      }
+      
+      https.end();
+      return;
+    }
+    
+    // Get the response
+    response = https.getString();
+    https.end();
+  }
+  
+  Serial.println(F("[NETATMO] Memory before JSON parsing:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
+  
   processTokenResponse(response);
+  
+  Serial.println(F("[NETATMO] Memory after token processing:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
 }
 
 // Helper function to process token response

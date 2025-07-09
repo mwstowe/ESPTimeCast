@@ -676,14 +676,19 @@ void processTokenExchange() {
   
   // Memory optimization: Use static client to reduce stack usage
   static BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
   
-  // Print memory before HTTPS client creation
-  Serial.println(F("[NETATMO] Memory before HTTPS client:"));
-  printMemoryStats();
+  // Instead of setInsecure(), try setting specific SSL parameters
+  // These are more compatible with older servers
+  client.setBufferSizes(1024, 1024); // Smaller buffer sizes
+  client.setX509Time(1577836800); // Jan 1, 2020 - avoid time validation issues
+  
+  // Set a specific cipher suite that's more compatible
+  // ECDHE-RSA-AES128-GCM-SHA256 is widely supported
+  static const uint16_t ciphersuites[] = {0xC02F};
+  client.setCiphers(ciphersuites, 1);
   
   HTTPClient https;
-  https.setTimeout(10000); // 10 second timeout
+  https.setTimeout(15000); // Increased timeout to 15 seconds
   
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
   if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
@@ -692,6 +697,8 @@ void processTokenExchange() {
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  https.addHeader("Accept", "application/json");
+  https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
   
   // Memory optimization: Build the POST data in chunks
   String postData = "grant_type=authorization_code";
@@ -739,87 +746,71 @@ void processTokenExchange() {
     
     https.end();
     
-    // Try a different approach with a direct TCP connection
-    Serial.println(F("[NETATMO] Trying direct TCP connection as fallback"));
-    WiFiClientSecure directClient;
-    directClient.setInsecure();
+    // Try a different approach with a different SSL configuration
+    Serial.println(F("[NETATMO] Trying with minimal SSL configuration"));
     
-    Serial.println(F("[NETATMO] Connecting directly to api.netatmo.com:443"));
-    if (!directClient.connect("api.netatmo.com", 443)) {
-      Serial.println(F("[NETATMO] Direct connection failed"));
+    static BearSSL::WiFiClientSecure client2;
+    client2.setInsecure(); // Minimal SSL validation
+    
+    HTTPClient https2;
+    https2.setTimeout(15000);
+    
+    if (!https2.begin(client2, "https://api.netatmo.com/oauth2/token")) {
+      Serial.println(F("[NETATMO] Error - Failed to connect with second approach"));
       return;
     }
     
-    Serial.println(F("[NETATMO] Direct connection successful! Sending request"));
+    https2.addHeader("Content-Type", "application/x-www-form-urlencoded");
     
-    // Build the HTTP request manually
-    String request = "POST /oauth2/token HTTP/1.1\r\n";
-    request += "Host: api.netatmo.com\r\n";
-    request += "Connection: close\r\n";
-    request += "Content-Type: application/x-www-form-urlencoded\r\n";
-    request += "Content-Length: " + String(postData.length()) + "\r\n";
-    request += "\r\n";
-    request += postData;
+    Serial.println(F("[NETATMO] Sending token request with second approach"));
+    int httpCode2 = https2.POST(postData);
     
-    directClient.print(request);
-    
-    // Wait for the response
-    unsigned long timeout = millis();
-    while (directClient.available() == 0) {
-      if (millis() - timeout > 10000) {
-        Serial.println(F("[NETATMO] Direct request timeout"));
-        directClient.stop();
-        return;
-      }
-      delay(10);
+    if (httpCode2 != HTTP_CODE_OK) {
+      Serial.print(F("[NETATMO] Error with second approach - HTTP code: "));
+      Serial.println(httpCode2);
+      https2.end();
+      return;
     }
     
-    // Read the response
-    Serial.println(F("[NETATMO] Reading direct response"));
-    String response = "";
-    while (directClient.available()) {
-      char c = directClient.read();
-      response += c;
+    String response = https2.getString();
+    https2.end();
+    
+    Serial.println(F("[NETATMO] Second approach successful, parsing response"));
+    
+    // Memory optimization: Use a smaller JSON buffer
+    StaticJsonDocument<384> doc;
+    DeserializationError error = deserializeJson(doc, response);
+    
+    if (error) {
+      Serial.print(F("[NETATMO] JSON parse error: "));
+      Serial.println(error.c_str());
+      return;
     }
     
-    directClient.stop();
-    
-    Serial.println(F("[NETATMO] Direct response received"));
-    Serial.println(response);
-    
-    // Check if we got a valid JSON response
-    int jsonStart = response.indexOf("\r\n\r\n") + 4;
-    if (jsonStart > 4) {
-      String jsonResponse = response.substring(jsonStart);
-      Serial.println(F("[NETATMO] Parsing direct response"));
-      
-      // Memory optimization: Use a smaller JSON buffer
-      StaticJsonDocument<384> doc;
-      DeserializationError error = deserializeJson(doc, jsonResponse);
-      
-      if (!error && doc.containsKey("access_token") && doc.containsKey("refresh_token")) {
-        // Extract tokens directly as strings
-        const char* accessToken = doc["access_token"];
-        const char* refreshToken = doc["refresh_token"];
-        
-        // Save the tokens
-        Serial.println(F("[NETATMO] Saving tokens from direct response"));
-        strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
-        strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
-        
-        // Set flag to save tokens in main loop
-        saveCredentialsPending = true;
-        
-        Serial.println(F("[NETATMO] Token exchange complete via direct connection"));
-        
-        // Schedule a reboot after token exchange is complete
-        Serial.println(F("[NETATMO] Scheduling reboot to apply new tokens"));
-        rebootPending = true;
-        rebootTime = millis() + 2000; // Reboot in 2 seconds
-        return;
-      }
+    // Extract the tokens
+    if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
+      Serial.println(F("[NETATMO] Missing tokens in response"));
+      return;
     }
     
+    // Memory optimization: Extract tokens directly as strings
+    const char* accessToken = doc["access_token"];
+    const char* refreshToken = doc["refresh_token"];
+    
+    // Save the tokens
+    Serial.println(F("[NETATMO] Saving tokens"));
+    strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
+    strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
+    
+    // Set flag to save tokens in main loop instead of saving directly
+    saveCredentialsPending = true;
+    
+    Serial.println(F("[NETATMO] Token exchange complete with second approach"));
+    
+    // Schedule a reboot after token exchange is complete
+    Serial.println(F("[NETATMO] Scheduling reboot to apply new tokens"));
+    rebootPending = true;
+    rebootTime = millis() + 2000; // Reboot in 2 seconds
     return;
   }
   

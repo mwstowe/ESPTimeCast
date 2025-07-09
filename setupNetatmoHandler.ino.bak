@@ -1221,12 +1221,12 @@ void fetchStationsData() {
   Serial.println(F("[MEMORY] Final defragmentation before API call"));
   defragmentHeap();
   
-  // Report memory status before making the request
-  Serial.println(F("[MEMORY] Memory status before API call:"));
-  printMemoryStats();
-  
   int httpCode = https.GET();
   yield(); // Allow the watchdog to be fed
+  
+  // Report memory status immediately after the API call
+  Serial.println(F("[MEMORY] Memory status immediately after API call:"));
+  printMemoryStats();
   
   Serial.print(F("[NETATMO] HTTP response code: "));
   Serial.println(httpCode);

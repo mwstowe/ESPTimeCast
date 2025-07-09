@@ -651,25 +651,26 @@ void processTokenExchange() {
   Serial.print(F("[NETATMO] WiFi IP: "));
   Serial.println(WiFi.localIP());
   
-  // Memory optimization: Use static client to reduce stack usage
-  static BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
-  client.setTimeout(15000); // Increase timeout to 15 seconds
+  // Try with a completely different approach using a direct TCP connection
+  // This avoids the SSL/TLS overhead that might be causing issues
+  WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation
+  client.setTimeout(20000); // 20 second timeout
   
-  HTTPClient https;
-  https.setTimeout(15000); // Increase timeout to 15 seconds
-  
-  Serial.println(F("[NETATMO] Connecting to token endpoint"));
-  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
-    Serial.println(F("[NETATMO] Error - Failed to connect"));
+  Serial.println(F("[NETATMO] Connecting directly to api.netatmo.com:443"));
+  if (!client.connect("api.netatmo.com", 443)) {
+    Serial.println(F("[NETATMO] Direct connection failed"));
     return;
   }
   
-  https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  https.addHeader("Accept", "application/json");
-  https.addHeader("Connection", "close"); // Try to avoid keep-alive issues
+  Serial.println(F("[NETATMO] Connected! Building request"));
   
-  // Memory optimization: Build the POST data in smaller chunks
+  // Build the redirect URI
+  String redirectUri = "http://";
+  redirectUri += WiFi.localIP().toString();
+  redirectUri += "/api/netatmo/callback";
+  
+  // Build the POST data
   String postData = "grant_type=authorization_code";
   postData += "&client_id=";
   postData += urlEncode(netatmoClientId);
@@ -678,76 +679,75 @@ void processTokenExchange() {
   postData += "&code=";
   postData += urlEncode(code.c_str());
   postData += "&redirect_uri=";
-  
-  // Memory optimization: Build the redirect URI directly
-  String redirectUri = "http://";
-  redirectUri += WiFi.localIP().toString();
-  redirectUri += "/api/netatmo/callback";
   postData += urlEncode(redirectUri.c_str());
   
-  Serial.println(F("[NETATMO] Sending token request"));
-  Serial.print(F("[NETATMO] POST data: "));
-  Serial.println(postData);
+  // Build the HTTP request manually
+  String request = "POST /oauth2/token HTTP/1.1\r\n";
+  request += "Host: api.netatmo.com\r\n";
+  request += "Connection: close\r\n";
+  request += "Content-Type: application/x-www-form-urlencoded\r\n";
+  request += "Accept: application/json\r\n";
+  request += "Content-Length: " + String(postData.length()) + "\r\n";
+  request += "\r\n";
+  request += postData;
   
-  int httpCode = https.POST(postData);
+  Serial.println(F("[NETATMO] Sending direct request"));
+  client.print(request);
   
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.print(F("[NETATMO] Error - HTTP code: "));
-    Serial.println(httpCode);
-    
-    // Get more detailed error information if available
-    if (httpCode > 0) {
-      String payload = https.getString();
-      Serial.print(F("[NETATMO] Error response: "));
-      Serial.println(payload);
-    } else {
-      Serial.print(F("[NETATMO] Connection error: "));
-      Serial.println(https.errorToString(httpCode));
+  // Wait for the response
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 20000) {
+      Serial.println(F("[NETATMO] Direct request timeout"));
+      client.stop();
+      return;
     }
-    
-    https.end();
-    
-    // Try a simpler approach with plain WiFiClient
-    Serial.println(F("[NETATMO] Trying alternative approach..."));
-    WiFiClient plainClient;
-    HTTPClient http;
-    
-    if (http.begin(plainClient, "http://api.netatmo.com/oauth2/token")) {
-      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-      http.addHeader("Accept", "application/json");
-      
-      int plainHttpCode = http.POST(postData);
-      
-      if (plainHttpCode > 0) {
-        Serial.print(F("[NETATMO] Alternative HTTP code: "));
-        Serial.println(plainHttpCode);
-        
-        if (plainHttpCode == HTTP_CODE_OK) {
-          String response = http.getString();
-          http.end();
-          
-          Serial.println(F("[NETATMO] Alternative approach successful, parsing response"));
-          processTokenResponse(response);
-          return;
-        } else {
-          String payload = http.getString();
-          Serial.print(F("[NETATMO] Alternative error response: "));
-          Serial.println(payload);
-        }
-      } else {
-        Serial.print(F("[NETATMO] Alternative connection error: "));
-        Serial.println(http.errorToString(plainHttpCode));
-      }
-      
-      http.end();
-    }
-    
-    return;
+    delay(10); // Small delay to avoid watchdog issues
   }
   
-  // Memory optimization: Process the response in smaller chunks
-  String response = https.getString();
-  https.end();
+  // Read the response headers
+  Serial.println(F("[NETATMO] Reading response headers"));
+  String headers = "";
+  String line = "";
+  bool headerDone = false;
+  
+  while (client.available() && !headerDone) {
+    line = client.readStringUntil('\n');
+    if (line == "\r") {
+      headerDone = true;
+    } else {
+      headers += line + "\n";
+    }
+  }
+  
+  Serial.println(F("[NETATMO] Response headers:"));
+  Serial.println(headers);
+  
+  // Read the response body
+  Serial.println(F("[NETATMO] Reading response body"));
+  String response = "";
+  while (client.available()) {
+    char c = client.read();
+    response += c;
+    
+    // Yield occasionally to avoid watchdog issues
+    if (response.length() % 100 == 0) {
+      delay(0);
+    }
+  }
+  
+  client.stop();
+  
+  Serial.println(F("[NETATMO] Response received"));
+  Serial.print(F("[NETATMO] Response length: "));
+  Serial.println(response.length());
+  
+  // Check if we got a valid JSON response
+  if (response.indexOf("{") != 0) {
+    Serial.println(F("[NETATMO] Invalid JSON response"));
+    Serial.println(response);
+    return;
+  }
   
   processTokenResponse(response);
 }

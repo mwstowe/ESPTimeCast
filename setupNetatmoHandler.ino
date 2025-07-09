@@ -1964,10 +1964,24 @@ void fetchStationsDataImproved() {
     apiCallInProgress = false; // Reset flag
     return;
   }
-  
   // Add authorization header
+  // Try a different approach: add the token as a query parameter
+  if (apiUrl.indexOf("?") == -1) {
+    apiUrl += "?";
+  } else {
+    apiUrl += "&";
+  }
+  apiUrl += "access_token=";
+  apiUrl += urlEncode(netatmoAccessToken);
+  
+  Serial.print(F("[NETATMO] Using URL with token: "));
+  Serial.println(apiUrl);
+  
+  // Still add the Authorization header as a backup
   String authHeader = "Bearer ";
   authHeader += netatmoAccessToken;
+  https.addHeader("Authorization", authHeader);
+  https.addHeader("Accept", "application/json");
   https.addHeader("Authorization", authHeader);
   https.addHeader("Accept", "application/json");
   // Log the complete API request

@@ -66,6 +66,7 @@ void logTokenPeriodically();
 int logDetailedApiRequest(HTTPClient &https, const String &apiUrl);
 String encodeToken(const char* token);
 void patchFetchStationsDataImproved();
+void tryDifferentAuthHeaders();
 void simpleNetatmoCall();
 void processSaveCredentials();
 
@@ -1575,6 +1576,9 @@ void setup() {
   
   // Patch the fetchStationsDataImproved function to use URL-encoded tokens
   patchFetchStationsDataImproved();
+  
+  // Try different authorization header formats
+  tryDifferentAuthHeaders();
   
   // Initialize DS18B20 temperature sensor
   sensors.begin();

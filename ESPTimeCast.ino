@@ -21,12 +21,14 @@
 #include "src/NetatmoHandler.h"
 
 // Forward declarations
+bool shouldHandleWebRequest();
 void processFetchStationsData();
 void processProxyRequest();
 bool refreshNetatmoToken();
 void extractDeviceInfo();
 void fetchStationsDataWithDump();
 void fetchStationsDataFallback();
+void processSaveCredentials();
 
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
 #include "tz_lookup.h" // Timezone lookup, do not duplicate mapping here!
@@ -1547,6 +1549,7 @@ void loop() {
   processFetchDevices();
   
   // Process any pending Netatmo stations data fetches
+  // Process any pending Netatmo stations data fetches
   processFetchStationsData();
   
   // Process any pending Netatmo proxy requests
@@ -1554,20 +1557,6 @@ void loop() {
   
   // Process any pending credential saves
   processSaveCredentials();
-  // Process any pending Netatmo proxy requests
-  processProxyRequest();
-  
-  // Process any pending credential saves
-  processSaveCredentials();
-  // Process any pending Netatmo proxy requests
-  processProxyRequest();
-  
-  // Process any pending credential saves
-  processSaveCredentials();
-  // Process any pending Netatmo proxy requests
-  processProxyRequest();
-  
-  // Process any pending credential saves
   // Process any pending credential saves
   processSaveCredentials();
 

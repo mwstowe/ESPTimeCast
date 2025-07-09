@@ -559,7 +559,51 @@ void setupNetatmoHandler() {
     
     String response = "{";
     response += "\"clientId\":\"" + String(netatmoClientId) + "\"";
+    response += ",\"clientSecret\":\"" + String(netatmoClientSecret) + "\"";
     response += ",\"hasClientSecret\":" + String(strlen(netatmoClientSecret) > 0 ? "true" : "false");
+    response += "}";
+    
+    request->send(200, "application/json", response);
+  });
+  
+  // Add an endpoint to get memory information and trigger defragmentation
+  server.on("/api/memory", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[MEMORY] Handling memory info request"));
+    
+    // Check if defragmentation was requested
+    bool defrag = false;
+    if (request->hasParam("defrag")) {
+      defrag = request->getParam("defrag")->value() == "true";
+    }
+    
+    // Get memory stats
+    uint32_t freeHeap = ESP.getFreeHeap();
+    uint8_t fragmentation = ESP.getHeapFragmentation();
+    uint32_t maxFreeBlock = ESP.getMaxFreeBlockSize();
+    uint32_t freeStack = ESP.getFreeContStack();
+    
+    // Print memory stats to serial
+    printMemoryStats();
+    
+    // Perform defragmentation if requested
+    if (defrag) {
+      Serial.println(F("[MEMORY] Defragmentation requested via API"));
+      defragmentHeap();
+      
+      // Get updated stats
+      freeHeap = ESP.getFreeHeap();
+      fragmentation = ESP.getHeapFragmentation();
+      maxFreeBlock = ESP.getMaxFreeBlockSize();
+      freeStack = ESP.getFreeContStack();
+    }
+    
+    // Create response
+    String response = "{";
+    response += "\"freeHeap\":" + String(freeHeap);
+    response += ",\"fragmentation\":" + String(fragmentation);
+    response += ",\"maxFreeBlock\":" + String(maxFreeBlock);
+    response += ",\"freeStack\":" + String(freeStack);
+    response += ",\"defragPerformed\":" + String(defrag ? "true" : "false");
     response += "}";
     
     request->send(200, "application/json", response);
@@ -693,6 +737,16 @@ void processFetchDevices() {
   }
   
   Serial.println(F("[NETATMO] Fetching Netatmo devices"));
+  
+  // Print memory stats before processing
+  Serial.println(F("[NETATMO] Memory stats before fetch devices:"));
+  printMemoryStats();
+  
+  // Defragment heap if needed
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Defragmenting heap before fetch devices"));
+    defragmentHeap();
+  }
   
   // Clear the flag immediately to prevent repeated attempts if this fails
   fetchDevicesPending = false;

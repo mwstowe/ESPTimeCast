@@ -28,10 +28,23 @@ function fetchNetatmoDevices() {
   indoorModuleSelect.innerHTML = '<option value="none">Not mapped</option>';
   
   // Show loading message
-  showStatus("Fetching Netatmo devices...", "loading");
+  showStatus("Preparing to fetch Netatmo devices...", "loading");
   
-  // First check token status
-  fetch('/api/netatmo/token-status')
+  // First, check memory and defragment if needed
+  fetch('/api/memory?defrag=true')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(memoryData => {
+      console.log("Memory stats:", memoryData);
+      showStatus(`Memory optimized. Free heap: ${memoryData.freeHeap} bytes. Fetching devices...`, "loading");
+      
+      // Now check token status
+      return fetch('/api/netatmo/token-status');
+    })
     .then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -321,6 +334,13 @@ function loadApiKeys() {
       if (clientIdInput && data.clientId) {
         clientIdInput.value = data.clientId;
         clientIdInput.placeholder = "Your Netatmo API Client ID";
+      }
+      
+      // Update the client secret field
+      const clientSecretInput = document.getElementById('netatmoClientSecret');
+      if (clientSecretInput && data.clientSecret) {
+        clientSecretInput.value = data.clientSecret;
+        clientSecretInput.placeholder = "Your Netatmo API Client Secret";
       }
     })
     .catch(error => {

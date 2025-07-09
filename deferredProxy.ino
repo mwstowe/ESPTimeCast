@@ -11,6 +11,16 @@ void processProxyRequest() {
   
   Serial.println(F("[NETATMO] Processing deferred proxy request"));
   
+  // Print memory stats before processing
+  Serial.println(F("[NETATMO] Memory stats before proxy request:"));
+  printMemoryStats();
+  
+  // Defragment heap if needed
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Defragmenting heap before proxy request"));
+    defragmentHeap();
+  }
+  
   // Clear the flag immediately to prevent repeated attempts if this fails
   proxyPending = false;
   String endpoint = proxyEndpoint;

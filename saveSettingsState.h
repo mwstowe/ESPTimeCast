@@ -4,10 +4,8 @@
 // Enum to track the state of the settings save operation
 enum SaveSettingsState {
   IDLE,
-  MOUNT_FS,
-  READ_CONFIG,
-  UPDATE_CONFIG,
-  WRITE_CONFIG,
+  PREPARE,
+  WRITE_SETTINGS,
   FINALIZE
 };
 

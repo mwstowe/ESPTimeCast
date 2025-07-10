@@ -415,13 +415,15 @@ function loadConfig() {
 function saveConfig() {
   showStatus('Saving configuration...', 'loading');
   
-  // Send a minimal request with no data
+  // Send a minimal request with minimal data
   fetch('/api/netatmo/save-settings', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({})
+    body: JSON.stringify({
+      action: 'save'
+    })
   })
   .then(response => {
     if (!response.ok) {

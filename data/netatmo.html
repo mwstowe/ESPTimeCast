@@ -415,20 +415,13 @@ function loadConfig() {
 function saveConfig() {
   showStatus('Saving configuration...', 'loading');
   
-  // Get form data
-  const form = document.getElementById('netatmoForm');
-  const formData = new FormData(form);
-  
-  // Convert FormData to URL-encoded string
-  const urlEncodedData = new URLSearchParams(formData).toString();
-  
-  // Send AJAX request
+  // Send a minimal request with no data
   fetch('/api/netatmo/save-settings', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
     },
-    body: urlEncodedData
+    body: JSON.stringify({})
   })
   .then(response => {
     if (!response.ok) {

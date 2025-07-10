@@ -23,6 +23,11 @@ body {
   background-repeat: no-repeat, repeat, repeat; 
 }
 
+/* Force dropdown options to be visible in all browsers */
+select {
+  color-scheme: dark;
+}
+
 h1 { 
   text-align: center; 
   font-size: 1.5rem; 
@@ -111,10 +116,27 @@ select {
   font-size: 1rem;
 }
 
-/* Fix for dropdown options */
+/* Fix for dropdown options - ensure they're visible with dark background and white text */
 select option {
   background-color: #2b425a;
   color: #ffffff;
+  padding: 8px;
+}
+
+/* Fix for Chromium-based browsers which may ignore the background-color */
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  select {
+    -webkit-appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="6"><path d="M0 0l6 6 6-6z" fill="%23ffffff"/></svg>');
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    padding-right: 2rem;
+  }
+  
+  select option {
+    background-color: #2b425a !important;
+    color: #ffffff !important;
+  }
 }
 
 input[type="text"]:focus, 
@@ -649,9 +671,7 @@ function hideStatus() {
           <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules(this.value)" class="select-styled">
             <option value="">Select Device...</option>
           </select>
-          <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button type="button" onclick="fetchNetatmoDevices()" class="fetch-button">Refresh Stations</button>
-          </div>
+        </div>
         </div>
         
         <div class="form-group">

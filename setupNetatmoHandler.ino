@@ -752,6 +752,9 @@ void setupNetatmoHandler() {
       return;
     }
     
+    // List all files to help diagnose issues
+    listAllFiles();
+    
     // Check if the file exists
     if (!LittleFS.exists("/devices/netatmo_devices.json")) {
       Serial.println(F("[NETATMO] Device data file not found"));
@@ -2173,6 +2176,9 @@ void fetchStationsDataImproved() {
   https.end();
   
   Serial.print(F("[NETATMO] Stations data saved to file"));
+  
+  // List all files to verify the file was saved
+  listAllFiles();
   
   // Log the first part of the response
   Serial.println(F("[NETATMO] Response preview:"));

@@ -70,6 +70,7 @@ void patchFetchStationsDataImproved();
 void tryDifferentAuthHeaders();
 bool isInvalidTokenError(const String &errorPayload);
 void setupHttpClientWithTimeout(HTTPClient &https);
+void listAllFiles();
 void simpleNetatmoCall();
 void processSaveCredentials();
 

@@ -41,8 +41,8 @@ function fetchNetatmoDevices() {
     .then(data => {
       console.log("Refresh initiated:", data);
       
-      // Wait longer for the refresh to complete (5 seconds)
-      showStatus("Waiting for API call to complete (5 seconds)...", "loading");
+      // Wait longer for the refresh to complete (10 seconds)
+      showStatus("Waiting for API call to complete (10 seconds)...", "loading");
       setTimeout(() => {
         // Now get the stations data
         fetch('/api/netatmo/stations')
@@ -91,7 +91,7 @@ function fetchNetatmoDevices() {
             showStatus("Error fetching Netatmo stations: " + error.message, "error");
             setTimeout(hideStatus, 5000);
           });
-      }, 5000); // Wait 5 seconds before fetching stations data
+      }, 10000); // Wait 10 seconds before fetching stations data
     })
     .catch(error => {
       console.error("Error refreshing stations:", error);

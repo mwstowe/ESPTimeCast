@@ -44,8 +44,8 @@ function fetchNetatmoDevices() {
       // Wait longer for the refresh to complete (10 seconds)
       showStatus("Waiting for API call to complete (10 seconds)...", "loading");
       setTimeout(() => {
-        // Now get the stations data
-        fetch('/api/netatmo/stations')
+        // Now get the stations data directly from the file
+        fetch('/netatmo_devices.json')
           .then(response => {
             if (!response.ok) {
               throw new Error(`HTTP error! Status: ${response.status}`);

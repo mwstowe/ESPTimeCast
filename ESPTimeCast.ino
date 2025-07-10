@@ -71,6 +71,8 @@ void tryDifferentAuthHeaders();
 bool isInvalidTokenError(const String &errorPayload);
 void setupHttpClientWithTimeout(HTTPClient &https);
 void listAllFiles();
+void enhanceApiResponse(AsyncWebServerRequest *request, const char* contentType, const String &payload);
+void sendFileWithEnhancedHeaders(AsyncWebServerRequest *request, const char* filePath, const char* contentType);
 void simpleNetatmoCall();
 void processSaveCredentials();
 

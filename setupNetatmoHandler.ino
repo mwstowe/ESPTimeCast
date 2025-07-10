@@ -742,51 +742,12 @@ void setupNetatmoHandler() {
   });
   
   // Add an endpoint to get stations data
+  // Legacy endpoint - now we access the file directly
   server.on("/api/netatmo/stations", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println(F("[NETATMO] Handling get stations request"));
+    Serial.println(F("[NETATMO] Handling legacy get stations request"));
     
-    // Check if an API call is in progress
-    if (apiCallInProgress) {
-      Serial.println(F("[NETATMO] API call in progress, deferring request"));
-      request->send(503, "application/json", "{\"error\":\"API call in progress, try again later\"}");
-      return;
-    }
-    
-    // List all files to help diagnose issues
-    listAllFiles();
-    
-    // Check if the file exists
-    if (!LittleFS.exists("/devices/netatmo_devices.json")) {
-      Serial.println(F("[NETATMO] Device data file not found"));
-      request->send(404, "application/json", "{\"error\":\"Device data not found\"}");
-      return;
-    }
-    
-    // Open the file
-    File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "r");
-    if (!deviceFile) {
-      Serial.println(F("[NETATMO] Failed to open device data file"));
-      request->send(500, "application/json", "{\"error\":\"Failed to open device data file\"}");
-      return;
-    }
-    
-    // Create a response stream
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    
-    // Stream the file content to the response
-    const size_t bufSize = 256;
-    uint8_t buf[bufSize];
-    
-    while (deviceFile.available()) {
-      size_t bytesRead = deviceFile.read(buf, bufSize);
-      if (bytesRead > 0) {
-        response->write(buf, bytesRead);
-      }
-      yield(); // Allow the watchdog to be fed
-    }
-    
-    deviceFile.close();
-    request->send(response);
+    // Redirect to the file
+    request->redirect("/netatmo_devices.json");
   });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
@@ -2077,13 +2038,8 @@ void fetchStationsDataImproved() {
   Serial.print(F("[NETATMO] Content-Type: "));
   Serial.println(https.header("Content-Type"));
   
-  // Create the devices directory if it doesn't exist
-  if (!LittleFS.exists("/devices")) {
-    LittleFS.mkdir("/devices");
-  }
-  
-  // Open a file to save the raw response
-  File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "w");
+  // Open a file to save the raw response directly in the root directory
+  File deviceFile = LittleFS.open("/netatmo_devices.json", "w");
   if (!deviceFile) {
     Serial.println(F("[NETATMO] Failed to open file for writing"));
     https.end();

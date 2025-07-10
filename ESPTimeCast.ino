@@ -43,9 +43,11 @@ bool parseNetatmoJson(String &payload, JsonDocument &doc);
 String fetchNetatmoDevices();
 void createDefaultConfig();
 void setupNetatmoHandler();
+void setupSaveSettingsHandler();
 void processTokenExchange();
 void processFetchDevices();
 void triggerNetatmoDevicesFetch();
+void processSettingsSave();
 String getNetatmoDeviceData();
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
@@ -183,6 +185,7 @@ AsyncWebServer server(80);
 
 char ssid[32] = "";
 char password[32] = "";
+// Netatmo API credentials and tokens
 char netatmoClientId[64] = "";
 char netatmoClientSecret[64] = "";
 char netatmoUsername[64] = "";
@@ -938,6 +941,9 @@ void setupWebServer() {
   // Setup Netatmo OAuth handler
   setupNetatmoHandler();
   
+  // Setup Netatmo save settings handler
+  setupSaveSettingsHandler();
+  
   // Add handler for netatmo-devices.js
   server.on("/netatmo-devices.js", HTTP_GET, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /netatmo-devices.js"));
@@ -1661,14 +1667,14 @@ void loop() {
   processFetchDevices();
   
   // Process any pending Netatmo stations data fetches
-  // Process any pending Netatmo stations data fetches
   processFetchStationsData();
   
   // Process any pending Netatmo proxy requests
   processProxyRequest();
   
-  // Process any pending credential saves
-  processSaveCredentials();
+  // Process any pending settings saves
+  processSettingsSave();
+  
   // Process any pending credential saves
   processSaveCredentials();
 

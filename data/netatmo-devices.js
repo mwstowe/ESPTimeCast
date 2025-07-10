@@ -289,21 +289,3 @@ function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
     indoorModuleSelect.value = currentIndoorModuleId || 'none';
   }
 }
-
-// Helper function to show status messages
-function showStatus(message, type) {
-  const statusDiv = document.getElementById('statusMessage');
-  if (!statusDiv) return;
-  
-  statusDiv.textContent = message;
-  statusDiv.className = 'status-message ' + (type || 'info');
-  statusDiv.style.display = 'block';
-}
-
-// Helper function to hide status messages
-function hideStatus() {
-  const statusDiv = document.getElementById('statusMessage');
-  if (statusDiv) {
-    statusDiv.style.display = 'none';
-  }
-}

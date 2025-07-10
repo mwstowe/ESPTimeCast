@@ -812,13 +812,7 @@ void processTokenExchange() {
   strcat(postData, "&code=");
   strncat(postData, code.c_str(), 100); // Limit code length
   strcat(postData, "&redirect_uri=");
-  
-  // Add the redirect URI - this is a simplified version without full URL encoding
-  // but should work for most cases
-  char encodedUri[128];
-  snprintf(encodedUri, sizeof(encodedUri), "http%%3A%%2F%%2F%s%%2Fapi%%2Fnetatmo%%2Fcallback", 
-           WiFi.localIP().toString().c_str());
-  strcat(postData, encodedUri);
+  strncat(postData, redirectUri.c_str(), 100); // Use the same redirect URI as in the auth request
   
   Serial.println(F("[NETATMO] Sending token request"));
   int httpCode = https.POST(postData);

@@ -39,7 +39,7 @@ void setupSaveSettingsHandler() {
     // Send response immediately before saving
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings received\"}");
     
-    // Save in a non-blocking way by using a task in the main loop
+    // Schedule the save operation for the next loop iteration
     settingsSavePending = true;
   });
 }

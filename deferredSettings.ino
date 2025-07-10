@@ -11,7 +11,7 @@ void processSettingsSave() {
   Serial.println(F("[NETATMO] Processing pending settings save"));
   settingsSavePending = false;
   
-  // Save to config file with yield calls
+  // Save settings to config file with yield calls
   Serial.println(F("[CONFIG] Saving settings to config.json"));
   
   yield(); // Feed the watchdog
@@ -31,8 +31,18 @@ void processSettingsSave() {
     File configFile = LittleFS.open("/config.json", "r");
     if (configFile) {
       yield(); // Feed the watchdog
-      DeserializationError error = deserializeJson(doc, configFile);
+      
+      // Read the file in chunks to avoid memory issues
+      String jsonString = "";
+      while (configFile.available()) {
+        jsonString += configFile.readString();
+        yield(); // Feed the watchdog
+      }
       configFile.close();
+      
+      yield(); // Feed the watchdog
+      
+      DeserializationError error = deserializeJson(doc, jsonString);
       
       yield(); // Feed the watchdog
       
@@ -44,6 +54,10 @@ void processSettingsSave() {
         Serial.println(error.c_str());
         // Continue with empty doc if parsing fails
       }
+      
+      // Clear the string to free memory
+      jsonString = "";
+      yield(); // Feed the watchdog
     }
   }
   
@@ -67,11 +81,18 @@ void processSettingsSave() {
   
   yield(); // Feed the watchdog
   
-  // Serialize the updated JSON document to the file
-  if (serializeJson(doc, outFile) == 0) {
-    Serial.println(F("[CONFIG] Failed to write to config file"));
-    outFile.close();
-    return;
+  // Serialize the updated JSON document to the file in chunks
+  String jsonOutput;
+  serializeJson(doc, jsonOutput);
+  
+  yield(); // Feed the watchdog
+  
+  // Write in chunks of 256 bytes
+  const int chunkSize = 256;
+  for (size_t i = 0; i < jsonOutput.length(); i += chunkSize) {
+    size_t end = min(i + chunkSize, jsonOutput.length());
+    outFile.print(jsonOutput.substring(i, end));
+    yield(); // Feed the watchdog
   }
   
   outFile.close();
@@ -81,9 +102,8 @@ void processSettingsSave() {
   // Replace the old config file with the new one
   if (LittleFS.exists("/config.json")) {
     LittleFS.remove("/config.json");
+    yield(); // Feed the watchdog
   }
-  
-  yield(); // Feed the watchdog
   
   if (LittleFS.rename("/config.json.new", "/config.json")) {
     Serial.println(F("[CONFIG] Settings saved successfully"));

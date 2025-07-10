@@ -764,10 +764,14 @@ void processTokenExchange() {
   String code = pendingCode;
   pendingCode = "";
   
+  // Set API call in progress flag to prevent web requests
+  apiCallInProgress = true;
+  
   // Skip memory checks and defragmentation to avoid yield issues
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    apiCallInProgress = false;
     return;
   }
   
@@ -784,6 +788,7 @@ void processTokenExchange() {
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
   if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
+    apiCallInProgress = false;
     return;
   }
   
@@ -817,6 +822,7 @@ void processTokenExchange() {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
     Serial.println(httpCode);
     https.end();
+    apiCallInProgress = false;
     return;
   }
   
@@ -834,6 +840,7 @@ void processTokenExchange() {
   if (error) {
     Serial.print(F("[NETATMO] JSON parse error: "));
     Serial.println(error.c_str());
+    apiCallInProgress = false;
     return;
   }
   
@@ -856,6 +863,9 @@ void processTokenExchange() {
   saveCredentialsPending = true;
   
   Serial.println(F("[NETATMO] Token exchange complete"));
+  
+  // Reset API call in progress flag
+  apiCallInProgress = false;
   
   // Immediately fetch stations data
   fetchStationsData();

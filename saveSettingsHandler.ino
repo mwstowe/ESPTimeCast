@@ -1,7 +1,15 @@
+#include "saveSettingsState.h"
+
 // Function to set up the save settings handler
 void setupSaveSettingsHandler() {
   server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling save settings request"));
+    
+    // Check if a save operation is already in progress
+    if (saveSettingsState != IDLE) {
+      request->send(409, "application/json", "{\"success\":false,\"message\":\"Settings save already in progress\"}");
+      return;
+    }
     
     // Process all parameters
     for (int i = 0; i < request->params(); i++) {
@@ -37,9 +45,9 @@ void setupSaveSettingsHandler() {
     }
     
     // Send response immediately before saving
-    request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings received\"}");
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings save scheduled\"}");
     
-    // Schedule the save operation for the next loop iteration
+    // Schedule the save operation
     settingsSavePending = true;
   });
 }

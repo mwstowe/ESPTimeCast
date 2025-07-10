@@ -196,15 +196,13 @@ void setupNetatmoHandler() {
     }
     
     // Generate authorization URL with minimal memory usage
-    String redirectUri = "http://";
-    redirectUri += WiFi.localIP().toString();
-    redirectUri += "/api/netatmo/callback";
-    
+    // Build the redirect URI with pre-encoded format to save memory
     String authUrl = "https://api.netatmo.com/oauth2/authorize";
     authUrl += "?client_id=";
     authUrl += urlEncode(netatmoClientId);
-    authUrl += "&redirect_uri=";
-    authUrl += urlEncode(redirectUri.c_str());
+    authUrl += "&redirect_uri=http%3A%2F%2F";
+    authUrl += WiFi.localIP().toString();
+    authUrl += "%2Fapi%2Fnetatmo%2Fcallback";
     authUrl += "&scope=read_station%20read_homecoach&state=state&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
@@ -242,12 +240,10 @@ void setupNetatmoHandler() {
     authUrl += urlEncode(netatmoClientId);
     authUrl += "&redirect_uri=";
     
-    // Build the redirect URI directly
-    String redirectUri = "http://";
-    redirectUri += WiFi.localIP().toString();
-    redirectUri += "/api/netatmo/callback";
-    
-    authUrl += urlEncode(redirectUri.c_str());
+    // Use pre-encoded redirect URI to save memory
+    authUrl += "http%3A%2F%2F";
+    authUrl += WiFi.localIP().toString();
+    authUrl += "%2Fapi%2Fnetatmo%2Fcallback";
     authUrl += "&scope=read_station%20read_homecoach%20access_camera%20read_presence%20read_thermostat&state=state&response_type=code";
     
     Serial.print(F("[NETATMO] Auth URL: "));
@@ -793,10 +789,9 @@ void processTokenExchange() {
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
-  // Build the redirect URI directly to minimize string operations
-  String redirectUri = "http://";
-  redirectUri += WiFi.localIP().toString();
-  redirectUri += "/api/netatmo/callback";
+  // Use a pre-encoded redirect URI to save memory
+  char ipStr[16];
+  snprintf(ipStr, sizeof(ipStr), "%s", WiFi.localIP().toString().c_str());
   
   // Build the POST data in chunks to minimize memory usage
   // Use static buffers to avoid heap fragmentation
@@ -811,8 +806,9 @@ void processTokenExchange() {
   strcat(postData, netatmoClientSecret);
   strcat(postData, "&code=");
   strncat(postData, code.c_str(), 100); // Limit code length
-  strcat(postData, "&redirect_uri=");
-  strncat(postData, redirectUri.c_str(), 100); // Use the same redirect URI as in the auth request
+  strcat(postData, "&redirect_uri=http%3A%2F%2F");
+  strcat(postData, ipStr);
+  strcat(postData, "%2Fapi%2Fnetatmo%2Fcallback");
   
   Serial.println(F("[NETATMO] Sending token request"));
   int httpCode = https.POST(postData);

@@ -1192,10 +1192,14 @@ void saveTokensToConfig() {
   Serial.println(F("[MEMORY] Defragmenting heap before saving config"));
   defragmentHeap();
   
+  yield(); // Feed the watchdog
+  
   if (!LittleFS.begin()) {
     Serial.println(F("[CONFIG] Failed to mount file system"));
     return;
   }
+  
+  yield(); // Feed the watchdog
   
   // First, read the existing config file to preserve all settings
   DynamicJsonDocument doc(2048);
@@ -1204,8 +1208,11 @@ void saveTokensToConfig() {
   if (LittleFS.exists("/config.json")) {
     File configFile = LittleFS.open("/config.json", "r");
     if (configFile) {
+      yield(); // Feed the watchdog
       DeserializationError error = deserializeJson(doc, configFile);
       configFile.close();
+      
+      yield(); // Feed the watchdog
       
       if (!error) {
         configExists = true;
@@ -1218,11 +1225,15 @@ void saveTokensToConfig() {
     }
   }
   
+  yield(); // Feed the watchdog
+  
   // Create a backup of the current config file if it exists
   if (configExists && LittleFS.exists("/config.json")) {
     if (LittleFS.exists("/config.json.bak")) {
       LittleFS.remove("/config.json.bak");
     }
+    
+    yield(); // Feed the watchdog
     
     File sourceFile = LittleFS.open("/config.json", "r");
     File destFile = LittleFS.open("/config.json.bak", "w");
@@ -1244,6 +1255,8 @@ void saveTokensToConfig() {
     }
   }
   
+  yield(); // Feed the watchdog
+  
   // Update only the Netatmo tokens in the JSON document
   doc["netatmoAccessToken"] = netatmoAccessToken;
   doc["netatmoRefreshToken"] = netatmoRefreshToken;
@@ -1253,12 +1266,16 @@ void saveTokensToConfig() {
   doc["netatmoModuleId"] = netatmoModuleId;
   doc["netatmoIndoorModuleId"] = netatmoIndoorModuleId;
   
+  yield(); // Feed the watchdog
+  
   // Create a new config file
   File outFile = LittleFS.open("/config.json.new", "w");
   if (!outFile) {
     Serial.println(F("[CONFIG] Failed to open temp config file for writing"));
     return;
   }
+  
+  yield(); // Feed the watchdog
   
   // Serialize the updated JSON document to the file
   if (serializeJson(doc, outFile) == 0) {
@@ -1269,13 +1286,19 @@ void saveTokensToConfig() {
   
   outFile.close();
   
+  yield(); // Feed the watchdog
+  
   // Replace the old config file with the new one
   if (LittleFS.exists("/config.json")) {
     LittleFS.remove("/config.json");
   }
   
+  yield(); // Feed the watchdog
+  
   if (LittleFS.rename("/config.json.new", "/config.json")) {
     Serial.println(F("[CONFIG] Tokens saved successfully"));
+    
+    yield(); // Feed the watchdog
     
     // Verify the config file is valid after saving
     if (!checkAndRepairConfig()) {
@@ -1283,6 +1306,8 @@ void saveTokensToConfig() {
     }
   } else {
     Serial.println(F("[CONFIG] Failed to rename config file"));
+    
+    yield(); // Feed the watchdog
     
     // If rename fails, try to restore from backup
     if (LittleFS.exists("/config.json.bak")) {
@@ -1293,6 +1318,8 @@ void saveTokensToConfig() {
       }
     }
   }
+  
+  yield(); // Feed the watchdog
   
   // Report memory status after saving config
   Serial.println(F("[MEMORY] Memory status after saving config:"));

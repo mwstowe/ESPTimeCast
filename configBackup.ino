@@ -102,14 +102,20 @@ bool restoreConfig() {
 bool checkAndRepairConfig() {
   Serial.println(F("[CONFIG] Checking configuration integrity"));
   
+  yield(); // Feed the watchdog
+  
   if (!LittleFS.begin()) {
     Serial.println(F("[CONFIG] Failed to mount file system"));
     return false;
   }
   
+  yield(); // Feed the watchdog
+  
   // Check if config.json exists
   if (!LittleFS.exists("/config.json")) {
     Serial.println(F("[CONFIG] Configuration file not found"));
+    
+    yield(); // Feed the watchdog
     
     // Try to restore from backup
     if (LittleFS.exists("/config.bak")) {
@@ -120,11 +126,15 @@ bool checkAndRepairConfig() {
       }
     }
     
+    yield(); // Feed the watchdog
+    
     // Create default config if restore failed
     Serial.println(F("[CONFIG] Creating default configuration"));
     createDefaultConfig();
     return LittleFS.exists("/config.json");
   }
+  
+  yield(); // Feed the watchdog
   
   // Validate the config file
   File configFile = LittleFS.open("/config.json", "r");
@@ -133,34 +143,48 @@ bool checkAndRepairConfig() {
     return false;
   }
   
+  yield(); // Feed the watchdog
+  
   size_t fileSize = configFile.size();
   if (fileSize == 0) {
     configFile.close();
     Serial.println(F("[CONFIG] Configuration file is empty"));
     
+    yield(); // Feed the watchdog
+    
     // Try to restore from backup
     if (restoreConfig()) {
       Serial.println(F("[CONFIG] Configuration restored from backup"));
       return true;
     }
     
+    yield(); // Feed the watchdog
+    
     // Create default config if restore failed
     Serial.println(F("[CONFIG] Creating default configuration"));
     createDefaultConfig();
     return LittleFS.exists("/config.json");
   }
+  
+  yield(); // Feed the watchdog
   
   // Read the file content
   String configData = configFile.readString();
   configFile.close();
   
+  yield(); // Feed the watchdog
+  
   // Validate JSON
   DynamicJsonDocument doc(2048);
   DeserializationError err = deserializeJson(doc, configData);
   
+  yield(); // Feed the watchdog
+  
   if (err) {
     Serial.print(F("[CONFIG] Configuration file is corrupted: "));
     Serial.println(err.c_str());
+    
+    yield(); // Feed the watchdog
     
     // Try to restore from backup
     if (restoreConfig()) {
@@ -168,17 +192,23 @@ bool checkAndRepairConfig() {
       return true;
     }
     
+    yield(); // Feed the watchdog
+    
     // Create default config if restore failed
     Serial.println(F("[CONFIG] Creating default configuration"));
     createDefaultConfig();
     return LittleFS.exists("/config.json");
   }
+  
+  yield(); // Feed the watchdog
   
   // Configuration is valid, create a backup if one doesn't exist
   if (!LittleFS.exists("/config.bak")) {
     Serial.println(F("[CONFIG] Creating backup of valid configuration"));
     backupConfig();
   }
+  
+  yield(); // Feed the watchdog
   
   Serial.println(F("[CONFIG] Configuration is valid"));
   return true;

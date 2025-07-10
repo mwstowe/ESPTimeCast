@@ -779,8 +779,8 @@ void processTokenExchange() {
   static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
   
-  // Use larger buffer sizes for more efficient operations
-  client.setBufferSizes(1024, 1024); // Increased buffer sizes
+  // Use moderate buffer sizes for balance between efficiency and memory usage
+  client.setBufferSizes(512, 512); // Balanced buffer sizes
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
@@ -1049,7 +1049,7 @@ void processFetchDevices() {
   
   // Stream the response directly to the file
   WiFiClient* stream = https.getStreamPtr();
-  const size_t bufSize = 1024; // Increased buffer size for more efficient operations
+  const size_t bufSize = 512; // Moderate buffer size for balance between efficiency and memory usage
   uint8_t buf[bufSize];
   int totalRead = 0;
   int expectedSize = https.getSize();

@@ -14,8 +14,8 @@ void setupOptimizedHandlers() {
       return;
     }
     
-    // Use streaming response to reduce memory usage
-    sendFileWithEnhancedHeaders(request, "/netatmo-devices.js", "application/javascript");
+    // Use direct file serving instead of streaming to avoid AsyncWebServer issues
+    request->send(LittleFS, "/netatmo-devices.js", "application/javascript");
   });
   
   // Netatmo HTML handler
@@ -28,8 +28,8 @@ void setupOptimizedHandlers() {
       return;
     }
     
-    // Use streaming response to reduce memory usage
-    sendFileWithEnhancedHeaders(request, "/netatmo.html", "text/html");
+    // Use direct file serving instead of streaming to avoid AsyncWebServer issues
+    request->send(LittleFS, "/netatmo.html", "text/html");
   });
   
   // Index HTML handler
@@ -42,8 +42,8 @@ void setupOptimizedHandlers() {
       return;
     }
     
-    // Use streaming response to reduce memory usage
-    sendFileWithEnhancedHeaders(request, "/index.html", "text/html");
+    // Use direct file serving instead of streaming to avoid AsyncWebServer issues
+    request->send(LittleFS, "/index.html", "text/html");
   });
   
   // CSS handler
@@ -56,7 +56,7 @@ void setupOptimizedHandlers() {
       return;
     }
     
-    // Use streaming response to reduce memory usage
-    sendFileWithEnhancedHeaders(request, "/style.css", "text/css");
+    // Use direct file serving instead of streaming to avoid AsyncWebServer issues
+    request->send(LittleFS, "/style.css", "text/css");
   });
 }

@@ -111,6 +111,12 @@ select {
   font-size: 1rem;
 }
 
+/* Fix for dropdown options */
+select option {
+  background-color: #2b425a;
+  color: #ffffff;
+}
+
 input[type="text"]:focus, 
 input[type="password"]:focus, 
 select:focus {
@@ -640,7 +646,7 @@ function hideStatus() {
         
         <div class="form-group">
           <label for="netatmoDeviceId">Weather Station:</label>
-          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules()" class="select-styled">
+          <select id="netatmoDeviceId" name="netatmoDeviceId" onchange="loadModules(this.value)" class="select-styled">
             <option value="">Select Device...</option>
           </select>
           <div style="display: flex; gap: 10px; margin-top: 10px;">

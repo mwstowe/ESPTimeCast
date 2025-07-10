@@ -33,6 +33,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Process the device data using our helper function
         let devices = processNetatmoData(data);
         
+        // Update the global variable
+        window.netatmoDevices = devices;
+        
         // Update the UI with the device data
         populateDeviceDropdowns(devices);
       } catch (e) {
@@ -169,9 +172,8 @@ function populateDeviceDropdowns(devices) {
   // Restore previous selections if possible
   if (currentDeviceId) {
     deviceSelect.value = currentDeviceId;
-    // Trigger change event to load modules
-    const event = new Event('change');
-    deviceSelect.dispatchEvent(event);
+    // Manually call loadModules with the current device ID
+    loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
   }
 }
 
@@ -227,6 +229,7 @@ function processNetatmoData(data) {
 // Function to load modules for a selected device
 function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
   console.log("Loading modules for device:", deviceId);
+  console.log("Current global devices:", window.netatmoDevices);
   
   const moduleSelect = document.getElementById('netatmoModuleId');
   const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
@@ -251,6 +254,7 @@ function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
   }
   
   console.log("Found device:", device);
+  console.log("Modules:", device.modules);
   
   // Add outdoor modules (with temperature data)
   device.modules.forEach(module => {

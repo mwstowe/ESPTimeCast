@@ -48,7 +48,6 @@ void processTokenExchange();
 void processFetchDevices();
 void triggerNetatmoDevicesFetch();
 void processSettingsSave();
-void processFormData();
 String getNetatmoDeviceData();
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
@@ -75,8 +74,6 @@ void setupHttpClientWithTimeout(HTTPClient &https);
 void listAllFiles();
 void enhanceApiResponse(AsyncWebServerRequest *request, const char* contentType, const String &payload);
 void sendFileWithEnhancedHeaders(AsyncWebServerRequest *request, const char* filePath, const char* contentType);
-void loadNetatmoSettings();
-void updateConfigWithSettingsFlag();
 void simpleNetatmoCall();
 void processSaveCredentials();
 
@@ -406,11 +403,6 @@ void loadConfig() {
     tempSymbol = 'C';
     
   Serial.println(F("[CONFIG] Configuration loaded."));
-  
-  // Load Netatmo settings from separate file if needed
-  if (useNetatmoSettingsFile) {
-    loadNetatmoSettings();
-  }
 }
 
 void connectWiFi() {
@@ -1685,9 +1677,6 @@ void loop() {
   processProxyRequest();
   
   // Process any pending settings saves
-  // Process any pending form data
-  processFormData();
-  
   // Process any pending settings save
   processSettingsSave();
   

@@ -1,50 +1,67 @@
 #include "saveSettingsState.h"
 
-// Global variables to store form data temporarily
-char tempDeviceId[64] = "";
-char tempModuleId[64] = "";
-char tempIndoorModuleId[64] = "";
-bool tempUseNetatmoOutdoor = false;
-bool tempPrioritizeNetatmoIndoor = false;
-bool formDataReceived = false;
-
 // Function to set up the save settings handler
 void setupSaveSettingsHandler() {
   server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling save settings request"));
     
-    // Send response immediately without processing parameters
+    // Check if a save operation is already in progress
+    if (settingsSavePending) {
+      request->send(409, "application/json", "{\"success\":false,\"message\":\"Settings save already in progress\"}");
+      return;
+    }
+    
+    // Extract parameters one by one with safety checks
+    if (request->hasParam("netatmoDeviceId", true)) {
+      String value = request->getParam("netatmoDeviceId", true)->value();
+      strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
+    }
+    
+    if (request->hasParam("netatmoModuleId", true)) {
+      String value = request->getParam("netatmoModuleId", true)->value();
+      if (value == "none") {
+        netatmoModuleId[0] = '\0'; // Empty string
+      } else {
+        strlcpy(netatmoModuleId, value.c_str(), sizeof(netatmoModuleId));
+      }
+    }
+    
+    if (request->hasParam("netatmoIndoorModuleId", true)) {
+      String value = request->getParam("netatmoIndoorModuleId", true)->value();
+      if (value == "none") {
+        netatmoIndoorModuleId[0] = '\0'; // Empty string
+      } else {
+        strlcpy(netatmoIndoorModuleId, value.c_str(), sizeof(netatmoIndoorModuleId));
+      }
+    }
+    
+    if (request->hasParam("useNetatmoOutdoor", true)) {
+      String value = request->getParam("useNetatmoOutdoor", true)->value();
+      useNetatmoOutdoor = (value == "true" || value == "on" || value == "1");
+    }
+    
+    if (request->hasParam("prioritizeNetatmoIndoor", true)) {
+      String value = request->getParam("prioritizeNetatmoIndoor", true)->value();
+      prioritizeNetatmoIndoor = (value == "true" || value == "on" || value == "1");
+    }
+    
+    // Send response immediately
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings received\"}");
     
-    // Set flag for main loop to process parameters
-    formDataReceived = true;
+    // Schedule the save operation for the next loop iteration
+    settingsSavePending = true;
     
-    // Store parameter count for processing in main loop
-    int paramCount = request->params();
-    Serial.print(F("[NETATMO] Received "));
-    Serial.print(paramCount);
-    Serial.println(F(" parameters"));
+    // Debug output
+    Serial.println(F("[NETATMO] Settings received:"));
+    Serial.print(F("  netatmoDeviceId: "));
+    Serial.println(netatmoDeviceId);
+    Serial.print(F("  netatmoModuleId: "));
+    Serial.println(netatmoModuleId);
+    Serial.print(F("  netatmoIndoorModuleId: "));
+    Serial.println(netatmoIndoorModuleId);
+    Serial.print(F("  useNetatmoOutdoor: "));
+    Serial.println(useNetatmoOutdoor ? "true" : "false");
+    Serial.print(F("  prioritizeNetatmoIndoor: "));
+    Serial.println(prioritizeNetatmoIndoor ? "true" : "false");
   });
-}
-
-// Function to process form data in the main loop
-void processFormData() {
-  if (!formDataReceived) {
-    return;
-  }
-  
-  Serial.println(F("[NETATMO] Processing form data"));
-  formDataReceived = false;
-  
-  // Copy temporary values to actual variables
-  strlcpy(netatmoDeviceId, tempDeviceId, sizeof(netatmoDeviceId));
-  strlcpy(netatmoModuleId, tempModuleId, sizeof(netatmoModuleId));
-  strlcpy(netatmoIndoorModuleId, tempIndoorModuleId, sizeof(netatmoIndoorModuleId));
-  useNetatmoOutdoor = tempUseNetatmoOutdoor;
-  prioritizeNetatmoIndoor = tempPrioritizeNetatmoIndoor;
-  
-  // Schedule the save operation
-  settingsSavePending = true;
-  
-  Serial.println(F("[NETATMO] Form data processed"));
 }

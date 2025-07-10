@@ -867,6 +867,11 @@ void processTokenExchange() {
   // Reset API call in progress flag
   apiCallInProgress = false;
   
+  // Perform heap defragmentation after API call
+  Serial.println(F("[NETATMO] Performing post-API call heap defragmentation"));
+  defragmentHeap();
+  printMemoryStats();
+  
   // Immediately fetch stations data
   fetchStationsData();
 }
@@ -1016,6 +1021,7 @@ void processFetchDevices() {
     Serial.println(F("[NETATMO] Not enough space to save device data"));
     deviceData = F("{\"error\":\"Not enough space to save device data\"}");
     https.end();
+    apiCallInProgress = false;
     return;
   }
   
@@ -1024,12 +1030,20 @@ void processFetchDevices() {
     LittleFS.mkdir("/devices");
   }
   
+  // Remove existing file if it exists to ensure clean state
+  if (LittleFS.exists("/devices/netatmo_devices.json")) {
+    Serial.println(F("[NETATMO] Removing existing devices file"));
+    LittleFS.remove("/devices/netatmo_devices.json");
+    yield(); // Allow the watchdog to be fed
+  }
+  
   // Open a file to save the raw response
   File deviceFile = LittleFS.open("/devices/netatmo_devices.json", "w");
   if (!deviceFile) {
     Serial.println(F("[NETATMO] Failed to open file for writing"));
     deviceData = F("{\"error\":\"Failed to open file for writing\"}");
     https.end();
+    apiCallInProgress = false;
     return;
   }
   
@@ -1079,6 +1093,9 @@ void processFetchDevices() {
   deviceFile.close();
   https.end();
   
+  // Reset API call in progress flag
+  apiCallInProgress = false;
+  
   Serial.print(F("[NETATMO] Device data saved to file, bytes: "));
   Serial.println(totalRead);
   
@@ -1087,6 +1104,11 @@ void processFetchDevices() {
   
   // Print memory stats after processing
   Serial.println(F("[NETATMO] Memory stats after fetch devices:"));
+  printMemoryStats();
+  
+  // Perform heap defragmentation after API call
+  Serial.println(F("[NETATMO] Performing post-API call heap defragmentation"));
+  defragmentHeap();
   printMemoryStats();
 }
 

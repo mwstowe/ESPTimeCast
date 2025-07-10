@@ -48,6 +48,7 @@ void processTokenExchange();
 void processFetchDevices();
 void triggerNetatmoDevicesFetch();
 void processSettingsSave();
+void processFormData();
 String getNetatmoDeviceData();
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
@@ -1684,6 +1685,10 @@ void loop() {
   processProxyRequest();
   
   // Process any pending settings saves
+  // Process any pending form data
+  processFormData();
+  
+  // Process any pending settings save
   processSettingsSave();
   
   // Process any pending credential saves

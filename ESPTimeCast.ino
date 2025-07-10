@@ -30,6 +30,7 @@ void fetchStationsDataWithDump();
 void fetchStationsDataFallback();
 void processSaveCredentials();
 void fetchStationsDataImproved();
+void setupOptimizedHandlers();
 
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
 #include "tz_lookup.h" // Timezone lookup, do not duplicate mapping here!
@@ -488,7 +489,8 @@ void setupWebServer() {
       return;
     }
     
-    request->send(LittleFS, "/netatmo.html", "text/html");
+    // Use streaming response to reduce memory usage
+    sendFileWithEnhancedHeaders(request, "/netatmo.html", "text/html");
   });
   
   server.on("/config.json", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -965,6 +967,9 @@ void setupWebServer() {
   });
   
   // Add a generic static file handler for any other files
+  // Set up optimized handlers for memory-intensive requests
+  setupOptimizedHandlers();
+  
   server.serveStatic("/", LittleFS, "/", "max-age=86400");
   
   server.begin();

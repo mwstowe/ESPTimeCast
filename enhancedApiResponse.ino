@@ -11,42 +11,56 @@ void enhanceApiResponse(AsyncWebServerRequest *request, const char* contentType,
   // Add the payload
   response->print(payload);
   
-  // Log that we're sending the response
-  Serial.println(F("[API] Sending enhanced response"));
-  Serial.print(F("[API] Response size: "));
-  Serial.println(payload.length());
-  
   // Send the response
   request->send(response);
 }
 
-// Function to send a file with enhanced headers
+// Function to stream a file with enhanced headers
 void sendFileWithEnhancedHeaders(AsyncWebServerRequest *request, const char* filePath, const char* contentType) {
   // Check if the file exists
   if (!LittleFS.exists(filePath)) {
-    Serial.print(F("[API] File not found: "));
-    Serial.println(filePath);
     enhanceApiResponse(request, "application/json", "{\"error\":\"File not found\"}");
     return;
   }
   
-  // Open the file
-  File file = LittleFS.open(filePath, "r");
-  if (!file) {
-    Serial.print(F("[API] Failed to open file: "));
-    Serial.println(filePath);
-    enhanceApiResponse(request, "application/json", "{\"error\":\"Failed to open file\"}");
-    return;
-  }
+  // Use chunked response for files to reduce memory usage
+  AsyncWebServerResponse *response = request->beginChunkedResponse(contentType, 
+    [filePath](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+      static File file;
+      static size_t totalSent = 0;
+      
+      // Open file on first call
+      if (index == 0) {
+        file = LittleFS.open(filePath, "r");
+        totalSent = 0;
+        if (!file) return 0;
+      }
+      
+      // Check if we've sent everything
+      if (totalSent >= file.size()) {
+        file.close();
+        return 0; // End of file
+      }
+      
+      // Read a chunk
+      size_t bytesToRead = min(maxLen, file.size() - totalSent);
+      size_t bytesRead = file.read(buffer, bytesToRead);
+      
+      if (bytesRead > 0) {
+        totalSent += bytesRead;
+        return bytesRead;
+      } else {
+        file.close();
+        return 0; // Error or end of file
+      }
+    }
+  );
   
-  // Read the file content
-  String fileContent = "";
-  while (file.available()) {
-    fileContent += (char)file.read();
-    yield(); // Feed the watchdog
-  }
-  file.close();
+  // Add CORS headers
+  response->addHeader("Access-Control-Allow-Origin", "*");
+  response->addHeader("Access-Control-Allow-Methods", "GET");
+  response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+  response->addHeader("Cache-Control", "no-cache");
   
-  // Send the response with enhanced headers
-  enhanceApiResponse(request, contentType, fileContent);
+  request->send(response);
 }

@@ -780,7 +780,7 @@ void processTokenExchange() {
   client.setInsecure(); // Skip certificate validation to save memory
   
   // Minimize memory usage by setting smaller buffer sizes
-  client.setBufferSizes(512, 512); // Minimum buffer sizes
+  client.setBufferSizes(256, 256); // Reduced buffer sizes
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
@@ -800,7 +800,7 @@ void processTokenExchange() {
   
   // Build the POST data in chunks to minimize memory usage
   // Use static buffers to avoid heap fragmentation
-  static char postData[512]; // Static buffer for POST data
+  static char postData[384]; // Reduced static buffer for POST data
   memset(postData, 0, sizeof(postData));
   
   // Build the POST data manually to minimize memory usage

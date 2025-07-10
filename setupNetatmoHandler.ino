@@ -329,13 +329,13 @@ void setupNetatmoHandler() {
       "<!DOCTYPE html>"
       "<html><head>"
       "<meta charset='UTF-8'>"
-      "<meta http-equiv='refresh' content='3;url=/netatmo.html'>"
+      "<meta http-equiv='refresh' content='10;url=/netatmo.html'>"
       "<title>ESPTimeCast - Authorization</title>"
       "<style>body{font-family:Arial;text-align:center;margin:50px}</style>"
       "</head><body>"
       "<h1>Authorization Successful</h1>"
       "<p>Exchanging code for tokens...</p>"
-      "<p>You will be redirected to the Netatmo settings page in 3 seconds.</p>"
+      "<p>You will be redirected to the Netatmo settings page in 10 seconds.</p>"
       "<p>If not redirected, <a href='/netatmo.html'>click here</a>.</p>"
       "</body></html>";
     

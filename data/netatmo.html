@@ -415,16 +415,18 @@ function loadConfig() {
 function saveConfig() {
   showStatus('Saving configuration...', 'loading');
   
-  // Send a minimal request with minimal data
-  fetch('/api/netatmo/save-settings', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      action: 'save'
-    })
-  })
+  // Get form values
+  const deviceId = document.getElementById('netatmoDeviceId').value || '';
+  const moduleId = document.getElementById('netatmoModuleId').value || 'none';
+  const indoorModuleId = document.getElementById('netatmoIndoorModuleId').value || 'none';
+  const useOutdoor = document.getElementById('useNetatmoOutdoor')?.checked ? 'true' : 'false';
+  const prioritizeIndoor = document.getElementById('prioritizeNetatmoIndoor')?.checked ? 'true' : 'false';
+  
+  // Build URL with query parameters
+  const url = `/api/netatmo/save-settings-simple?deviceId=${encodeURIComponent(deviceId)}&moduleId=${encodeURIComponent(moduleId)}&indoorModuleId=${encodeURIComponent(indoorModuleId)}&useOutdoor=${useOutdoor}&prioritizeIndoor=${prioritizeIndoor}`;
+  
+  // Send GET request
+  fetch(url)
   .then(response => {
     if (!response.ok) {
       throw new Error('Network response was not ok');

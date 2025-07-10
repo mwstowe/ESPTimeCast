@@ -2,26 +2,67 @@
 
 // Function to set up the save settings handler
 void setupSaveSettingsHandler() {
-  server.on("/api/netatmo/save-settings", HTTP_POST, 
-    // Response handler - called after the request is complete
-    [](AsyncWebServerRequest *request) {
-      // This is called after the request body has been fully processed
-      request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings received\"}");
-    },
-    // Upload handler - not used for this endpoint
-    NULL,
-    // Body handler - processes the request body in chunks
-    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-      // This is called for each chunk of the request body
-      // We're not actually processing the data, just acknowledging it
-      
-      // Log the request progress
-      Serial.print(F("[NETATMO] Received body chunk: "));
-      Serial.print(index);
-      Serial.print(F("/"));
-      Serial.println(total);
-      
-      // Don't do any processing that might cause a yield
+  // Use a GET request instead of POST to avoid the body parsing issues
+  server.on("/api/netatmo/save-settings-simple", HTTP_GET, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling simple save settings request"));
+    
+    // Extract parameters from URL query string
+    if (request->hasParam("deviceId")) {
+      String value = request->getParam("deviceId")->value();
+      strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
     }
-  );
+    
+    if (request->hasParam("moduleId")) {
+      String value = request->getParam("moduleId")->value();
+      if (value == "none") {
+        netatmoModuleId[0] = '\0'; // Empty string
+      } else {
+        strlcpy(netatmoModuleId, value.c_str(), sizeof(netatmoModuleId));
+      }
+    }
+    
+    if (request->hasParam("indoorModuleId")) {
+      String value = request->getParam("indoorModuleId")->value();
+      if (value == "none") {
+        netatmoIndoorModuleId[0] = '\0'; // Empty string
+      } else {
+        strlcpy(netatmoIndoorModuleId, value.c_str(), sizeof(netatmoIndoorModuleId));
+      }
+    }
+    
+    if (request->hasParam("useOutdoor")) {
+      String value = request->getParam("useOutdoor")->value();
+      useNetatmoOutdoor = (value == "true" || value == "1");
+    }
+    
+    if (request->hasParam("prioritizeIndoor")) {
+      String value = request->getParam("prioritizeIndoor")->value();
+      prioritizeNetatmoIndoor = (value == "true" || value == "1");
+    }
+    
+    // Send response
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings received\"}");
+    
+    // Set flag to save settings in the main loop
+    settingsSavePending = true;
+    
+    // Debug output
+    Serial.println(F("[NETATMO] Settings received:"));
+    Serial.print(F("  netatmoDeviceId: "));
+    Serial.println(netatmoDeviceId);
+    Serial.print(F("  netatmoModuleId: "));
+    Serial.println(netatmoModuleId);
+    Serial.print(F("  netatmoIndoorModuleId: "));
+    Serial.println(netatmoIndoorModuleId);
+    Serial.print(F("  useNetatmoOutdoor: "));
+    Serial.println(useNetatmoOutdoor ? "true" : "false");
+    Serial.print(F("  prioritizeNetatmoIndoor: "));
+    Serial.println(prioritizeNetatmoIndoor ? "true" : "false");
+  });
+  
+  // Keep the original endpoint for compatibility, but make it do nothing
+  server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+    Serial.println(F("[NETATMO] Handling original save settings request"));
+    request->send(200, "application/json", "{\"success\":false,\"message\":\"Please use the simple endpoint\"}");
+  });
 }

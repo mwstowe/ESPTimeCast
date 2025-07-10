@@ -779,8 +779,8 @@ void processTokenExchange() {
   static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
   
-  // Minimize memory usage by setting smaller buffer sizes
-  client.setBufferSizes(256, 256); // Reduced buffer sizes
+  // Use larger buffer sizes for more efficient operations
+  client.setBufferSizes(1024, 1024); // Increased buffer sizes
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
@@ -800,7 +800,7 @@ void processTokenExchange() {
   
   // Build the POST data in chunks to minimize memory usage
   // Use static buffers to avoid heap fragmentation
-  static char postData[384]; // Reduced static buffer for POST data
+  static char postData[512]; // Increased buffer size for POST data
   memset(postData, 0, sizeof(postData));
   
   // Build the POST data manually to minimize memory usage
@@ -1049,7 +1049,7 @@ void processFetchDevices() {
   
   // Stream the response directly to the file
   WiFiClient* stream = https.getStreamPtr();
-  const size_t bufSize = 256;
+  const size_t bufSize = 1024; // Increased buffer size for more efficient operations
   uint8_t buf[bufSize];
   int totalRead = 0;
   int expectedSize = https.getSize();
@@ -1058,6 +1058,7 @@ void processFetchDevices() {
   Serial.print(expectedSize);
   Serial.println(F(" bytes"));
   
+  // Process in larger chunks with fewer yield calls
   while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
     // Read available data
     size_t available = stream->available();
@@ -1071,11 +1072,12 @@ void processFetchDevices() {
         deviceFile.write(buf, bytesRead);
         totalRead += bytesRead;
         
-        // Print progress every 1KB
-        if (totalRead % 1024 == 0) {
+        // Print progress less frequently (every 4KB)
+        if (totalRead % 4096 == 0) {
           Serial.print(F("[NETATMO] Read "));
           Serial.print(totalRead);
           Serial.println(F(" bytes"));
+          yield(); // Only yield every 4KB to reduce context switches
         }
       }
       

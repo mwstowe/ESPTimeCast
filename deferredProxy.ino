@@ -11,6 +11,9 @@ void processProxyRequest() {
   
   Serial.println(F("[NETATMO] Processing deferred proxy request"));
   
+  // Set API call in progress flag to prevent concurrent web requests
+  apiCallInProgress = true;
+  
   // Print memory stats before processing
   Serial.println(F("[NETATMO] Memory stats before proxy request:"));
   printMemoryStats();
@@ -242,4 +245,11 @@ void processProxyRequest() {
   https.end();
   request->send(response);
   Serial.println(F("[NETATMO] Response streamed to client"));
+  
+  // Reset API call in progress flag
+  apiCallInProgress = false;
+  
+  // Print memory stats after processing
+  Serial.println(F("[NETATMO] Memory stats after proxy request:"));
+  printMemoryStats();
 }

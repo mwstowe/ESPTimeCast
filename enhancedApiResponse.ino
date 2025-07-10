@@ -42,7 +42,7 @@ void sendFileWithEnhancedHeaders(AsyncWebServerRequest *request, const char* fil
         return 0; // End of file
       }
       
-      // Read a chunk
+      // Read a chunk - use larger chunks (up to 1KB)
       size_t bytesToRead = min(maxLen, file.size() - totalSent);
       size_t bytesRead = file.read(buffer, bytesToRead);
       

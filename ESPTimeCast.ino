@@ -368,18 +368,12 @@ void loadConfig() {
   if (doc.containsKey("netatmoAccessToken")) strlcpy(netatmoAccessToken, doc["netatmoAccessToken"], sizeof(netatmoAccessToken));
   if (doc.containsKey("netatmoRefreshToken")) strlcpy(netatmoRefreshToken, doc["netatmoRefreshToken"], sizeof(netatmoRefreshToken));
   
-  // Check if we should load Netatmo settings from a separate file
-  bool useNetatmoSettingsFile = false;
-  if (doc.containsKey("useNetatmoSettingsFile")) useNetatmoSettingsFile = doc["useNetatmoSettingsFile"];
-  
-  // Load Netatmo settings from main config if not using separate file
-  if (!useNetatmoSettingsFile) {
-    if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
-    if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
-    if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
-    if (doc.containsKey("useNetatmoOutdoor")) useNetatmoOutdoor = doc["useNetatmoOutdoor"];
-    if (doc.containsKey("prioritizeNetatmoIndoor")) prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
-  }
+  // Always load Netatmo settings from main config
+  if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
+  if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
+  if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
+  if (doc.containsKey("useNetatmoOutdoor")) useNetatmoOutdoor = doc["useNetatmoOutdoor"];
+  if (doc.containsKey("prioritizeNetatmoIndoor")) prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
   if (doc.containsKey("tempSource")) tempSource = doc["tempSource"];
   if (doc.containsKey("mdnsHostname")) strlcpy(mdnsHostname, doc["mdnsHostname"], sizeof(mdnsHostname));
   if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));

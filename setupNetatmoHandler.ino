@@ -1355,7 +1355,7 @@ void fetchStationsData() {
       
       if (bytesRead > 0) {
         // Write to file
-        deviceFile.write(buf, bytesRead);
+        writeCleanJsonFromBuffer(buf, bytesRead, deviceFile);
         totalRead += bytesRead;
         
         // Capture the first part of the response for logging

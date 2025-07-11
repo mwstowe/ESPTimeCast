@@ -58,7 +58,7 @@ void simpleNetatmoCall() {
     }
     
     // Open a file to save the response
-    File file = LittleFS.open("/devices/netatmo_simple.json", "w");
+    File file = LittleFS.open("/netatmo_simple.json", "w");
     if (!file) {
       Serial.println(F("[NETATMO] Failed to open file for writing"));
       https.end();

@@ -1060,14 +1060,32 @@ void processFetchDevices() {
     return;
   }
   
+  // Record the start time for timing
+  unsigned long startTime = millis();
+  Serial.println(F("[TIMING] Starting file write at: ") + String(millis() - startTime) + F(" ms after request completion"));
+  
   // Stream the response directly to the file
   WiFiClient* stream = https.getStreamPtr();
-  const size_t bufSize = 512; // Moderate buffer size for balance between efficiency and memory usage
-  uint8_t buf[bufSize];
   int totalRead = 0;
-  int expectedSize = https.getSize();
   
-  Serial.print(F("[NETATMO] Expected response size: "));
+  // Check if the response is chunked
+  bool isChunked = isChunkedResponse(https);
+  if (isChunked) {
+    Serial.println(F("[NETATMO] Detected chunked transfer encoding"));
+    
+    // Use our specialized function to handle chunked encoding
+    if (writeChunkedResponseToFile(stream, deviceFile)) {
+      Serial.println(F("[NETATMO] Successfully processed chunked response"));
+    } else {
+      Serial.println(F("[NETATMO] Error processing chunked response"));
+    }
+  } else {
+    // Handle non-chunked response (original code)
+    const size_t bufSize = 512; // Moderate buffer size for balance between efficiency and memory usage
+    uint8_t buf[bufSize];
+    int expectedSize = https.getSize();
+    
+    Serial.print(F("[NETATMO] Expected response size: "));
   Serial.print(expectedSize);
   Serial.println(F(" bytes"));
   
@@ -1104,6 +1122,7 @@ void processFetchDevices() {
       yield();
     }
   }
+  }
   
   deviceFile.close();
   https.end();
@@ -1111,8 +1130,32 @@ void processFetchDevices() {
   // Reset API call in progress flag
   apiCallInProgress = false;
   
-  Serial.print(F("[NETATMO] Device data saved to file, bytes: "));
+  // Calculate and log the time taken
+  unsigned long duration = millis() - startTime;
+  Serial.print(F("[TIMING] File write time: "));
+  Serial.print(duration);
+  Serial.println(F(" ms"));
+  Serial.print(F("[TIMING] Total time from request to file completion: "));
+  Serial.print(duration);
+  Serial.println(F(" ms"));
+  
+  Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
   Serial.println(totalRead);
+  
+  // Debug: Print the first 100 bytes of the file
+  Serial.println(F("[DEBUG] First 100 bytes of saved file:"));
+  File checkFile = LittleFS.open("/netatmo_config.json", "r");
+  if (checkFile) {
+    char debugBuf[101];
+    int readSize = checkFile.readBytes(debugBuf, 100);
+    debugBuf[readSize] = '\0';
+    Serial.println(debugBuf);
+    checkFile.close();
+  }
+  
+  // Dump the entire file content for debugging
+  Serial.println(F("[DEBUG] Dumping contents of file: /netatmo_config.json"));
+  dumpFileContents("/netatmo_config.json");
   
   // Set a success response
   deviceData = "{\"status\":\"success\",\"message\":\"Device data saved to file\",\"bytes\":" + String(totalRead) + "}";

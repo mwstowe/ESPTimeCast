@@ -50,6 +50,8 @@ void processSettingsSave();
 String getNetatmoDeviceData();
 bool isNetatmoTokenValid();
 bool checkNetworkConnectivity();
+bool writeChunkedResponseToFile(WiFiClient* stream, File& file);
+bool isChunkedResponse(HTTPClient& http);
 void optimizeMemory(); // Add this line // Add this line
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);

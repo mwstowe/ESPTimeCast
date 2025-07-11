@@ -1813,7 +1813,7 @@ void fetchStationsDataFallback() {
 // Function to handle chunked transfers more effectively
 bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
   WiFiClient* stream = https.getStreamPtr();
-  const size_t bufSize = 64; // Even smaller buffer size to save memory
+  const size_t bufSize = 64; // Small buffer size to save memory
   uint8_t buf[bufSize];
   int totalRead = 0;
   bool previewCaptured = false;
@@ -1822,74 +1822,119 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
   unsigned long startTime = millis();
   const unsigned long timeout = 15000; // 15 second timeout
   
-  // Set a maximum size to read to avoid OOM
-  const int maxBytesToRead = 16384; // 16KB max to avoid OOM
+  Serial.println(F("[NETATMO] Starting to read chunked response..."));
   
-  Serial.println(F("[NETATMO] Starting to read response data..."));
-  
-  // Read data in chunks
+  // Process chunks until we get a zero-length chunk
   while (https.connected()) {
     // Check for timeout
     if (millis() - startTime > timeout) {
-      Serial.println(F("[NETATMO] Timeout reading response"));
+      Serial.println(F("[NETATMO] Timeout reading chunked response"));
       return false;
     }
     
-    // Check if we've reached the maximum size
-    if (totalRead >= maxBytesToRead) {
-      Serial.println(F("[NETATMO] Maximum response size reached, stopping read"));
+    // Read the chunk size (hex digits)
+    int chunkSize = 0;
+    bool endOfSizeLine = false;
+    
+    while (!endOfSizeLine && https.connected()) {
+      if (stream->available()) {
+        char c = stream->read();
+        
+        // Check for CR (end of size line)
+        if (c == '\r') {
+          // Skip the LF that should follow
+          stream->read(); // Read '\n'
+          endOfSizeLine = true;
+        } else if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+          // Convert hex digit to integer and add to chunk size
+          if (c >= '0' && c <= '9') {
+            chunkSize = (chunkSize << 4) | (c - '0');
+          } else if (c >= 'a' && c <= 'f') {
+            chunkSize = (chunkSize << 4) | (c - 'a' + 10);
+          } else { // c >= 'A' && c <= 'F'
+            chunkSize = (chunkSize << 4) | (c - 'A' + 10);
+          }
+        }
+        // Ignore any other characters (like chunk extensions)
+      } else {
+        yield();
+        if (millis() - startTime > timeout) {
+          Serial.println(F("[NETATMO] Timeout reading chunk size"));
+          return false;
+        }
+      }
+    }
+    
+    Serial.print(F("[NETATMO] Chunk size: "));
+    Serial.print(chunkSize);
+    Serial.println(F(" bytes"));
+    
+    // A chunk size of 0 means we're done
+    if (chunkSize == 0) {
+      Serial.println(F("[NETATMO] Found end chunk (size 0), transfer complete"));
+      
+      // Read the final CRLF
+      while (stream->available() < 2) {
+        yield();
+        if (millis() - startTime > timeout) break;
+      }
+      if (stream->available() >= 2) {
+        stream->read(); // \r
+        stream->read(); // \n
+      }
+      
       break;
     }
     
-    // Read available data
-    size_t available = stream->available();
+    // Read the chunk data
+    int bytesRemaining = chunkSize;
+    while (bytesRemaining > 0 && https.connected()) {
+      // Check for timeout
+      if (millis() - startTime > timeout) {
+        Serial.println(F("[NETATMO] Timeout reading chunk data"));
+        return false;
+      }
+      
+      size_t available = stream->available();
+      if (available) {
+        // Reset timeout when data is available
+        startTime = millis();
+        
+        // Read up to buffer size or remaining bytes in chunk
+        size_t readBytes = min(min(available, bufSize), (size_t)bytesRemaining);
+        int bytesRead = stream->readBytes(buf, readBytes);
+        
+        if (bytesRead > 0) {
+          // Write to file
+          file.write(buf, bytesRead);
+          totalRead += bytesRead;
+          bytesRemaining -= bytesRead;
+          
+          // Capture the first part of the response for logging
+          if (!previewCaptured && preview.length() < 200) {
+            for (int i = 0; i < bytesRead && preview.length() < 200; i++) {
+              preview += (char)buf[i];
+            }
+            if (preview.length() >= 200) {
+              previewCaptured = true;
+            }
+          }
+        }
+        
+        yield(); // Allow the watchdog to be fed
+      } else {
+        yield();
+      }
+    }
     
-    if (available) {
-      // Reset timeout when data is available
-      startTime = millis();
-      
-      // Read up to buffer size
-      size_t readBytes = available > bufSize ? bufSize : available;
-      int bytesRead = stream->readBytes(buf, readBytes);
-      
-      if (bytesRead > 0) {
-        // Write to file
-        file.write(buf, bytesRead);
-        totalRead += bytesRead;
-        
-        // Capture the first part of the response for logging
-        if (!previewCaptured && preview.length() < 200) {
-          for (int i = 0; i < bytesRead && preview.length() < 200; i++) {
-            preview += (char)buf[i];
-          }
-          if (preview.length() >= 200) {
-            previewCaptured = true;
-          }
-        }
-        
-        // Print progress more frequently
-        if (totalRead % 256 == 0) {
-          Serial.print(F("[NETATMO] Read "));
-          Serial.print(totalRead);
-          Serial.println(F(" bytes"));
-          yield(); // Allow the watchdog to be fed
-        }
-      }
-      
-      yield(); // Allow the watchdog to be fed
-    } else if (!https.connected()) {
-      // No more data and disconnected
-      break;
-    } else {
-      // No data available, wait a bit and feed the watchdog
-      delay(1);
+    // Read the CRLF at the end of the chunk
+    while (stream->available() < 2) {
       yield();
-      
-      // If we've been waiting for data for too long, break
-      if (millis() - startTime > 2000) { // 2 seconds with no data
-        Serial.println(F("[NETATMO] No data received for 2 seconds, assuming transfer complete"));
-        break;
-      }
+      if (millis() - startTime > timeout) break;
+    }
+    if (stream->available() >= 2) {
+      stream->read(); // \r
+      stream->read(); // \n
     }
   }
   

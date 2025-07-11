@@ -1121,8 +1121,7 @@ void processFetchDevices() {
       // We've read all the data
       break;
     } else {
-      // No data available, wait a bit
-      delay(10);
+      // No data available, just feed the watchdog
       yield();
     }
   }
@@ -1479,15 +1478,10 @@ void fetchStationsData() {
       // We've read all the data
       break;
       // We've read all the data
-      Serial.println(F("[NETATMO] Expected size reached, exiting read loop"));    } else {
-      // No data available, wait a bit
-      delay(10);
-      // Update the last activity time if we've received data before
-      if (receivedData && (millis() - lastDataTime > 1000)) {
-        Serial.print(F("[NETATMO] Waiting for data... "));
-        Serial.print(millis() - lastDataTime);
-        Serial.println(F(" ms since last data"));
-      }      yield();
+      Serial.println(F("[NETATMO] Expected size reached, exiting read loop"));
+    } else {
+      // No data available, just feed the watchdog
+      yield();
     }
   }
   

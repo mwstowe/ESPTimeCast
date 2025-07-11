@@ -48,6 +48,7 @@ void processFetchDevices();
 void triggerNetatmoDevicesFetch();
 void processSettingsSave();
 String getNetatmoDeviceData();
+bool isNetatmoTokenValid(); // Add this line
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
 void handleBlockedRequest(String errorPayload);
@@ -1448,17 +1449,28 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
     return;
   }
   
-  // Check if we have an access token
-  if (strlen(netatmoAccessToken) == 0) {
-    Serial.println(F("[NETATMO] No access token available"));
-    outdoorTempAvailable = false;
-    return;
+  // Check if we have a valid access token
+  if (!isNetatmoTokenValid()) {
+    Serial.println(F("[NETATMO] Invalid or missing access token"));
+    // Try to refresh the token
+    Serial.println(F("[NETATMO] Attempting to refresh token..."));
+    String newToken = getNetatmoToken();
+    if (newToken.length() > 0) {
+      Serial.println(F("[NETATMO] Token refreshed successfully"));
+    } else {
+      Serial.println(F("[NETATMO] Failed to refresh token"));
+      outdoorTempAvailable = false;
+      return;
+    }
   }
   
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure(); // Skip certificate validation
   
   HTTPClient https;
+  
+  // Set timeout to avoid long delays
+  https.setTimeout(5000); // 5 second timeout
   
   String url = "https://api.netatmo.com/api/getstationsdata?device_id=";
   url += netatmoDeviceId;
@@ -1468,7 +1480,12 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   Serial.print(F("[NETATMO] Using token: "));
   Serial.println(String(netatmoAccessToken).substring(0, 10) + "...");
   
+  // Debug: Print token length
+  Serial.print(F("[NETATMO] Token length: "));
+  Serial.println(strlen(netatmoAccessToken));
+  
   if (https.begin(*client, url)) {
+    Serial.println(F("[NETATMO] Client connected"));
     https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");
@@ -1570,7 +1587,12 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
       Serial.println(httpCode);
       
       // Get the error response
-      String errorPayload = https.getString();
+      // Debug: Print more information about the error
+      if (httpCode == -1) {
+        Serial.println(F("[NETATMO] Connection failed or timed out"));
+        Serial.print(F("[NETATMO] Last error: "));
+        Serial.println(https.errorToString(httpCode));
+      }      String errorPayload = https.getString();
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       

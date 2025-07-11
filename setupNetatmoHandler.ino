@@ -885,8 +885,8 @@ void processTokenExchange() {
   defragmentHeap();
   printMemoryStats();
   
-  // Immediately fetch stations data
-  fetchStationsData();
+  // Trigger a fetch of the stations data
+  fetchStationsDataPending = true;
 }
 
 // Function to be called from loop() to fetch Netatmo devices

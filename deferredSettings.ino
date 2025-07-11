@@ -58,6 +58,18 @@ void processSettingsSave() {
   doc["useNetatmoOutdoor"] = useNetatmoOutdoor;
   doc["prioritizeNetatmoIndoor"] = prioritizeNetatmoIndoor;
   
+  // Debug output for Netatmo settings being saved
+  Serial.println(F("[CONFIG] Saving Netatmo settings:"));
+  Serial.print(F("[CONFIG] Device ID: '"));
+  Serial.print(netatmoDeviceId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Module ID: '"));
+  Serial.print(netatmoModuleId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Indoor Module ID: '"));
+  Serial.print(netatmoIndoorModuleId);
+  Serial.println(F("'"));
+  
   yield(); // Feed the watchdog
   
   // Create a new config file

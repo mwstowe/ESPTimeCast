@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log("Netatmo devices script loaded, attempting to load device data");
   
   // Try to load the device data file directly
-  fetch('/netatmo_devices.json')
+  fetch('/netatmo_stations_data.json')
     .then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -90,7 +90,7 @@ function fetchNetatmoDevices() {
       showStatus("Waiting for API call to complete (10 seconds)...", "loading");
       setTimeout(() => {
         // Now get the stations data directly from the file
-        fetch('/netatmo_devices.json')
+        fetch('/netatmo_stations_data.json')
           .then(response => {
             if (!response.ok) {
               throw new Error(`HTTP error! Status: ${response.status}`);

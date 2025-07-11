@@ -374,6 +374,18 @@ void loadConfig() {
   if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
   if (doc.containsKey("useNetatmoOutdoor")) useNetatmoOutdoor = doc["useNetatmoOutdoor"];
   if (doc.containsKey("prioritizeNetatmoIndoor")) prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
+  
+  // Debug output for Netatmo settings
+  Serial.println(F("[CONFIG] Netatmo settings loaded:"));
+  Serial.print(F("[CONFIG] Device ID: '"));
+  Serial.print(netatmoDeviceId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Module ID: '"));
+  Serial.print(netatmoModuleId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Indoor Module ID: '"));
+  Serial.print(netatmoIndoorModuleId);
+  Serial.println(F("'"));
   if (doc.containsKey("tempSource")) tempSource = doc["tempSource"];
   if (doc.containsKey("mdnsHostname")) strlcpy(mdnsHostname, doc["mdnsHostname"], sizeof(mdnsHostname));
   if (doc.containsKey("weatherUnits")) strlcpy(weatherUnits, doc["weatherUnits"], sizeof(weatherUnits));

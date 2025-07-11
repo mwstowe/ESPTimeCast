@@ -1,3 +1,13 @@
+/*
+ * Improved Netatmo Stations Data Fetcher
+ * 
+ * This file fetches Netatmo stations data and saves it to /netatmo_stations_data.json
+ * The file is used by the web interface to populate device selection dropdowns.
+ * 
+ * Note: This is separate from /netatmo_config.json which contains
+ * the selected device configuration used by the clock system.
+ */
+
 // Improved function to fetch Netatmo stations data and save it as clean JSON
 void fetchNetatmoStationsImproved() {
   Serial.println(F("[NETATMO] Fetching stations data (improved)"));
@@ -73,7 +83,8 @@ void fetchNetatmoStationsImproved() {
   Serial.println(payload.substring(0, 200));
   
   // Write the clean JSON to the file
-  writeCleanJsonToFile(payload, "/netatmo_devices.json");
+  // This file is used by the web interface to populate device selection dropdowns
+  writeCleanJsonToFile(payload, "/netatmo_stations_data.json");
   
   // Log that we've saved the file
   Serial.println(F("[NETATMO] Stations data saved to file"));

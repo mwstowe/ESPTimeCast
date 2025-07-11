@@ -80,6 +80,52 @@ select {
   font-size: 1rem;
 }
 
+/* Fix for dropdown options - ensure they're visible with dark background and white text */
+select option {
+  background-color: #2b425a;
+  color: #ffffff;
+  padding: 8px;
+}
+
+/* Fix for Chromium-based browsers which may ignore the background-color */
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+  select {
+    -webkit-appearance: none;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="6"><path d="M0 0l6 6 6-6z" fill="%23ffffff"/></svg>');
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    padding-right: 2rem;
+  }
+}
+
+/* Additional fixes for dropdown options in different browsers */
+select option {
+  background-color: #2b425a !important;
+  color: #ffffff !important;
+}
+
+/* Firefox specific fix */
+@-moz-document url-prefix() {
+  select {
+    background-color: #2b425a;
+    color: #ffffff;
+  }
+  select option {
+    background-color: #2b425a !important;
+    color: #ffffff !important;
+  }
+}
+
+/* Edge and IE specific fix */
+select::-ms-expand {
+  display: none;
+}
+
+select:focus::-ms-value {
+  background-color: #2b425a;
+  color: #ffffff;
+}
+
 input[type="text"]:focus, 
 input[type="password"]:focus, 
 input[type="number"]:focus, 

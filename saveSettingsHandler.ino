@@ -10,6 +10,21 @@ void setupSaveSettingsHandler() {
     if (request->hasParam("deviceId")) {
       String value = request->getParam("deviceId")->value();
       strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
+      
+      // Also update stationId if it's empty (for backward compatibility)
+      if (strlen(netatmoStationId) == 0) {
+        strlcpy(netatmoStationId, value.c_str(), sizeof(netatmoStationId));
+      }
+    }
+    
+    // Add support for explicitly setting stationId
+    if (request->hasParam("stationId")) {
+      String value = request->getParam("stationId")->value();
+      if (value == "none") {
+        netatmoStationId[0] = '\0'; // Empty string
+      } else {
+        strlcpy(netatmoStationId, value.c_str(), sizeof(netatmoStationId));
+      }
     }
     
     if (request->hasParam("moduleId")) {
@@ -50,6 +65,8 @@ void setupSaveSettingsHandler() {
     Serial.println(F("[NETATMO] Settings received:"));
     Serial.print(F("  netatmoDeviceId: "));
     Serial.println(netatmoDeviceId);
+    Serial.print(F("  netatmoStationId: "));
+    Serial.println(netatmoStationId);
     Serial.print(F("  netatmoModuleId: "));
     Serial.println(netatmoModuleId);
     Serial.print(F("  netatmoIndoorModuleId: "));

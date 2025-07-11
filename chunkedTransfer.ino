@@ -78,6 +78,10 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
   unsigned long startTime = millis();
   const unsigned long timeout = 10000; // 10 second timeout
   
+  // Check if we've already read some bytes (the chunk size line)
+  // If so, we need to handle the first chunk differently
+  bool firstChunkHandled = false;
+  
   // Process chunks until we get a zero-length chunk
   while (true) {
     // Check for timeout
@@ -94,13 +98,31 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
       Serial.println(F(" seconds"));
     }
     
+    // For the first chunk, we may have already read the chunk size line
+    // and possibly some of the chunk data
+    if (!firstChunkHandled) {
+      Serial.println(F("[CHUNKED] First chunk may have been partially read"));
+      firstChunkHandled = true;
+      
+      // We'll just continue and read the next chunk
+      // The data we've already read has been written to the file
+      // in setupNetatmoHandler.ino
+    }
+    
     // Read the chunk size (hex digits)
     int chunkSize = 0;
     String chunkSizeStr = ""; // For logging only
     
     // Wait for data to be available
+    unsigned long waitStart = millis();
     while (!stream->available()) {
       yield();
+      if (millis() - waitStart > 1000) {
+        Serial.print(F("[CHUNKED] Waiting for chunk size data... "));
+        Serial.print(millis() - waitStart);
+        Serial.println(F(" ms"));
+        waitStart = millis(); // Reset to only log once per second
+      }
       if (millis() - startTime > timeout) {
         Serial.println(F("[CHUNKED] Timeout waiting for chunk size"));
         return false;
@@ -206,8 +228,15 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
       }
       
       // Wait for data to be available
+      unsigned long dataWaitStart = millis();
       while (!stream->available()) {
         yield();
+        if (millis() - dataWaitStart > 1000) {
+          Serial.print(F("[CHUNKED] Waiting for chunk data... "));
+          Serial.print(millis() - dataWaitStart);
+          Serial.println(F(" ms"));
+          dataWaitStart = millis(); // Reset to only log once per second
+        }
         if (millis() - startTime > timeout) {
           Serial.println(F("[CHUNKED] Timeout waiting for chunk data"));
           return false;
@@ -241,8 +270,15 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
     }
     
     // Read the CRLF at the end of the chunk
+    unsigned long crlfWaitStart = millis();
     while (!stream->available()) {
       yield();
+      if (millis() - crlfWaitStart > 1000) {
+        Serial.print(F("[CHUNKED] Waiting for CRLF after chunk... "));
+        Serial.print(millis() - crlfWaitStart);
+        Serial.println(F(" ms"));
+        crlfWaitStart = millis(); // Reset to only log once per second
+      }
       if (millis() - startTime > timeout) {
         Serial.println(F("[CHUNKED] Timeout waiting for CRLF after chunk"));
         break;
@@ -252,7 +288,8 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
     if (stream->available()) {
       char cr = stream->read();
       if (cr != '\r') {
-        Serial.println(F("[CHUNKED] Warning: Expected CR after chunk"));
+        Serial.print(F("[CHUNKED] Warning: Expected CR after chunk, got: "));
+        Serial.println(cr);
       }
       
       while (!stream->available()) {
@@ -263,7 +300,8 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
       if (stream->available()) {
         char lf = stream->read();
         if (lf != '\n') {
-          Serial.println(F("[CHUNKED] Warning: Expected LF after chunk"));
+          Serial.print(F("[CHUNKED] Warning: Expected LF after chunk, got: "));
+          Serial.println(lf);
         }
       }
     }

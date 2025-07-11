@@ -65,6 +65,7 @@ void processSettingsSave() {
   
   // Update only the Netatmo settings in the JSON document
   doc["netatmoDeviceId"] = netatmoDeviceId;
+  doc["netatmoStationId"] = netatmoStationId;  // Also save the station ID
   doc["netatmoModuleId"] = netatmoModuleId;
   doc["netatmoIndoorModuleId"] = netatmoIndoorModuleId;
   doc["useNetatmoOutdoor"] = useNetatmoOutdoor;
@@ -74,6 +75,9 @@ void processSettingsSave() {
   Serial.println(F("[CONFIG] Saving Netatmo settings:"));
   Serial.print(F("[CONFIG] Device ID: '"));
   Serial.print(netatmoDeviceId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Station ID: '"));
+  Serial.print(netatmoStationId);
   Serial.println(F("'"));
   Serial.print(F("[CONFIG] Module ID: '"));
   Serial.print(netatmoModuleId);

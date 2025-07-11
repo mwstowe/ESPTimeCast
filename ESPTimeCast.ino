@@ -365,9 +365,26 @@ void loadConfig() {
   if (doc.containsKey("netatmoRefreshToken")) strlcpy(netatmoRefreshToken, doc["netatmoRefreshToken"], sizeof(netatmoRefreshToken));
   
   // Always load Netatmo settings from main config
+  // Debug output for raw JSON content
+  Serial.println(F("[CONFIG] Raw JSON content from config.json:"));
+  String jsonDebug;
+  serializeJson(doc, jsonDebug);
+  Serial.println(jsonDebug);
+  
+  // Check if Netatmo fields exist in the JSON
+  Serial.println(F("[CONFIG] Checking for Netatmo fields in config.json:"));
+  Serial.print(F("[CONFIG] netatmoDeviceId exists: "));
+  Serial.println(doc.containsKey("netatmoDeviceId") ? "Yes" : "No");
+  Serial.print(F("[CONFIG] netatmoModuleId exists: "));
+  Serial.println(doc.containsKey("netatmoModuleId") ? "Yes" : "No");
+  Serial.print(F("[CONFIG] netatmoStationId exists: "));
+  Serial.println(doc.containsKey("netatmoStationId") ? "Yes" : "No");
+  
+  // Load Netatmo settings
   if (doc.containsKey("netatmoDeviceId")) strlcpy(netatmoDeviceId, doc["netatmoDeviceId"], sizeof(netatmoDeviceId));
   if (doc.containsKey("netatmoModuleId")) strlcpy(netatmoModuleId, doc["netatmoModuleId"], sizeof(netatmoModuleId));
   if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
+  if (doc.containsKey("netatmoStationId")) strlcpy(netatmoStationId, doc["netatmoStationId"], sizeof(netatmoStationId));
   if (doc.containsKey("useNetatmoOutdoor")) useNetatmoOutdoor = doc["useNetatmoOutdoor"];
   if (doc.containsKey("prioritizeNetatmoIndoor")) prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
   
@@ -375,6 +392,9 @@ void loadConfig() {
   Serial.println(F("[CONFIG] Netatmo settings loaded:"));
   Serial.print(F("[CONFIG] Device ID: '"));
   Serial.print(netatmoDeviceId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] Station ID: '"));
+  Serial.print(netatmoStationId);
   Serial.println(F("'"));
   Serial.print(F("[CONFIG] Module ID: '"));
   Serial.print(netatmoModuleId);

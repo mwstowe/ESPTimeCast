@@ -26,10 +26,8 @@ void processFetchStationsData();
 void processProxyRequest();
 bool refreshNetatmoToken();
 void extractDeviceInfo();
-void fetchStationsDataWithDump();
 void fetchStationsDataFallback();
 void processSaveCredentials();
-void fetchStationsDataImproved();
 void setupOptimizedHandlers();
 
 #include "mfactoryfont.h"  // Replace with your font, or comment/remove if not using custom
@@ -68,8 +66,6 @@ void logApiRequest(const char* url, const char* token);
 void logToken();
 void logTokenPeriodically();
 int logDetailedApiRequest(HTTPClient &https, const String &apiUrl);
-String encodeToken(const char* token);
-void patchFetchStationsDataImproved();
 bool isInvalidTokenError(const String &errorPayload);
 void setupHttpClientWithTimeout(HTTPClient &https);
 void listAllFiles();
@@ -1637,9 +1633,6 @@ void setup() {
   // Check Netatmo configuration
   checkNetatmoConfig();
   
-  // Patch the fetchStationsDataImproved function to use URL-encoded tokens
-  patchFetchStationsDataImproved();
-  
   // Initialize DS18B20 temperature sensor
   sensors.begin();
   Serial.println(F("[SETUP] DS18B20 sensor initialized"));
@@ -1926,8 +1919,6 @@ bool shouldHandleWebRequest() {
 void processFetchStationsData();
 void processProxyRequest();
 void extractDeviceInfo();
-void fetchStationsDataWithDump();
-void fetchStationsDataFallback();
 bool refreshNetatmoToken();
 void safeGarbageCollection();
 

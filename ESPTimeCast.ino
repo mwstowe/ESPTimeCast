@@ -1659,8 +1659,12 @@ void updateTemperatures() {
   Serial.println(F("[TEMP] Updating temperatures..."));
   
   // Determine if we need to round temperatures to integers
-  // Always round to integers when both indoor and outdoor temps will be displayed
-  bool shouldRound = true; // Always round to integers
+  // Only round to integers when both indoor and outdoor temps will be displayed
+  bool shouldRound = showIndoorTemp && showOutdoorTemp && 
+                    (strlen(netatmoDeviceId) > 0 && strlen(netatmoModuleId) > 0);
+  
+  Serial.print(F("[TEMP] Rounding to integers: "));
+  Serial.println(shouldRound ? "Yes" : "No");
   
   // Handle indoor temperature based on source setting
   if (tempSource == 0) { // Local sensor primary

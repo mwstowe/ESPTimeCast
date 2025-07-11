@@ -49,7 +49,8 @@ void triggerNetatmoDevicesFetch();
 void processSettingsSave();
 String getNetatmoDeviceData();
 bool isNetatmoTokenValid();
-bool checkNetworkConnectivity(); // Add this line // Add this line
+bool checkNetworkConnectivity();
+void optimizeMemory(); // Add this line // Add this line
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
 void handleBlockedRequest(String errorPayload);
@@ -1432,6 +1433,14 @@ void saveTokensToConfig() {
 void fetchOutdoorTemperature(bool roundToInteger = true) {
   Serial.println(F("\n[NETATMO] Fetching outdoor temperature..."));
   
+  // Print and optimize memory before starting
+  printMemoryStats();
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting..."));
+    defragmentHeap();
+  }
+  
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Skipped: WiFi not connected"));
     outdoorTempAvailable = false;
@@ -1458,8 +1467,13 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
     return;
   }
   
-  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation
+  // Print memory after getting token
+  printMemoryStats();
+  
+  // Create a smaller buffer size for the SSL client
+  BearSSL::WiFiClientSecure client;
+  client.setInsecure(); // Skip certificate validation
+  client.setBufferSizes(512, 512); // Use even smaller buffer sizes
   
   HTTPClient https;
   
@@ -1471,7 +1485,10 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   Serial.print(F("[NETATMO] Using token: "));
   Serial.println(token.substring(0, 10) + "...");
   
-  if (https.begin(*client, url)) {
+  // Print memory before beginning connection
+  printMemoryStats();
+  
+  if (https.begin(client, url)) {
     https.addHeader("Authorization", "Bearer " + token);
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");

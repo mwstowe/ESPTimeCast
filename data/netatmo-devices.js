@@ -223,6 +223,9 @@ function populateDeviceDropdowns(devices) {
 function processNetatmoData(data) {
   console.log("Processing Netatmo data:", data);
   
+  // Log raw device data to help debug ID issues
+  logRawDeviceData(data);
+  
   const devices = [];
   
   try {
@@ -230,16 +233,24 @@ function processNetatmoData(data) {
     if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
       // Process each device from getstationsdata endpoint
       data.body.devices.forEach(device => {
+        // Log the device object to see all available fields
+        console.log("Device object:", device);
+        
+        // Find the MAC address
+        const deviceId = findMacAddress(device);
+        
         const deviceInfo = {
-          id: device._id,
+          id: deviceId,
           name: device.station_name || device.module_name || "Unknown Device",
           type: device.type,
           modules: []
         };
         
+        console.log("Using device ID:", deviceId);
+        
         // Add the main device as a module (for indoor measurements)
         deviceInfo.modules.push({
-          id: device._id,
+          id: deviceId,
           name: device.module_name || "Main Module",
           type: device.type,
           data_type: device.data_type || []
@@ -248,8 +259,16 @@ function processNetatmoData(data) {
         // Process modules if available
         if (device.modules && Array.isArray(device.modules)) {
           device.modules.forEach(module => {
+            // Log the module object to see all available fields
+            console.log("Module object:", module);
+            
+            // Find the MAC address
+            const moduleId = findMacAddress(module);
+            
+            console.log("Using module ID:", moduleId);
+            
             deviceInfo.modules.push({
-              id: module._id,
+              id: moduleId,
               name: module.module_name || "Unknown Module",
               type: module.type,
               data_type: module.data_type || []
@@ -265,10 +284,17 @@ function processNetatmoData(data) {
       console.log("Processing homes data");
       // Process each home
       data.body.homes.forEach(home => {
+        // Log the home object to see all available fields
+        console.log("Home object:", home);
+        
         if (home.modules && Array.isArray(home.modules)) {
           // Create a device for each home
+          const homeId = home.id || home.home_id || home._id;
+          
+          console.log("Using home ID:", homeId);
+          
           const deviceInfo = {
-            id: home.id,
+            id: homeId,
             name: home.name || "Home",
             type: "NAHome",
             modules: []
@@ -276,8 +302,16 @@ function processNetatmoData(data) {
           
           // Process modules in the home
           home.modules.forEach(module => {
+            // Log the module object to see all available fields
+            console.log("Home module object:", module);
+            
+            // Use the MAC address (id) if available, otherwise fall back to _id
+            const moduleId = module.id || module.module_id || module._id;
+            
+            console.log("Using home module ID:", moduleId);
+            
             deviceInfo.modules.push({
-              id: module.id,
+              id: moduleId,
               name: module.name || "Unknown Module",
               type: module.type,
               data_type: module.data_type || []
@@ -314,10 +348,66 @@ function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
   indoorModuleSelect.innerHTML = '<option value="none">Not mapped</option>';
   
   if (!deviceId) return;
+// Function to check if a string is in MAC address format (xx:xx:xx:xx:xx:xx)
+function isMacAddressFormat(str) {
+  return /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(str);
+}
+
+// Function to find the MAC address field in a device object
+function findMacAddress(obj) {
+  // Check common field names for MAC addresses
+  const possibleFields = ['mac_address', 'macAddress', 'MAC', 'mac', 'id', 'device_id', '_id'];
   
+  for (const field of possibleFields) {
+    if (obj[field] && typeof obj[field] === 'string') {
+      if (isMacAddressFormat(obj[field])) {
+        console.log(`Found MAC address in field '${field}':`, obj[field]);
+        return obj[field];
+      }
+    }
+  }
+  
+  // If no MAC address format found, look for any field that might contain a MAC
+  for (const key in obj) {
+    if (typeof obj[key] === 'string' && isMacAddressFormat(obj[key])) {
+      console.log(`Found MAC address in field '${key}':`, obj[key]);
+      return obj[key];
+    }
+  }
+  
+  // If still not found, return the _id as fallback
+  return obj._id || '';
+}  
   // Find the selected device in our processed data
   const device = window.netatmoDevices.find(d => d.id === deviceId);
+// Function to log raw device data
+function logRawDeviceData(data) {
+  console.log("Raw device data:", data);
   
+  if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
+    data.body.devices.forEach((device, index) => {
+      console.log(`Device ${index}:`, device);
+      console.log(`Device ${index} ID fields:`, {
+        _id: device._id,
+        id: device.id,
+        device_id: device.device_id,
+        mac_address: device.mac_address
+      });
+      
+      if (device.modules && Array.isArray(device.modules)) {
+        device.modules.forEach((module, moduleIndex) => {
+          console.log(`Device ${index} Module ${moduleIndex}:`, module);
+          console.log(`Device ${index} Module ${moduleIndex} ID fields:`, {
+            _id: module._id,
+            id: module.id,
+            module_id: module.module_id,
+            mac_address: module.mac_address
+          });
+        });
+      }
+    });
+  }
+}  
   if (!device) {
     console.error("Selected device not found in data");
     return;

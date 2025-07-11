@@ -51,6 +51,8 @@ function logRawDeviceData(data) {
 // Helper function to get data types for module types
 function getDataTypeForModuleType(type) {
   switch (type) {
+    case "NAMain":
+      return ["Temperature", "Humidity", "CO2", "Pressure", "Noise"];
     case "NAModule1":
       return ["Temperature", "Humidity"];
     case "NAModule2":
@@ -60,7 +62,7 @@ function getDataTypeForModuleType(type) {
     case "NAModule4":
       return ["Temperature", "Humidity", "CO2"];
     default:
-      return [];
+      return ["Temperature"]; // Default to temperature for unknown modules
   }
 }// Function to debug Netatmo settings
 function debugNetatmoSettings() {
@@ -150,6 +152,8 @@ document.addEventListener('DOMContentLoaded', function() {
       jsonText = jsonText.replace(/[^}]*$/g, ''); // Remove anything after the last }
       
       console.log("Cleaned JSON length:", jsonText.length);
+      console.log("First 100 chars:", jsonText.substring(0, 100));
+      console.log("Last 100 chars:", jsonText.substring(jsonText.length - 100));
       
       try {
         // Parse the cleaned JSON
@@ -164,6 +168,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update the UI with the device data
         populateDeviceDropdowns(devices);
+        
+        // Log the populated dropdowns
+        logDropdownContents();
       } catch (e) {
         console.error("Error parsing JSON:", e);
         throw new Error("Invalid JSON format");
@@ -174,6 +181,34 @@ document.addEventListener('DOMContentLoaded', function() {
       // This is expected on first load, so we don't show an error
     });
 });
+
+// Function to log dropdown contents for debugging
+function logDropdownContents() {
+  const deviceSelect = document.getElementById('netatmoDeviceId');
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+  
+  console.log("Device dropdown options:");
+  if (deviceSelect) {
+    Array.from(deviceSelect.options).forEach(option => {
+      console.log(`  ${option.value}: ${option.textContent}`);
+    });
+  }
+  
+  console.log("Outdoor module dropdown options:");
+  if (moduleSelect) {
+    Array.from(moduleSelect.options).forEach(option => {
+      console.log(`  ${option.value}: ${option.textContent}`);
+    });
+  }
+  
+  console.log("Indoor module dropdown options:");
+  if (indoorModuleSelect) {
+    Array.from(indoorModuleSelect.options).forEach(option => {
+      console.log(`  ${option.value}: ${option.textContent}`);
+    });
+  }
+}
 
 // Function to fetch Netatmo devices
 function fetchNetatmoDevices() {
@@ -401,9 +436,39 @@ function processNetatmoData(data) {
             });
             
             devices.push(deviceInfo);
+          } else {
+            console.warn("No main station (NAMain) found in home:", home.name);
+            
+            // If no main station is found, still try to add modules
+            if (home.modules.length > 0) {
+              // Use the first module as the "device"
+              const firstModule = home.modules[0];
+              
+              const deviceInfo = {
+                id: firstModule.id,
+                name: home.name || "Home",
+                type: firstModule.type,
+                modules: []
+              };
+              
+              // Add all modules
+              home.modules.forEach(module => {
+                deviceInfo.modules.push({
+                  id: module.id,
+                  name: module.name || "Unknown Module",
+                  type: module.type,
+                  data_type: getDataTypeForModuleType(module.type)
+                });
+              });
+              
+              devices.push(deviceInfo);
+            }
           }
+        } else {
+          console.warn("No modules found in home:", home.name);
         }
       });
+    }
     }
     // Check if we have a valid response with devices (from getstationsdata endpoint)
     else if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
@@ -509,6 +574,8 @@ function processNetatmoData(data) {
 // Function to load modules for a selected device
 function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
   console.log("Loading modules for device:", deviceId);
+  console.log("Current module ID:", currentModuleId);
+  console.log("Current indoor module ID:", currentIndoorModuleId);
   console.log("Current global devices:", window.netatmoDevices);
   
   const moduleSelect = document.getElementById('netatmoModuleId');
@@ -524,6 +591,69 @@ function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
   indoorModuleSelect.innerHTML = '<option value="none">Not mapped</option>';
   
   if (!deviceId) return;
+  
+  // Find the selected device in our processed data
+  const device = window.netatmoDevices.find(d => d.id === deviceId);
+  
+  if (!device) {
+    console.error("Selected device not found in data");
+    return;
+  }
+  
+  console.log("Found device:", device);
+  console.log("Modules:", device.modules);
+  
+  // Add outdoor modules (with temperature data)
+  device.modules.forEach(module => {
+    console.log("Processing module for dropdowns:", module);
+    
+    // Check if this module has temperature data
+    const hasTemperature = module.data_type && 
+                          (module.data_type.includes('Temperature') || 
+                           module.data_type.includes('temperature'));
+    
+    // For outdoor modules (typically NAModule1)
+    if (module.type === 'NAModule1' || (module.type !== 'NAMain' && hasTemperature)) {
+      const option = document.createElement('option');
+      option.value = module.id;
+      option.textContent = module.name;
+      moduleSelect.appendChild(option);
+      console.log("Added to outdoor dropdown:", module.name, module.id);
+    }
+    
+    // For indoor modules (including the main module)
+    if (hasTemperature || module.type === 'NAMain' || module.type === 'NAModule4') {
+      const option = document.createElement('option');
+      option.value = module.id;
+      option.textContent = module.name;
+      indoorModuleSelect.appendChild(option);
+      console.log("Added to indoor dropdown:", module.name, module.id);
+    }
+  });
+  
+  // Set the selected values if provided
+  if (currentModuleId && currentModuleId !== 'none') {
+    // Check if the value exists in the dropdown
+    const moduleExists = Array.from(moduleSelect.options).some(option => option.value === currentModuleId);
+    if (moduleExists) {
+      moduleSelect.value = currentModuleId;
+      console.log("Set outdoor module to:", currentModuleId);
+    } else {
+      console.warn(`Module ID ${currentModuleId} not found in outdoor dropdown options`);
+    }
+  }
+  
+  if (currentIndoorModuleId && currentIndoorModuleId !== 'none') {
+    // Check if the value exists in the dropdown
+    const indoorModuleExists = Array.from(indoorModuleSelect.options).some(option => option.value === currentIndoorModuleId);
+    if (indoorModuleExists) {
+      indoorModuleSelect.value = currentIndoorModuleId;
+      console.log("Set indoor module to:", currentIndoorModuleId);
+    } else {
+      console.warn(`Indoor module ID ${currentIndoorModuleId} not found in indoor dropdown options`);
+    }
+  }
+}
 // Function to check if a string is in MAC address format (xx:xx:xx:xx:xx:xx)
 function isMacAddressFormat(str) {
   return /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(str);

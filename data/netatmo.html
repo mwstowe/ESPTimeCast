@@ -132,11 +132,34 @@ select option {
     background-repeat: no-repeat;
     padding-right: 2rem;
   }
-  
+}
+
+/* Additional fixes for dropdown options in different browsers */
+select option {
+  background-color: #2b425a !important;
+  color: #ffffff !important;
+}
+
+/* Firefox specific fix */
+@-moz-document url-prefix() {
+  select {
+    background-color: #2b425a;
+    color: #ffffff;
+  }
   select option {
     background-color: #2b425a !important;
     color: #ffffff !important;
   }
+}
+
+/* Edge and IE specific fix */
+select::-ms-expand {
+  display: none;
+}
+
+select:focus::-ms-value {
+  background-color: #2b425a;
+  color: #ffffff;
 }
 
 input[type="text"]:focus, 

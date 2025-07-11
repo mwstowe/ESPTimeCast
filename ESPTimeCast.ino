@@ -1548,11 +1548,13 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
                 if (dashboard_data.containsKey("Temperature")) {
                   float temp = dashboard_data["Temperature"];
                   
-                  // Convert to the correct unit based on settings
-                  if (strcmp(weatherUnits, "imperial") == 0) {
-                    temp = (temp * 9.0 / 5.0) + 32.0; // Convert to Fahrenheit
-                  }
+                  // Debug the raw temperature value
+                  Serial.print(F("[NETATMO] Raw temperature from API: "));
+                  Serial.print(temp);
+                  Serial.println(F("°C"));
                   
+                  // Note: formatTemperature already handles unit conversion based on weatherUnits
+                  // so we don't need to convert here
                   outdoorTemp = formatTemperature(temp, roundToInteger) + "º";
                   Serial.print(F("[NETATMO] Outdoor temperature: "));
                   Serial.println(outdoorTemp);

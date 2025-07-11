@@ -1181,6 +1181,7 @@ void processSaveCredentials() {
 }
 // Function to fetch stations data directly
 void fetchStationsData() {
+  unsigned long startTime = millis();
   Serial.println(F("[NETATMO] Fetching stations data"));
   
   // Report memory status before API call
@@ -1194,6 +1195,11 @@ void fetchStationsData() {
   // Report memory status after defragmentation
   Serial.println(F("[MEMORY] Memory status after defragmentation:"));
   printMemoryStats();
+  
+  unsigned long afterDefragTime = millis();
+  Serial.print(F("[TIMING] Setup and defrag time: "));
+  Serial.print(afterDefragTime - startTime);
+  Serial.println(F(" ms"));
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
@@ -1251,6 +1257,11 @@ void fetchStationsData() {
   https.addHeader("Authorization", authHeader);
   https.addHeader("Accept", "application/json");
   
+  unsigned long beforeRequestTime = millis();
+  Serial.print(F("[TIMING] HTTP client setup time: "));
+  Serial.print(beforeRequestTime - afterDefragTime);
+  Serial.println(F(" ms"));
+  
   // Make the request with yield to avoid watchdog issues
   Serial.println(F("[NETATMO] Sending request..."));
   
@@ -1258,8 +1269,14 @@ void fetchStationsData() {
   Serial.println(F("[MEMORY] Final defragmentation before API call"));
   defragmentHeap();
   
+  unsigned long requestStartTime = millis();
   int httpCode = https.GET();
   yield(); // Allow the watchdog to be fed
+  
+  unsigned long requestEndTime = millis();
+  Serial.print(F("[TIMING] HTTP request time: "));
+  Serial.print(requestEndTime - requestStartTime);
+  Serial.println(F(" ms"));
   
   // Report memory status immediately after the API call
   Serial.println(F("[MEMORY] Memory status immediately after API call:"));
@@ -1390,6 +1407,11 @@ void fetchStationsData() {
   deviceFile.close();
   https.end();
   
+  unsigned long afterFileWriteTime = millis();
+  Serial.print(F("[TIMING] File write time: "));
+  Serial.print(afterFileWriteTime - millis());
+  Serial.println(F(" ms"));
+  
   Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
   Serial.println(totalRead);
   
@@ -1405,6 +1427,11 @@ void fetchStationsData() {
   Serial.println(F("[MEMORY] Defragmenting heap after API call"));
   defragmentHeap();
   
+  unsigned long beforeExtractTime = millis();
+  Serial.print(F("[TIMING] Before extracting device info: "));
+  Serial.print(beforeExtractTime - afterFileWriteTime);
+  Serial.println(F(" ms"));
+  
   // Report memory status after defragmentation
   Serial.println(F("[MEMORY] Memory status after post-API defragmentation:"));
   printMemoryStats();
@@ -1414,6 +1441,7 @@ void fetchStationsData() {
 }
 // Function to extract device info from the saved JSON file
 void extractDeviceInfo() {
+  unsigned long startExtractTime = millis();
   Serial.println(F("[NETATMO] Extracting device info"));
   
   if (!LittleFS.exists("/netatmo_config.json")) {
@@ -1426,6 +1454,11 @@ void extractDeviceInfo() {
     Serial.println(F("[NETATMO] Error - Failed to open device data file"));
     return;
   }
+  
+  unsigned long fileOpenTime = millis();
+  Serial.print(F("[TIMING] File open time: "));
+  Serial.print(fileOpenTime - startExtractTime);
+  Serial.println(F(" ms"));
   
   // Use a streaming parser to avoid loading the entire file into memory
   DynamicJsonDocument doc(2048);
@@ -1562,6 +1595,11 @@ void extractDeviceInfo() {
   
   // Save the updated device and module IDs to config
   saveTokensToConfig();
+  
+  unsigned long endExtractTime = millis();
+  Serial.print(F("[TIMING] Device info extraction time: "));
+  Serial.print(endExtractTime - startExtractTime);
+  Serial.println(F(" ms"));
 }
 // Function to be called from loop() to process pending stations data fetch
 void processFetchStationsData() {

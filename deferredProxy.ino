@@ -9,6 +9,7 @@ void processProxyRequest() {
     return;
   }
   
+  unsigned long startTime = millis();
   Serial.println(F("[NETATMO] Processing deferred proxy request"));
   
   // Set API call in progress flag to prevent concurrent web requests
@@ -30,6 +31,11 @@ void processProxyRequest() {
   AsyncWebServerRequest* request = proxyRequest;
   proxyRequest = nullptr;
   proxyEndpoint = "";
+  
+  unsigned long setupTime = millis();
+  Serial.print(F("[TIMING] Setup time: "));
+  Serial.print(setupTime - startTime);
+  Serial.println(F(" ms"));
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
@@ -55,10 +61,20 @@ void processProxyRequest() {
   https.addHeader("Authorization", authHeader);
   https.addHeader("Accept", "application/json");
   
+  unsigned long beforeRequestTime = millis();
+  Serial.print(F("[TIMING] HTTP client setup time: "));
+  Serial.print(beforeRequestTime - setupTime);
+  Serial.println(F(" ms"));
+  
   // Make the request with yield to avoid watchdog issues
   Serial.println(F("[NETATMO] Sending request..."));
   int httpCode = https.GET();
   yield(); // Allow the watchdog to be fed
+  
+  unsigned long afterRequestTime = millis();
+  Serial.print(F("[TIMING] HTTP request time: "));
+  Serial.print(afterRequestTime - beforeRequestTime);
+  Serial.println(F(" ms"));
   
   if (httpCode != HTTP_CODE_OK) {
     Serial.print(F("[NETATMO] Error - HTTP code: "));
@@ -91,6 +107,11 @@ void processProxyRequest() {
     Serial.println(errorPayload);
     https.end();
     
+    unsigned long errorHandlingTime = millis();
+    Serial.print(F("[TIMING] Error handling time: "));
+    Serial.print(errorHandlingTime - afterRequestTime);
+    Serial.println(F(" ms"));
+    
     // If we get a 401 or 403, check if it's an invalid token error
     if (httpCode == 401 || httpCode == 403) {
       // Check if the error payload indicates an invalid token
@@ -105,8 +126,18 @@ void processProxyRequest() {
         Serial.println(F("[NETATMO] Token expired, trying to refresh"));
       }
       
+      unsigned long beforeRefreshTime = millis();
+      Serial.print(F("[TIMING] Before token refresh: "));
+      Serial.print(beforeRefreshTime - errorHandlingTime);
+      Serial.println(F(" ms"));
+      
       // Try to refresh the token
       if (refreshNetatmoToken()) {
+        unsigned long afterRefreshTime = millis();
+        Serial.print(F("[TIMING] Token refresh time: "));
+        Serial.print(afterRefreshTime - beforeRefreshTime);
+        Serial.println(F(" ms"));
+        
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
         
         // Create a new client for the retry
@@ -128,10 +159,20 @@ void processProxyRequest() {
         https2.addHeader("Authorization", newAuthHeader);
         https2.addHeader("Accept", "application/json");
         
+        unsigned long beforeRetryTime = millis();
+        Serial.print(F("[TIMING] Retry setup time: "));
+        Serial.print(beforeRetryTime - afterRefreshTime);
+        Serial.println(F(" ms"));
+        
         // Make the request again with yield
         Serial.println(F("[NETATMO] Sending retry request..."));
         int httpCode2 = https2.GET();
         yield(); // Allow the watchdog to be fed
+        
+        unsigned long afterRetryTime = millis();
+        Serial.print(F("[TIMING] Retry request time: "));
+        Serial.print(afterRetryTime - beforeRetryTime);
+        Serial.println(F(" ms"));
         
         if (httpCode2 != HTTP_CODE_OK) {
           Serial.print(F("[NETATMO] Error on retry - HTTP code: "));
@@ -167,6 +208,11 @@ void processProxyRequest() {
           return;
         }
         
+        unsigned long beforeStreamTime = millis();
+        Serial.print(F("[TIMING] Before streaming response: "));
+        Serial.print(beforeStreamTime - afterRetryTime);
+        Serial.println(F(" ms"));
+        
         // Stream the response directly to the client to avoid memory issues
         WiFiClient* stream = https2.getStreamPtr();
         AsyncResponseStream *response = request->beginResponseStream("application/json");
@@ -198,9 +244,20 @@ void processProxyRequest() {
           }
         }
         
+        unsigned long afterStreamTime = millis();
+        Serial.print(F("[TIMING] Streaming response time: "));
+        Serial.print(afterStreamTime - beforeStreamTime);
+        Serial.println(F(" ms"));
+        
         https2.end();
         request->send(response);
         Serial.println(F("[NETATMO] Response streamed to client after token refresh"));
+        
+        unsigned long totalTime = millis() - startTime;
+        Serial.print(F("[TIMING] Total retry request time: "));
+        Serial.print(totalTime);
+        Serial.println(F(" ms"));
+        
         return;
       } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
@@ -210,6 +267,11 @@ void processProxyRequest() {
     request->send(httpCode, "application/json", errorPayload);
     return;
   }
+  
+  unsigned long beforeStreamingTime = millis();
+  Serial.print(F("[TIMING] Before streaming original response: "));
+  Serial.print(beforeStreamingTime - afterRequestTime);
+  Serial.println(F(" ms"));
   
   // Stream the response directly to the client to avoid memory issues
   WiFiClient* stream = https.getStreamPtr();
@@ -242,6 +304,11 @@ void processProxyRequest() {
     }
   }
   
+  unsigned long afterStreamingTime = millis();
+  Serial.print(F("[TIMING] Streaming original response time: "));
+  Serial.print(afterStreamingTime - beforeStreamingTime);
+  Serial.println(F(" ms"));
+  
   https.end();
   request->send(response);
   Serial.println(F("[NETATMO] Response streamed to client"));
@@ -252,4 +319,9 @@ void processProxyRequest() {
   // Print memory stats after processing
   Serial.println(F("[NETATMO] Memory stats after proxy request:"));
   printMemoryStats();
+  
+  unsigned long totalTime = millis() - startTime;
+  Serial.print(F("[TIMING] Total request processing time: "));
+  Serial.print(totalTime);
+  Serial.println(F(" ms"));
 }

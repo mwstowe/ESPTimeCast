@@ -1072,8 +1072,33 @@ void processFetchDevices() {
   WiFiClient* stream = https.getStreamPtr();
   int totalRead = 0;
   
+  // Log the first few bytes of the stream for debugging
+  if (stream->available() >= 10) {
+    char firstBytes[11];
+    int bytesRead = stream->readBytes(firstBytes, 10);
+    firstBytes[bytesRead] = '\0';
+    Serial.print(F("[JSON] First bytes of buffer: "));
+    for (int i = 0; i < bytesRead; i++) {
+      if (firstBytes[i] >= 32 && firstBytes[i] <= 126) {
+        Serial.print((char)firstBytes[i]);
+      } else {
+        Serial.print("\\x");
+        Serial.print(firstBytes[i], HEX);
+      }
+    }
+    Serial.println();
+    
+    // Put the bytes back into the stream (not possible with ESP8266WiFiClient)
+    // Instead, we'll write them to the file directly
+    deviceFile.write((uint8_t*)firstBytes, bytesRead);
+    totalRead += bytesRead;
+  }
+  
   // Check if the response is chunked
   bool isChunked = isChunkedResponse(https);
+  Serial.print(F("[NETATMO] Is chunked response (final decision): "));
+  Serial.println(isChunked ? "Yes" : "No");
+  
   if (isChunked) {
     Serial.println(F("[NETATMO] Detected chunked transfer encoding"));
     

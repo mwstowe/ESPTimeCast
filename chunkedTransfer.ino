@@ -8,8 +8,16 @@ bool isChunkedResponse(HTTPClient& http) {
   
   Serial.print(F("[CHUNKED] Transfer-Encoding header: "));
   Serial.println(transferEncoding);
-  Serial.print(F("[CHUNKED] Is chunked response: "));
-  Serial.println(isChunked ? "Yes" : "No");
+  
+  // If Content-Length is -1, it's likely chunked
+  int contentLength = http.getSize();
+  Serial.print(F("[CHUNKED] Content-Length: "));
+  Serial.println(contentLength);
+  
+  if (contentLength == -1) {
+    Serial.println(F("[CHUNKED] Content-Length is -1, likely chunked encoding"));
+    isChunked = true;
+  }
   
   // If header doesn't indicate chunking but we see a chunk size at the start of the stream,
   // we should still treat it as chunked
@@ -24,6 +32,12 @@ bool isChunkedResponse(HTTPClient& http) {
         i++;
       }
       peek[i] = '\0';
+      
+      Serial.print(F("[CHUNKED] First bytes of stream: "));
+      for (int j = 0; j < i; j++) {
+        Serial.print((char)peek[j]);
+      }
+      Serial.println();
       
       // Check if it looks like a hex chunk size followed by CRLF
       bool looksLikeChunk = false;
@@ -49,6 +63,9 @@ bool isChunkedResponse(HTTPClient& http) {
       }
     }
   }
+  
+  Serial.print(F("[CHUNKED] Is chunked response: "));
+  Serial.println(isChunked ? "Yes" : "No");
   
   return isChunked;
 }

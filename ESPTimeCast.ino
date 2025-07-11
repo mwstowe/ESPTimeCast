@@ -618,7 +618,40 @@ void setupWebServer() {
   });
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /save"));    
+    
+    // First, read the existing config file to preserve all settings
     DynamicJsonDocument doc(2048);
+    bool configExists = false;
+    
+    if (LittleFS.exists("/config.json")) {
+      File existingConfig = LittleFS.open("/config.json", "r");
+      if (existingConfig) {
+        DeserializationError error = deserializeJson(doc, existingConfig);
+        existingConfig.close();
+        
+        if (!error) {
+          configExists = true;
+          Serial.println(F("[WEBSERVER] Successfully read existing config"));
+          
+          // Debug: Print Netatmo settings before update
+          Serial.println(F("[WEBSERVER] Netatmo settings before update:"));
+          if (doc.containsKey("netatmoDeviceId")) {
+            Serial.print(F("[WEBSERVER] netatmoDeviceId: "));
+            Serial.println(doc["netatmoDeviceId"].as<String>());
+          }
+          if (doc.containsKey("netatmoModuleId")) {
+            Serial.print(F("[WEBSERVER] netatmoModuleId: "));
+            Serial.println(doc["netatmoModuleId"].as<String>());
+          }
+        } else {
+          Serial.print(F("[WEBSERVER] Error parsing config file: "));
+          Serial.println(error.c_str());
+          // Continue with empty doc if parsing fails
+        }
+      }
+    }
+    
+    // Now update only the fields that were changed in the form
     for (int i = 0; i < request->params(); i++) {
       const AsyncWebParameter* p = request->getParam(i);
       String n = p->name();
@@ -631,9 +664,13 @@ void setupWebServer() {
       else if (n == "tempSource") doc[n] = v.toInt();
       else doc[n] = v;
     }
+    
+    // Create a backup of the existing config if it exists
     if (LittleFS.exists("/config.json")) {
       LittleFS.rename("/config.json", "/config.bak");
     }
+    
+    // Write the updated config
     File f = LittleFS.open("/config.json", "w");
     if (!f) {
       Serial.println(F("[WEBSERVER] Failed to open /config.json for writing"));
@@ -644,6 +681,18 @@ void setupWebServer() {
       request->send(500, "application/json", response);
       return;
     }
+    
+    // Debug: Print Netatmo settings after update
+    Serial.println(F("[WEBSERVER] Netatmo settings after update:"));
+    if (doc.containsKey("netatmoDeviceId")) {
+      Serial.print(F("[WEBSERVER] netatmoDeviceId: "));
+      Serial.println(doc["netatmoDeviceId"].as<String>());
+    }
+    if (doc.containsKey("netatmoModuleId")) {
+      Serial.print(F("[WEBSERVER] netatmoModuleId: "));
+      Serial.println(doc["netatmoModuleId"].as<String>());
+    }
+    
     serializeJson(doc, f);
     f.close();
     
@@ -693,6 +742,10 @@ void setupWebServer() {
     request->send(200, "application/json", response);
     Serial.println(F("[WEBSERVER] Rebooting..."));
     request->onDisconnect([]() {
+      // Ensure all file operations are complete before rebooting
+      Serial.println(F("[WEBSERVER] Flushing file system before reboot..."));
+      LittleFS.end();  // Properly close the file system
+      delay(500);      // Short delay to ensure flash operations complete
       Serial.println(F("[WEBSERVER] Rebooting..."));
       ESP.restart();
     });
@@ -735,6 +788,10 @@ void setupWebServer() {
       serializeJson(okDoc, response);
       request->send(200, "application/json", response);
       request->onDisconnect([]() {
+        // Ensure all file operations are complete before rebooting
+        Serial.println(F("[WEBSERVER] Flushing file system before reboot..."));
+        LittleFS.end();  // Properly close the file system
+        delay(500);      // Short delay to ensure flash operations complete
         Serial.println(F("[WEBSERVER] Rebooting after restore..."));
         ESP.restart();
       });
@@ -769,7 +826,10 @@ void setupWebServer() {
   server.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println(F("[WEBSERVER] Request: /restart"));
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Restarting device...\"}");
-    delay(1000);
+    // Ensure all file operations are complete before rebooting
+    Serial.println(F("[WEBSERVER] Flushing file system before reboot..."));
+    LittleFS.end();  // Properly close the file system
+    delay(1000);     // Delay to ensure flash operations complete and response is sent
     ESP.restart();
   });
   
@@ -1655,6 +1715,9 @@ void loop() {
   // Check if a reboot is pending
   if (rebootPending && millis() > rebootTime) {
     Serial.println(F("[SYSTEM] Executing scheduled reboot..."));
+    // Ensure all file operations are complete before rebooting
+    Serial.println(F("[SYSTEM] Flushing file system before reboot..."));
+    LittleFS.end();  // Properly close the file system
     delay(100); // Short delay to allow serial output to complete
     ESP.restart();
     return; // Just in case restart doesn't happen immediately

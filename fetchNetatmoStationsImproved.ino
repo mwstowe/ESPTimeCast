@@ -90,6 +90,16 @@ void fetchNetatmoStationsImproved() {
   uint8_t buffer[bufferSize];
   int totalBytes = 0;
   
+  // Add timing variables
+  unsigned long startTime = millis();
+  unsigned long lastChunkTime = startTime;
+  int chunkCount = 0;
+  unsigned long waitTime = 0;
+  unsigned long processTime = 0;
+  
+  Serial.print(F("[NETATMO] Starting to stream at: "));
+  Serial.println(startTime);
+  
   // Read all data from the stream
   while (https.connected() && (contentLength > 0 || contentLength == -1)) {
     // Feed the watchdog
@@ -98,6 +108,20 @@ void fetchNetatmoStationsImproved() {
     // Get available data size
     size_t available = stream->available();
     if (available) {
+      // Log chunk info
+      unsigned long now = millis();
+      unsigned long timeSinceLastChunk = now - lastChunkTime;
+      chunkCount++;
+      
+      Serial.print(F("[NETATMO] Chunk #"));
+      Serial.print(chunkCount);
+      Serial.print(F(" received after "));
+      Serial.print(timeSinceLastChunk);
+      Serial.print(F("ms, size: "));
+      Serial.println(available);
+      
+      lastChunkTime = now;
+      
       // Read up to buffer size
       size_t bytesToRead = available;
       if (bytesToRead > bufferSize) {
@@ -105,21 +129,35 @@ void fetchNetatmoStationsImproved() {
       }
       
       // Read data into buffer
+      unsigned long readStart = millis();
       int bytesRead = stream->readBytes(buffer, bytesToRead);
       
       // Write clean JSON to file
+      unsigned long processStart = millis();
       writeCleanJsonFromBuffer(buffer, bytesRead, file);
+      unsigned long processEnd = millis();
+      
+      // Update timing stats
+      processTime += (processEnd - processStart);
       
       // Update total bytes and content length
       totalBytes += bytesRead;
       if (contentLength > 0) {
         contentLength -= bytesRead;
       }
+      
+      Serial.print(F("[NETATMO] Processed "));
+      Serial.print(bytesRead);
+      Serial.print(F(" bytes in "));
+      Serial.print(processEnd - processStart);
+      Serial.println(F("ms"));
     }
     
     // If no data available, wait a bit
     if (!available) {
+      unsigned long beforeDelay = millis();
       delay(10);
+      waitTime += (millis() - beforeDelay);
     }
   }
   
@@ -128,6 +166,29 @@ void fetchNetatmoStationsImproved() {
   
   // Close the connection
   https.end();
+  
+  // Log timing information
+  unsigned long endTime = millis();
+  unsigned long totalTime = endTime - startTime;
+  
+  Serial.print(F("[NETATMO] Stream completed in "));
+  Serial.print(totalTime);
+  Serial.println(F("ms"));
+  
+  Serial.print(F("[NETATMO] Total chunks: "));
+  Serial.println(chunkCount);
+  
+  Serial.print(F("[NETATMO] Time spent waiting: "));
+  Serial.print(waitTime);
+  Serial.print(F("ms ("));
+  Serial.print((waitTime * 100) / totalTime);
+  Serial.println(F("%)"));
+  
+  Serial.print(F("[NETATMO] Time spent processing: "));
+  Serial.print(processTime);
+  Serial.print(F("ms ("));
+  Serial.print((processTime * 100) / totalTime);
+  Serial.println(F("%)"));
   
   // Log that we've saved the file
   Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));

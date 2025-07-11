@@ -53,41 +53,68 @@ bool isChunkedResponse(HTTPClient& http) {
   return isChunked;
 }
 
-// Improved memory-efficient chunked encoding handler
+// Completely rewritten memory-efficient chunked encoding handler
 bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
   Serial.println(F("[CHUNKED] Starting chunked response processing"));
   
   int totalBytes = 0;
   unsigned long startTime = millis();
-  const unsigned long timeout = 5000; // 5 second timeout
+  const unsigned long timeout = 10000; // 10 second timeout
   
   // Process chunks until we get a zero-length chunk
   while (true) {
     // Check for timeout
-    if (millis() - startTime > timeout) {
+    unsigned long currentTime = millis();
+    if (currentTime - startTime > timeout) {
       Serial.println(F("[CHUNKED] Timeout reading chunked response"));
       return false;
     }
     
+    // Log progress every 2 seconds
+    if (currentTime % 2000 < 10) {
+      Serial.print(F("[CHUNKED] Still processing after "));
+      Serial.print((currentTime - startTime) / 1000);
+      Serial.println(F(" seconds"));
+    }
+    
     // Read the chunk size (hex digits)
     int chunkSize = 0;
-    bool endOfSizeLine = false;
+    String chunkSizeStr = ""; // For logging only
     
-    while (!endOfSizeLine) {
+    // Wait for data to be available
+    while (!stream->available()) {
+      yield();
+      if (millis() - startTime > timeout) {
+        Serial.println(F("[CHUNKED] Timeout waiting for chunk size"));
+        return false;
+      }
+    }
+    
+    // Read hex digits until CR
+    bool foundCR = false;
+    while (!foundCR) {
       if (stream->available()) {
         char c = stream->read();
         
-        // Check for CR (end of size line)
         if (c == '\r') {
+          foundCR = true;
           // Skip the LF that should follow
           while (!stream->available()) {
             yield();
-            if (millis() - startTime > timeout) return false;
+            if (millis() - startTime > timeout) {
+              Serial.println(F("[CHUNKED] Timeout waiting for LF after CR"));
+              return false;
+            }
           }
-          stream->read(); // Read '\n'
-          endOfSizeLine = true;
+          char lf = stream->read();
+          if (lf != '\n') {
+            Serial.println(F("[CHUNKED] Warning: Expected LF after CR"));
+          }
         } else if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-          // Convert hex digit to integer and add to chunk size
+          // For logging
+          chunkSizeStr += c;
+          
+          // Convert hex digit to integer
           if (c >= '0' && c <= '9') {
             chunkSize = (chunkSize << 4) | (c - '0');
           } else if (c >= 'a' && c <= 'f') {
@@ -106,9 +133,11 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
       }
     }
     
-    Serial.print(F("[CHUNKED] Chunk size: "));
+    Serial.print(F("[CHUNKED] Chunk size: 0x"));
+    Serial.print(chunkSizeStr);
+    Serial.print(F(" ("));
     Serial.print(chunkSize);
-    Serial.println(F(" bytes"));
+    Serial.println(F(" bytes)"));
     
     // A chunk size of 0 means we're done
     if (chunkSize == 0) {
@@ -117,13 +146,33 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
       // Read the final CRLF
       while (!stream->available()) {
         yield();
-        if (millis() - startTime > timeout) break;
-      }
-      if (stream->available() >= 2) {
-        stream->read(); // \r
-        stream->read(); // \n
+        if (millis() - startTime > timeout) {
+          Serial.println(F("[CHUNKED] Timeout waiting for final CRLF"));
+          break;
+        }
       }
       
+      // Read and discard the final CRLF
+      if (stream->available()) {
+        char cr = stream->read();
+        if (cr != '\r') {
+          Serial.println(F("[CHUNKED] Warning: Expected CR at end of transfer"));
+        }
+        
+        while (!stream->available()) {
+          yield();
+          if (millis() - startTime > timeout) break;
+        }
+        
+        if (stream->available()) {
+          char lf = stream->read();
+          if (lf != '\n') {
+            Serial.println(F("[CHUNKED] Warning: Expected LF at end of transfer"));
+          }
+        }
+      }
+      
+      // We're done!
       break;
     }
     
@@ -139,44 +188,67 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
         return false;
       }
       
-      if (stream->available()) {
-        // Reset timeout when data is available
-        startTime = millis();
-        
-        // Read up to buffer size or remaining bytes in chunk
-        size_t available = stream->available();
-        size_t readBytes = (available < bufSize) ? available : bufSize;
-        readBytes = (readBytes < (size_t)bytesRemaining) ? readBytes : (size_t)bytesRemaining;
-        int bytesRead = stream->readBytes(buf, readBytes);
-        
-        if (bytesRead > 0) {
-          // Write to file
-          file.write(buf, bytesRead);
-          totalBytes += bytesRead;
-          bytesRemaining -= bytesRead;
-          
-          // Print progress every 1KB
-          if (totalBytes % 1024 == 0) {
-            Serial.print(F("[CHUNKED] Read "));
-            Serial.print(totalBytes);
-            Serial.println(F(" bytes"));
-          }
+      // Wait for data to be available
+      while (!stream->available()) {
+        yield();
+        if (millis() - startTime > timeout) {
+          Serial.println(F("[CHUNKED] Timeout waiting for chunk data"));
+          return false;
         }
-        
-        yield(); // Allow the watchdog to be fed
-      } else {
-        yield(); // Just feed the watchdog, no delay needed
       }
+      
+      // Reset timeout when data is available
+      startTime = millis();
+      
+      // Read up to buffer size or remaining bytes in chunk
+      size_t available = stream->available();
+      size_t readBytes = (available < bufSize) ? available : bufSize;
+      readBytes = (readBytes < (size_t)bytesRemaining) ? readBytes : (size_t)bytesRemaining;
+      int bytesRead = stream->readBytes(buf, readBytes);
+      
+      if (bytesRead > 0) {
+        // Write to file
+        file.write(buf, bytesRead);
+        totalBytes += bytesRead;
+        bytesRemaining -= bytesRead;
+        
+        // Print progress every 1KB
+        if (totalBytes % 1024 == 0) {
+          Serial.print(F("[CHUNKED] Read "));
+          Serial.print(totalBytes);
+          Serial.println(F(" bytes"));
+        }
+      }
+      
+      yield(); // Allow the watchdog to be fed
     }
     
     // Read the CRLF at the end of the chunk
     while (!stream->available()) {
       yield();
-      if (millis() - startTime > timeout) break;
+      if (millis() - startTime > timeout) {
+        Serial.println(F("[CHUNKED] Timeout waiting for CRLF after chunk"));
+        break;
+      }
     }
-    if (stream->available() >= 2) {
-      stream->read(); // \r
-      stream->read(); // \n
+    
+    if (stream->available()) {
+      char cr = stream->read();
+      if (cr != '\r') {
+        Serial.println(F("[CHUNKED] Warning: Expected CR after chunk"));
+      }
+      
+      while (!stream->available()) {
+        yield();
+        if (millis() - startTime > timeout) break;
+      }
+      
+      if (stream->available()) {
+        char lf = stream->read();
+        if (lf != '\n') {
+          Serial.println(F("[CHUNKED] Warning: Expected LF after chunk"));
+        }
+      }
     }
   }
   

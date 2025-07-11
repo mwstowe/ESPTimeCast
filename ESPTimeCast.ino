@@ -1530,6 +1530,29 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
             deviceFound = true;
             Serial.println(F("[NETATMO] Device ID matched!"));
             
+            // Check if the indoor module ID matches the main device ID
+            if (String(netatmoIndoorModuleId) == deviceId) {
+              Serial.println(F("[NETATMO] Indoor module is the main device"));
+              
+              // Get indoor temperature from the main device
+              JsonObject device_dashboard_data = device["dashboard_data"];
+              
+              if (device_dashboard_data.containsKey("Temperature")) {
+                float indoorTempValue = device_dashboard_data["Temperature"];
+                
+                Serial.print(F("[NETATMO] Indoor temperature from main device: "));
+                Serial.print(indoorTempValue);
+                Serial.println(F("°C"));
+                
+                netatmoIndoorTemp = indoorTempValue;
+                netatmoIndoorTempAvailable = true;
+                
+                // Format the indoor temperature
+                indoorTemp = formatTemperature(indoorTempValue, roundToInteger) + "º";
+                indoorTempAvailable = true;
+              }
+            }
+            
             JsonArray modules = device["modules"];
             Serial.print(F("[NETATMO] Number of modules found: "));
             Serial.println(modules.size());
@@ -1572,6 +1595,30 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
                     Serial.println(kv.value().as<String>());
                   }
                   outdoorTempAvailable = false;
+                }
+              }
+              
+              // Check if this module is the indoor module
+              if (moduleId == String(netatmoIndoorModuleId)) {
+                Serial.println(F("[NETATMO] Indoor module ID matched!"));
+                
+                JsonObject dashboard_data = module["dashboard_data"];
+                
+                if (dashboard_data.containsKey("Temperature")) {
+                  float indoorTempValue = dashboard_data["Temperature"];
+                  
+                  Serial.print(F("[NETATMO] Indoor temperature from module: "));
+                  Serial.print(indoorTempValue);
+                  Serial.println(F("°C"));
+                  
+                  netatmoIndoorTemp = indoorTempValue;
+                  netatmoIndoorTempAvailable = true;
+                  
+                  // Format the indoor temperature if we're using Netatmo as primary
+                  if (tempSource == 1 || tempSource == 2) {
+                    indoorTemp = formatTemperature(indoorTempValue, roundToInteger) + "º";
+                    indoorTempAvailable = true;
+                  }
                 }
                 break;
               }
@@ -1675,61 +1722,38 @@ void updateTemperatures() {
   Serial.print(F("[TEMP] Rounding to integers: "));
   Serial.println(shouldRound ? "Yes" : "No");
   
+  // Reset Netatmo temperature availability
+  netatmoIndoorTempAvailable = false;
+  
+  // Fetch outdoor temperature from Netatmo (this will also fetch indoor temperature if available)
+  fetchOutdoorTemperature(shouldRound);
+  
   // Handle indoor temperature based on source setting
   if (tempSource == 0) { // Local sensor primary
     // Read indoor temperature from DS18B20
     readIndoorTemperature(shouldRound);
     
-    // If local sensor failed and Netatmo indoor module is configured, try that as fallback
-    if (!indoorTempAvailable && strlen(netatmoIndoorModuleId) > 0) {
-      fetchNetatmoIndoorTemperature();
-      if (netatmoIndoorTempAvailable) {
-        // Convert Netatmo temperature to the same format as local sensor
-        indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound);
-        indoorTemp += "º";
-        indoorTempAvailable = true;
-        Serial.println(F("[TEMP] Using Netatmo as fallback for indoor temperature"));
-      }
+    // If local sensor failed and Netatmo indoor temperature is available, use that as fallback
+    if (!indoorTempAvailable && netatmoIndoorTempAvailable) {
+      // Convert Netatmo temperature to the same format as local sensor
+      indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound) + "º";
+      indoorTempAvailable = true;
+      Serial.println(F("[TEMP] Using Netatmo as fallback for indoor temperature"));
     }
   } else if (tempSource == 1) { // Netatmo primary
-    // Try Netatmo first if configured
-    if (strlen(netatmoIndoorModuleId) > 0) {
-      fetchNetatmoIndoorTemperature();
-      if (netatmoIndoorTempAvailable) {
-        // Convert Netatmo temperature to the same format as local sensor
-        indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound);
-        indoorTemp += "º";
-        indoorTempAvailable = true;
-      } else {
-        // Fallback to local sensor if Netatmo failed
-        readIndoorTemperature(shouldRound);
-        if (indoorTempAvailable) {
-          Serial.println(F("[TEMP] Using local sensor as fallback for indoor temperature"));
-        }
-      }
-    } else {
-      // No Netatmo indoor module configured, use local sensor
+    // If Netatmo indoor temperature is not available, try local sensor as fallback
+    if (!netatmoIndoorTempAvailable) {
       readIndoorTemperature(shouldRound);
+      if (indoorTempAvailable) {
+        Serial.println(F("[TEMP] Using local sensor as fallback for indoor temperature"));
+      }
     }
   } else if (tempSource == 2) { // Netatmo only
-    // Only use Netatmo if configured
-    if (strlen(netatmoIndoorModuleId) > 0) {
-      fetchNetatmoIndoorTemperature();
-      if (netatmoIndoorTempAvailable) {
-        // Convert Netatmo temperature to the same format as local sensor
-        indoorTemp = formatTemperature(netatmoIndoorTemp, shouldRound);
-        indoorTemp += "º";
-        indoorTempAvailable = true;
-      } else {
-        indoorTempAvailable = false;
-      }
-    } else {
+    // Only use Netatmo for indoor temperature
+    if (!netatmoIndoorTempAvailable) {
       indoorTempAvailable = false;
     }
   }
-  
-  // Fetch outdoor temperature from Netatmo
-  fetchOutdoorTemperature(shouldRound);
   
   // Set weatherFetched flag if at least one temperature is available
   weatherFetched = indoorTempAvailable || outdoorTempAvailable;

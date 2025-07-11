@@ -48,7 +48,21 @@ function logRawDeviceData(data) {
           console.log(`Device ${index} Module ${moduleIndex}:`, module);
           console.log(`Device ${index} Module ${moduleIndex} ID fields:`, {
             _id: module._id,
-// Function to debug Netatmo settings
+// Helper function to get data types for module types
+function getDataTypeForModuleType(type) {
+  switch (type) {
+    case "NAModule1":
+      return ["Temperature", "Humidity"];
+    case "NAModule2":
+      return ["Wind"];
+    case "NAModule3":
+      return ["Rain"];
+    case "NAModule4":
+      return ["Temperature", "Humidity", "CO2"];
+    default:
+      return [];
+  }
+}// Function to debug Netatmo settings
 function debugNetatmoSettings() {
   console.log("Debugging Netatmo settings");
   
@@ -341,8 +355,58 @@ function processNetatmoData(data) {
   const devices = [];
   
   try {
-    // Check if we have a valid response with devices
-    if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
+    // Check if we have a valid response with homes (from gethomedata endpoint)
+    if (data && data.body && data.body.homes && Array.isArray(data.body.homes)) {
+      console.log("Processing homes data");
+      
+      // Process each home
+      data.body.homes.forEach(home => {
+        console.log("Processing home:", home.name);
+        
+        if (home.modules && Array.isArray(home.modules)) {
+          // Find the main station (NAMain)
+          const mainModule = home.modules.find(module => module.type === "NAMain");
+          
+          if (mainModule) {
+            console.log("Found main station:", mainModule);
+            
+            // Create a device for the main station
+            const deviceInfo = {
+              id: mainModule.id,
+              name: mainModule.name || "Weather Station",
+              type: mainModule.type,
+              modules: []
+            };
+            
+            // Add the main station as a module (for indoor measurements)
+            deviceInfo.modules.push({
+              id: mainModule.id,
+              name: mainModule.name || "Main Module",
+              type: mainModule.type,
+              data_type: ["Temperature", "Humidity", "CO2", "Pressure", "Noise"]
+            });
+            
+            // Add all other modules
+            home.modules.forEach(module => {
+              if (module.id !== mainModule.id) {
+                console.log("Adding module:", module);
+                
+                deviceInfo.modules.push({
+                  id: module.id,
+                  name: module.name || "Unknown Module",
+                  type: module.type,
+                  data_type: getDataTypeForModuleType(module.type)
+                });
+              }
+            });
+            
+            devices.push(deviceInfo);
+          }
+        }
+      });
+    }
+    // Check if we have a valid response with devices (from getstationsdata endpoint)
+    else if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
       // Process each device from getstationsdata endpoint
       data.body.devices.forEach(device => {
         // Log the device object to see all available fields

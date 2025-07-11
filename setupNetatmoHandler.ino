@@ -150,6 +150,7 @@ void setupNetatmoHandler() {
   if (!LittleFS.begin()) {
     Serial.println(F("[NETATMO] ERROR: Failed to mount LittleFS"));
     return;
+  }
   Serial.println(F("[NETATMO] LittleFS mounted successfully"));
   
   // Instead of creating new objects, use simpler approach
@@ -163,6 +164,7 @@ void setupNetatmoHandler() {
       Serial.println(F("[NETATMO] Error - Missing parameters"));
       request->send(400, "text/plain", "Missing parameters");
       return;
+    }
     
     String clientId = request->getParam("clientId", true)->value();
     String clientSecret = request->getParam("clientSecret", true)->value();
@@ -179,6 +181,7 @@ void setupNetatmoHandler() {
     saveCredentialsPending = true;
     
     // Send a simple response
+    request->send(200, "application/json", "{\"success\":true}");
     
     Serial.println(F("[NETATMO] Credentials saved to memory, will be written to config in main loop"));
     
@@ -187,6 +190,7 @@ void setupNetatmoHandler() {
     Serial.println(netatmoClientId);
     Serial.print(F("[NETATMO] Current netatmoClientSecret length: "));
     Serial.println(strlen(netatmoClientSecret));
+  });
   
   // Endpoint to get auth URL without redirecting
   server.on("/api/netatmo/get-auth-url", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -200,7 +204,9 @@ void setupNetatmoHandler() {
     
     if (strlen(netatmoClientId) == 0 || strlen(netatmoClientSecret) == 0) {
       Serial.println(F("[NETATMO] Error - No credentials"));
+      request->send(400, "application/json", "{\"error\":\"Missing credentials\"}");
       return;
+    }
     
     // Generate authorization URL with minimal memory usage
     // Build the redirect URI with pre-encoded format to save memory
@@ -218,8 +224,10 @@ void setupNetatmoHandler() {
     // Return the URL as JSON
     String response = "{\"url\":\"";
     response += authUrl;
+    response += "\"}";
     
     request->send(200, "application/json", response);
+  });
   
   // Endpoint to initiate OAuth flow
   server.on("/api/netatmo/auth", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -235,6 +243,7 @@ void setupNetatmoHandler() {
       Serial.println(F("[NETATMO] Error - No credentials"));
       request->send(400, "text/plain", "Missing credentials");
       return;
+    }
     
     // Generate authorization URL with minimal memory usage
     // Store the URL in a static variable to avoid stack issues
@@ -269,6 +278,7 @@ void setupNetatmoHandler() {
     
     request->send(200, "text/html", html);
     Serial.println(F("[NETATMO] Auth page sent"));
+  });
   // Endpoint to handle OAuth callback
   server.on("/api/netatmo/callback", HTTP_GET, [](AsyncWebServerRequest *request) {
     Serial.println(F("[NETATMO] Handling OAuth callback"));
@@ -286,11 +296,13 @@ void setupNetatmoHandler() {
       
       request->send(200, "text/html", html);
       return;
+    }
     
     if (!request->hasParam("code")) {
       Serial.println(F("[NETATMO] Error - No authorization code in callback"));
       request->send(400, "text/plain", "No code parameter");
       return;
+    }
     
     String code = request->getParam("code")->value();
     Serial.print(F("[NETATMO] Received code: "));
@@ -308,6 +320,7 @@ void setupNetatmoHandler() {
       "<meta charset='UTF-8'>"
       "<meta http-equiv='refresh' content='15;url=/netatmo.html'>"
       "<title>ESPTimeCast - Authorization</title>"
+      "<style>body{font-family:Arial;text-align:center;margin:50px}</style>"
       "</head><body>"
       "<h1>Authorization Successful</h1>"
       "<p>Exchanging code for tokens...</p>"
@@ -316,6 +329,7 @@ void setupNetatmoHandler() {
       "</body></html>";
     
     request->send_P(200, "text/html", SUCCESS_HTML);
+  });
   
   // Endpoint to get the access token
   server.on("/api/netatmo/token", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -323,13 +337,17 @@ void setupNetatmoHandler() {
     
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
       return;
+    }
     
     // Create a JSON response with the access token
     String response = "{\"access_token\":\"";
     response += netatmoAccessToken;
+    response += "\"}";
     
     request->send(200, "application/json", response);
+  });
   
   // Add a debug endpoint to check token status
   server.on("/api/netatmo/token-status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -344,12 +362,16 @@ void setupNetatmoHandler() {
     // Add the first few characters of the tokens for verification
     if (strlen(netatmoAccessToken) > 10) {
       response += ",\"accessTokenPrefix\":\"" + String(netatmoAccessToken).substring(0, 10) + "...\"";
+    }
     
     if (strlen(netatmoRefreshToken) > 10) {
       response += ",\"refreshTokenPrefix\":\"" + String(netatmoRefreshToken).substring(0, 10) + "...\"";
+    }
     
+    response += "}";
     
     request->send(200, "application/json", response);
+  });
   
   // Add a token refresh endpoint
   server.on("/api/netatmo/refresh-token", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -357,7 +379,9 @@ void setupNetatmoHandler() {
     
     if (strlen(netatmoRefreshToken) == 0) {
       Serial.println(F("[NETATMO] Error - No refresh token"));
+      request->send(401, "application/json", "{\"error\":\"No refresh token available\"}");
       return;
+    }
     
     // Create a new client for the API call
     static BearSSL::WiFiClientSecure client;
@@ -368,7 +392,9 @@ void setupNetatmoHandler() {
     
     if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
       Serial.println(F("[NETATMO] Error - Failed to connect"));
+      request->send(500, "application/json", "{\"error\":\"Failed to connect to Netatmo API\"}");
       return;
+    }
     
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
     
@@ -393,6 +419,7 @@ void setupNetatmoHandler() {
       https.end();
       request->send(httpCode, "application/json", errorPayload);
       return;
+    }
     
     // Get the response
     String response = https.getString();
@@ -405,12 +432,16 @@ void setupNetatmoHandler() {
     if (error) {
       Serial.print(F("[NETATMO] JSON parse error: "));
       Serial.println(error.c_str());
+      request->send(500, "application/json", "{\"error\":\"Failed to parse response\"}");
       return;
+    }
     
     // Extract the tokens
     if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
       Serial.println(F("[NETATMO] Missing tokens in response"));
+      request->send(500, "application/json", "{\"error\":\"Missing tokens in response\"}");
       return;
+    }
     
     // Save the tokens
     const char* accessToken = doc["access_token"];
@@ -423,6 +454,8 @@ void setupNetatmoHandler() {
     saveTokensToConfig();
     
     // Send success response
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Token refreshed successfully\"}");
+  });
   
   // Endpoint to save Netatmo settings without rebooting
   server.on("/api/netatmo/save-settings", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -436,25 +469,37 @@ void setupNetatmoHandler() {
       
       if (name == "netatmoDeviceId") {
         strlcpy(netatmoDeviceId, value.c_str(), sizeof(netatmoDeviceId));
+      }
       else if (name == "netatmoModuleId") {
         // Handle "none" value
         if (value == "none") {
           netatmoModuleId[0] = '\0'; // Empty string
+        } else {
           strlcpy(netatmoModuleId, value.c_str(), sizeof(netatmoModuleId));
+        }
+      }
       else if (name == "netatmoIndoorModuleId") {
         // Handle "none" value
         if (value == "none") {
           netatmoIndoorModuleId[0] = '\0'; // Empty string
+        } else {
           strlcpy(netatmoIndoorModuleId, value.c_str(), sizeof(netatmoIndoorModuleId));
+        }
+      }
       else if (name == "useNetatmoOutdoor") {
         useNetatmoOutdoor = (value == "true" || value == "on" || value == "1");
+      }
       else if (name == "prioritizeNetatmoIndoor") {
         prioritizeNetatmoIndoor = (value == "true" || value == "on" || value == "1");
+      }
+    }
     
     // Save to config file
     saveTokensToConfig();
     
     // Send success response
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Settings saved\"}");
+  });
   
   // Add a proxy endpoint for Netatmo API calls to avoid CORS issues
   server.on("/api/netatmo/proxy", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -463,7 +508,9 @@ void setupNetatmoHandler() {
     // Check if we have a valid access token
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
       return;
+    }
     
     // Debug output
     Serial.print(F("[NETATMO] Using access token: "));
@@ -473,10 +520,13 @@ void setupNetatmoHandler() {
     String endpoint = "getstationsdata";
     if (request->hasParam("endpoint")) {
       endpoint = request->getParam("endpoint")->value();
+    }
     
     // Check if there's already a pending request
     if (proxyPending) {
+      request->send(429, "application/json", "{\"error\":\"Another request is already in progress\"}");
       return;
+    }
     
     // Set up the deferred request
     proxyPending = true;
@@ -487,6 +537,7 @@ void setupNetatmoHandler() {
     // This prevents blocking the web server and avoids watchdog timeouts
     
     // Note: We don't call request->send() here because we'll do that in processProxyRequest()
+  });
   
   // Add a debug endpoint to check token status
   server.on("/api/netatmo/token-status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -501,12 +552,16 @@ void setupNetatmoHandler() {
     // Add the first few characters of the tokens for verification
     if (strlen(netatmoAccessToken) > 10) {
       response += ",\"accessTokenPrefix\":\"" + String(netatmoAccessToken).substring(0, 10) + "...\"";
+    }
     
     if (strlen(netatmoRefreshToken) > 10) {
       response += ",\"refreshTokenPrefix\":\"" + String(netatmoRefreshToken).substring(0, 10) + "...\"";
+    }
     
+    response += "}";
     
     request->send(200, "application/json", response);
+  });
   
   // Add an endpoint to get the current API keys
   server.on("/api/netatmo/get-credentials", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -516,8 +571,10 @@ void setupNetatmoHandler() {
     response += "\"clientId\":\"" + String(netatmoClientId) + "\"";
     response += ",\"clientSecret\":\"" + String(netatmoClientSecret) + "\"";
     response += ",\"hasClientSecret\":" + String(strlen(netatmoClientSecret) > 0 ? "true" : "false");
+    response += "}";
     
     request->send(200, "application/json", response);
+  });
   
   // Add an endpoint to get memory information and trigger defragmentation
   server.on("/api/memory", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -527,6 +584,7 @@ void setupNetatmoHandler() {
     bool defrag = false;
     if (request->hasParam("defrag")) {
       defrag = request->getParam("defrag")->value() == "true";
+    }
     
     // Get memory stats
     uint32_t freeHeap = ESP.getFreeHeap();
@@ -547,6 +605,7 @@ void setupNetatmoHandler() {
       fragmentation = ESP.getHeapFragmentation();
       maxFreeBlock = ESP.getMaxFreeBlockSize();
       freeStack = ESP.getFreeContStack();
+    }
     
     // Create response
     String response = "{";
@@ -555,8 +614,10 @@ void setupNetatmoHandler() {
     response += ",\"maxFreeBlock\":" + String(maxFreeBlock);
     response += ",\"freeStack\":" + String(freeStack);
     response += ",\"defragPerformed\":" + String(defrag ? "true" : "false");
+    response += "}";
     
     request->send(200, "application/json", response);
+  });
   
   // Add an endpoint to trigger device fetch
   server.on("/api/netatmo/fetch-devices", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -565,12 +626,16 @@ void setupNetatmoHandler() {
     // Check if we have a valid access token
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
       return;
+    }
     
     // Set the flag to fetch devices in the main loop
     fetchDevicesPending = true;
     
     // Send a response indicating that the fetch has been initiated
+    request->send(200, "application/json", "{\"status\":\"initiated\",\"message\":\"Device fetch initiated\"}");
+  });
   
   // Add an endpoint to retrieve the saved device data
   server.on("/api/netatmo/saved-devices", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -579,13 +644,17 @@ void setupNetatmoHandler() {
     // Check if the file exists
     if (!LittleFS.exists("/netatmo_config.json")) {
       Serial.println(F("[NETATMO] Device data file not found"));
+      request->send(404, "application/json", "{\"error\":\"Device data not found\"}");
       return;
+    }
     
     // Open the file
     File deviceFile = LittleFS.open("/netatmo_config.json", "r");
     if (!deviceFile) {
       Serial.println(F("[NETATMO] Failed to open device data file"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open device data file\"}");
       return;
+    }
     
     // Create a response stream
     AsyncResponseStream *response = request->beginResponseStream("application/json");
@@ -598,10 +667,13 @@ void setupNetatmoHandler() {
       size_t bytesRead = deviceFile.read(buf, bufSize);
       if (bytesRead > 0) {
         response->write(buf, bytesRead);
+      }
       yield(); // Allow the watchdog to be fed
+    }
     
     deviceFile.close();
     request->send(response);
+  });
   
   // Add an endpoint to retrieve mock device data when API is unavailable
   server.on("/api/netatmo/mock-devices", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -610,8 +682,10 @@ void setupNetatmoHandler() {
     // Instead of reading from file, use a hardcoded minimal JSON response
     // This avoids file system operations that might cause yield issues
     static const char MOCK_JSON[] PROGMEM = 
+      "{\"body\":{\"devices\":[{\"_id\":\"70:ee:50:00:00:01\",\"station_name\":\"Mock Weather Station\",\"type\":\"NAMain\",\"modules\":[{\"_id\":\"70:ee:50:00:00:02\",\"module_name\":\"Mock Outdoor Module\",\"type\":\"NAModule1\"},{\"_id\":\"70:ee:50:00:00:03\",\"module_name\":\"Mock Indoor Module\",\"type\":\"NAModule4\"}]}]},\"status\":\"ok\"}";
     
     request->send_P(200, "application/json", MOCK_JSON);
+  });
   
   // Add an endpoint to test connectivity to Netatmo API
   server.on("/api/netatmo/test-connection", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -626,8 +700,10 @@ void setupNetatmoHandler() {
     response += dnsResolved ? "true" : "false";
     response += ",\"details\":\"";
     response += dnsResolved ? ip.toString() : "Failed to resolve hostname";
+    response += "\"}]}";
     
     request->send(200, "application/json", response);
+  });
   
   // Add an endpoint to refresh stations data
   server.on("/api/netatmo/refresh-stations", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -636,12 +712,16 @@ void setupNetatmoHandler() {
     // Check if we have a valid access token
     if (strlen(netatmoAccessToken) == 0) {
       Serial.println(F("[NETATMO] Error - No access token"));
+      request->send(401, "application/json", "{\"error\":\"Not authenticated with Netatmo\"}");
       return;
+    }
     
     // Set a flag to fetch stations data in the main loop
     fetchStationsDataPending = true;
     
     // Send a response indicating that the refresh has been initiated
+    request->send(200, "application/json", "{\"status\":\"initiated\",\"message\":\"Stations refresh initiated\"}");
+  });
   
   // Add an endpoint to get stations data
   server.on("/api/netatmo/stations", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -650,13 +730,17 @@ void setupNetatmoHandler() {
     // Check if the file exists
     if (!LittleFS.exists("/netatmo_config.json")) {
       Serial.println(F("[NETATMO] Device data file not found"));
+      request->send(404, "application/json", "{\"error\":\"Device data not found\"}");
       return;
+    }
     
     // Open the file
     File deviceFile = LittleFS.open("/netatmo_config.json", "r");
     if (!deviceFile) {
       Serial.println(F("[NETATMO] Failed to open device data file"));
+      request->send(500, "application/json", "{\"error\":\"Failed to open device data file\"}");
       return;
+    }
     
     // Create a response stream
     AsyncResponseStream *response = request->beginResponseStream("application/json");
@@ -669,17 +753,22 @@ void setupNetatmoHandler() {
       size_t bytesRead = deviceFile.read(buf, bufSize);
       if (bytesRead > 0) {
         response->write(buf, bytesRead);
+      }
       yield(); // Allow the watchdog to be fed
+    }
     
     deviceFile.close();
     request->send(response);
+  });
   
   Serial.println(F("[NETATMO] OAuth handler setup complete"));
+}
 
 // Function to be called from loop() to process pending token exchange
 void processTokenExchange() {
   if (!tokenExchangePending || pendingCode.isEmpty()) {
     return;
+  }
   
   Serial.println(F("[NETATMO] Processing token exchange"));
   
@@ -697,6 +786,7 @@ void processTokenExchange() {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     apiCallInProgress = false;
     return;
+  }
   
   // Memory optimization: Use static client to reduce stack usage
   static BearSSL::WiFiClientSecure client;
@@ -713,6 +803,7 @@ void processTokenExchange() {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     apiCallInProgress = false;
     return;
+  }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
@@ -746,6 +837,7 @@ void processTokenExchange() {
     https.end();
     apiCallInProgress = false;
     return;
+  }
   
   // Memory optimization: Process the response in smaller chunks
   // Get the response
@@ -763,11 +855,13 @@ void processTokenExchange() {
     Serial.println(error.c_str());
     apiCallInProgress = false;
     return;
+  }
   
   // Extract the tokens
   if (!doc.containsKey("access_token") || !doc.containsKey("refresh_token")) {
     Serial.println(F("[NETATMO] Missing tokens in response"));
     return;
+  }
   
   // Memory optimization: Extract tokens directly as strings
   const char* accessToken = doc["access_token"];
@@ -793,11 +887,13 @@ void processTokenExchange() {
   
   // Immediately fetch stations data
   fetchStationsData();
+}
 
 // Function to be called from loop() to fetch Netatmo devices
 void processFetchDevices() {
   if (!fetchDevicesPending) {
     return;
+  }
   
   Serial.println(F("[NETATMO] Fetching Netatmo devices"));
   
@@ -809,17 +905,22 @@ void processFetchDevices() {
   if (shouldDefragment()) {
     Serial.println(F("[NETATMO] Defragmenting heap before fetch devices"));
     defragmentHeap();
+  }
   
   // Clear the flag immediately to prevent repeated attempts if this fails
   fetchDevicesPending = false;
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
+    deviceData = F("{\"error\":\"WiFi not connected\"}");
     return;
+  }
   
   if (strlen(netatmoAccessToken) == 0) {
     Serial.println(F("[NETATMO] Error - No access token"));
+    deviceData = F("{\"error\":\"No access token\"}");
     return;
+  }
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
@@ -835,7 +936,9 @@ void processFetchDevices() {
   
   if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
+    deviceData = F("{\"error\":\"Failed to connect to Netatmo API\"}");
     return;
+  }
   
   // Add authorization header
   String authHeader = "Bearer ";
@@ -865,10 +968,15 @@ void processFetchDevices() {
       if (resolved) {
         Serial.print(F("[NETATMO] DNS resolution successful. IP: "));
         Serial.println(ip.toString());
+        deviceData = "{\"error\":\"Connection failed. DNS resolved to " + ip.toString() + "\"}";
+      } else {
         Serial.println(F("[NETATMO] DNS resolution failed"));
+        deviceData = F("{\"error\":\"Connection failed. DNS resolution failed.\"}");
+      }
       
       https.end();
       return;
+    }
     
     // Get error payload with yield - use streaming to avoid memory issues
     String errorPayload = "";
@@ -885,7 +993,11 @@ void processFetchDevices() {
         if (c > 0) {
           buf[c] = 0;
           errorPayload = String(buf);
+        }
+      }
+    } else {
       errorPayload = https.getString();
+    }
     
     yield(); // Allow the watchdog to be fed
     
@@ -900,8 +1012,16 @@ void processFetchDevices() {
       // Try to refresh the token
       if (refreshNetatmoToken()) {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
+        deviceData = F("{\"status\":\"token_refreshed\",\"message\":\"Token refreshed. Please try again.\"}");
+      } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
+        deviceData = F("{\"error\":\"Failed to refresh token\"}");
+      }
+    } else {
+      deviceData = "{\"error\":\"API error: " + String(httpCode) + "\"}";
+    }
     return;
+  }
   
   // Instead of trying to parse the response in memory, let's save it to a file
   // and then parse it in smaller chunks
@@ -912,24 +1032,33 @@ void processFetchDevices() {
   
   if (fs_info.totalBytes - fs_info.usedBytes < https.getSize() * 2) {
     Serial.println(F("[NETATMO] Not enough space to save device data"));
+    deviceData = F("{\"error\":\"Not enough space to save device data\"}");
     https.end();
     apiCallInProgress = false;
     return;
+  }
   
+  // Create the devices directory if it doesn't exist
+  if (!LittleFS.exists("/devices")) {
+    LittleFS.mkdir("/devices");
+  }
   
   // Remove existing file if it exists to ensure clean state
   if (LittleFS.exists("/netatmo_config.json")) {
     Serial.println(F("[NETATMO] Removing existing devices file"));
     LittleFS.remove("/netatmo_config.json");
     yield(); // Allow the watchdog to be fed
+  }
   
   // Open a file to save the raw response
   File deviceFile = LittleFS.open("/netatmo_config.json", "w");
   if (!deviceFile) {
     Serial.println(F("[NETATMO] Failed to open file for writing"));
+    deviceData = F("{\"error\":\"Failed to open file for writing\"}");
     https.end();
     apiCallInProgress = false;
     return;
+  }
   
   // Stream the response directly to the file
   WiFiClient* stream = https.getStreamPtr();
@@ -962,13 +1091,19 @@ void processFetchDevices() {
           Serial.print(totalRead);
           Serial.println(F(" bytes"));
           yield(); // Only yield every 4KB to reduce context switches
+        }
+      }
       
       yield(); // Allow the watchdog to be fed
+    } else if (totalRead >= expectedSize && expectedSize > 0) {
       // We've read all the data
       break;
+    } else {
       // No data available, wait a bit
       delay(10);
       yield();
+    }
+  }
   
   deviceFile.close();
   https.end();
@@ -980,6 +1115,7 @@ void processFetchDevices() {
   Serial.println(totalRead);
   
   // Set a success response
+  deviceData = "{\"status\":\"success\",\"message\":\"Device data saved to file\",\"bytes\":" + String(totalRead) + "}";
   
   // Print memory stats after processing
   Serial.println(F("[NETATMO] Memory stats after fetch devices:"));
@@ -989,11 +1125,13 @@ void processFetchDevices() {
   Serial.println(F("[NETATMO] Performing post-API call heap defragmentation"));
   defragmentHeap();
   printMemoryStats();
+}
 
 // Function to be called from loop() to process pending credential saves
 void processSaveCredentials() {
   if (!saveCredentialsPending) {
     return;
+  }
   
   Serial.println(F("[NETATMO] Processing pending credential save"));
   
@@ -1027,12 +1165,20 @@ void processSaveCredentials() {
         Serial.print(F("[NETATMO] Verified netatmoClientId in config: "));
         if (doc.containsKey("netatmoClientId")) {
           Serial.println(doc["netatmoClientId"].as<String>());
+        } else {
           Serial.println(F("(not found)"));
+        }
         
         Serial.print(F("[NETATMO] Verified netatmoClientSecret in config: "));
         if (doc.containsKey("netatmoClientSecret")) {
           Serial.println(F("(present but not shown)"));
+        } else {
           Serial.println(F("(not found)"));
+        }
+      }
+    }
+  }
+}
 // Function to fetch stations data directly
 void fetchStationsData() {
   Serial.println(F("[NETATMO] Fetching stations data"));
@@ -1052,10 +1198,12 @@ void fetchStationsData() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
+  }
   
   if (strlen(netatmoAccessToken) == 0) {
     Serial.println(F("[NETATMO] Error - No access token"));
     return;
+  }
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
@@ -1083,9 +1231,11 @@ void fetchStationsData() {
     Serial.print(String(netatmoAccessToken).substring(0, 5));
     Serial.print(F("..."));
     Serial.println(String(netatmoAccessToken).substring(strlen(netatmoAccessToken) - 5));
+  } else {
     Serial.print(netatmoAccessToken[0]);
     Serial.print(F("..."));
     Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  }
   Serial.println(F("  Accept: application/json"));
   
   // Now try the HTTPS connection
@@ -1093,6 +1243,7 @@ void fetchStationsData() {
   if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
+  }
   
   // Add authorization header
   String authHeader = "Bearer ";
@@ -1137,14 +1288,19 @@ void fetchStationsData() {
       if (refreshNetatmoToken()) {
         Serial.println(F("[NETATMO] Token refreshed, retrying request"));
         fetchStationsData(); // Recursive call after token refresh
+      } else {
         Serial.println(F("[NETATMO] Failed to refresh token"));
+      }
+    }
     
     // Try the getstationsdata endpoint as a fallback
     else if (httpCode == -1 || httpCode == 404) {
       Serial.println(F("[NETATMO] Trying getstationsdata endpoint as fallback"));
       fetchStationsDataFallback();
+    }
     
     return;
+  }
   
   // Log response headers in detail
   Serial.println(F("[NETATMO] Response headers:"));
@@ -1153,6 +1309,7 @@ void fetchStationsData() {
     Serial.print(https.headerName(i));
     Serial.print(F(": "));
     Serial.println(https.header(i));
+  }
   
   // Log content length and type
   Serial.print(F("[NETATMO] Content-Length: "));
@@ -1160,6 +1317,10 @@ void fetchStationsData() {
   Serial.print(F("[NETATMO] Content-Type: "));
   Serial.println(https.header("Content-Type"));
   
+  // Create the devices directory if it doesn't exist
+  if (!LittleFS.exists("/devices")) {
+    LittleFS.mkdir("/devices");
+  }
   
   // Open a file to save the raw response
   File deviceFile = LittleFS.open("/netatmo_config.json", "w");
@@ -1167,6 +1328,7 @@ void fetchStationsData() {
     Serial.println(F("[NETATMO] Failed to open file for writing"));
     https.end();
     return;
+  }
   
   // Stream the response directly to the file
   WiFiClient* stream = https.getStreamPtr();
@@ -1200,21 +1362,30 @@ void fetchStationsData() {
         if (!previewCaptured && responsePreview.length() < 500) {
           for (int i = 0; i < bytesRead && responsePreview.length() < 500; i++) {
             responsePreview += (char)buf[i];
+          }
           if (responsePreview.length() >= 500) {
             previewCaptured = true;
+          }
+        }
         
         // Print progress every 1KB
         if (totalRead % 1024 == 0) {
           Serial.print(F("[NETATMO] Read "));
           Serial.print(totalRead);
           Serial.println(F(" bytes"));
+        }
+      }
       
       yield(); // Allow the watchdog to be fed
+    } else if (totalRead >= expectedSize && expectedSize > 0) {
       // We've read all the data
       break;
+    } else {
       // No data available, wait a bit
       delay(10);
       yield();
+    }
+  }
   
   deviceFile.close();
   https.end();
@@ -1240,6 +1411,7 @@ void fetchStationsData() {
   
   // Now extract the device and module IDs for easy access
   extractDeviceInfo();
+}
 // Function to extract device info from the saved JSON file
 void extractDeviceInfo() {
   Serial.println(F("[NETATMO] Extracting device info"));
@@ -1247,11 +1419,13 @@ void extractDeviceInfo() {
   if (!LittleFS.exists("/netatmo_config.json")) {
     Serial.println(F("[NETATMO] Error - Device data file not found"));
     return;
+  }
   
   File deviceFile = LittleFS.open("/netatmo_config.json", "r");
   if (!deviceFile) {
     Serial.println(F("[NETATMO] Error - Failed to open device data file"));
     return;
+  }
   
   // Use a streaming parser to avoid loading the entire file into memory
   DynamicJsonDocument doc(2048);
@@ -1262,6 +1436,7 @@ void extractDeviceInfo() {
     Serial.print(F("[NETATMO] Error parsing device data: "));
     Serial.println(error.c_str());
     return;
+  }
   
   // Check if we have a homesdata response
   if (doc.containsKey("body") && doc["body"].containsKey("homes")) {
@@ -1315,12 +1490,20 @@ void extractDeviceInfo() {
                 strlcpy(netatmoModuleId, subModuleId, sizeof(netatmoModuleId));
                 Serial.print(F("[NETATMO] Set outdoor module ID: "));
                 Serial.println(netatmoModuleId);
+              }
               
               // Save indoor module ID
               if (strcmp(subModuleType, "NAModule4") == 0 && strlen(netatmoIndoorModuleId) == 0) {
                 strlcpy(netatmoIndoorModuleId, subModuleId, sizeof(netatmoIndoorModuleId));
                 Serial.print(F("[NETATMO] Set indoor module ID: "));
                 Serial.println(netatmoIndoorModuleId);
+              }
+            }
+          }
+        }
+      }
+    }
+  } 
   // Check if we have a getstationsdata response
   else if (doc.containsKey("body") && doc["body"].containsKey("devices")) {
     Serial.println(F("[NETATMO] Processing getstationsdata response"));
@@ -1342,6 +1525,7 @@ void extractDeviceInfo() {
         strlcpy(netatmoDeviceId, deviceId, sizeof(netatmoDeviceId));
         Serial.print(F("[NETATMO] Set device ID: "));
         Serial.println(netatmoDeviceId);
+      }
       
       // Extract module info
       JsonArray modules = device["modules"];
@@ -1362,26 +1546,35 @@ void extractDeviceInfo() {
           strlcpy(netatmoModuleId, moduleId, sizeof(netatmoModuleId));
           Serial.print(F("[NETATMO] Set outdoor module ID: "));
           Serial.println(netatmoModuleId);
+        }
         
         // Save indoor module ID if not already set
         if (strcmp(moduleType, "NAModule4") == 0 && strlen(netatmoIndoorModuleId) == 0) {
           strlcpy(netatmoIndoorModuleId, moduleId, sizeof(netatmoIndoorModuleId));
           Serial.print(F("[NETATMO] Set indoor module ID: "));
           Serial.println(netatmoIndoorModuleId);
+        }
+      }
+    }
+  } else {
     Serial.println(F("[NETATMO] Unknown response format"));
+  }
   
   // Save the updated device and module IDs to config
   saveTokensToConfig();
+}
 // Function to be called from loop() to process pending stations data fetch
 void processFetchStationsData() {
   if (!fetchStationsDataPending) {
     return;
+  }
   
   // Clear the flag immediately to prevent repeated attempts if this fails
   fetchStationsDataPending = false;
   
   // Call the fetch stations data function
   fetchStationsData();
+}
 // Function to fetch stations data using getstationsdata endpoint as fallback
 void fetchStationsDataFallback() {
   Serial.println(F("[NETATMO] Fetching stations data using fallback endpoint"));
@@ -1401,10 +1594,12 @@ void fetchStationsDataFallback() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return;
+  }
   
   if (strlen(netatmoAccessToken) == 0) {
     Serial.println(F("[NETATMO] Error - No access token"));
     return;
+  }
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
@@ -1432,9 +1627,11 @@ void fetchStationsDataFallback() {
     Serial.print(String(netatmoAccessToken).substring(0, 5));
     Serial.print(F("..."));
     Serial.println(String(netatmoAccessToken).substring(strlen(netatmoAccessToken) - 5));
+  } else {
     Serial.print(netatmoAccessToken[0]);
     Serial.print(F("..."));
     Serial.println(netatmoAccessToken[strlen(netatmoAccessToken)-1]);
+  }
   Serial.println(F("  Accept: application/json"));
   
   // Now try the HTTPS connection
@@ -1442,6 +1639,7 @@ void fetchStationsDataFallback() {
   if (!https.begin(*client, apiUrl)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return;
+  }
   
   // Add authorization header
   String authHeader = "Bearer ";
@@ -1469,6 +1667,7 @@ void fetchStationsDataFallback() {
     Serial.println(errorPayload);
     https.end();
     return;
+  }
   
   // Log response headers in detail
   Serial.println(F("[NETATMO] Response headers:"));
@@ -1477,6 +1676,7 @@ void fetchStationsDataFallback() {
     Serial.print(https.headerName(i));
     Serial.print(F(": "));
     Serial.println(https.header(i));
+  }
   
   // Log content length and type
   Serial.print(F("[NETATMO] Content-Length: "));
@@ -1484,6 +1684,10 @@ void fetchStationsDataFallback() {
   Serial.print(F("[NETATMO] Content-Type: "));
   Serial.println(https.header("Content-Type"));
   
+  // Create the devices directory if it doesn't exist
+  if (!LittleFS.exists("/devices")) {
+    LittleFS.mkdir("/devices");
+  }
   
   // Open a file to save the raw response
   File deviceFile = LittleFS.open("/netatmo_config.json", "w");
@@ -1491,6 +1695,7 @@ void fetchStationsDataFallback() {
     Serial.println(F("[NETATMO] Failed to open file for writing"));
     https.end();
     return;
+  }
   
   // Stream the response directly to the file
   WiFiClient* stream = https.getStreamPtr();
@@ -1524,21 +1729,30 @@ void fetchStationsDataFallback() {
         if (!previewCaptured && responsePreview.length() < 500) {
           for (int i = 0; i < bytesRead && responsePreview.length() < 500; i++) {
             responsePreview += (char)buf[i];
+          }
           if (responsePreview.length() >= 500) {
             previewCaptured = true;
+          }
+        }
         
         // Print progress every 1KB
         if (totalRead % 1024 == 0) {
           Serial.print(F("[NETATMO] Read "));
           Serial.print(totalRead);
           Serial.println(F(" bytes"));
+        }
+      }
       
       yield(); // Allow the watchdog to be fed
+    } else if (totalRead >= expectedSize && expectedSize > 0) {
       // We've read all the data
       break;
+    } else {
       // No data available, wait a bit
       delay(10);
       yield();
+    }
+  }
   
   deviceFile.close();
   https.end();
@@ -1564,3 +1778,4 @@ void fetchStationsDataFallback() {
   
   // Now extract the device and module IDs for easy access
   extractDeviceInfo();
+}

@@ -186,7 +186,7 @@ function processNetatmoData(data) {
   try {
     // Check if we have a valid response with devices
     if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
-      // Process each device
+      // Process each device from getstationsdata endpoint
       data.body.devices.forEach(device => {
         const deviceInfo = {
           id: device._id,
@@ -216,6 +216,34 @@ function processNetatmoData(data) {
         }
         
         devices.push(deviceInfo);
+      });
+    }
+    // Check if we have a valid response with homes (from gethomedata endpoint)
+    else if (data && data.body && data.body.homes && Array.isArray(data.body.homes)) {
+      console.log("Processing homes data");
+      // Process each home
+      data.body.homes.forEach(home => {
+        if (home.modules && Array.isArray(home.modules)) {
+          // Create a device for each home
+          const deviceInfo = {
+            id: home.id,
+            name: home.name || "Home",
+            type: "NAHome",
+            modules: []
+          };
+          
+          // Process modules in the home
+          home.modules.forEach(module => {
+            deviceInfo.modules.push({
+              id: module.id,
+              name: module.name || "Unknown Module",
+              type: module.type,
+              data_type: module.data_type || []
+            });
+          });
+          
+          devices.push(deviceInfo);
+        }
       });
     }
   } catch (error) {

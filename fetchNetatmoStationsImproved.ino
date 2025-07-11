@@ -68,26 +68,70 @@ void fetchNetatmoStationsImproved() {
     return;
   }
   
-  // Get the response as a string
-  String payload = https.getString();
+  // Open the file for writing
+  File file = LittleFS.open("/netatmo_stations_data.json", "w");
+  if (!file) {
+    Serial.println(F("[NETATMO] Failed to open file for writing"));
+    https.end();
+    apiCallInProgress = false;
+    return;
+  }
+  
+  // Get the response size if available
+  int contentLength = https.getSize();
+  Serial.print(F("[NETATMO] Content length: "));
+  Serial.println(contentLength);
+  
+  // Stream the response directly to the file
+  WiFiClient *stream = https.getStreamPtr();
+  
+  // Buffer for reading data
+  const size_t bufferSize = 256;
+  uint8_t buffer[bufferSize];
+  int totalBytes = 0;
+  
+  // Read all data from the stream
+  while (https.connected() && (contentLength > 0 || contentLength == -1)) {
+    // Feed the watchdog
+    yield();
+    
+    // Get available data size
+    size_t available = stream->available();
+    if (available) {
+      // Read up to buffer size
+      size_t bytesToRead = available;
+      if (bytesToRead > bufferSize) {
+        bytesToRead = bufferSize;
+      }
+      
+      // Read data into buffer
+      int bytesRead = stream->readBytes(buffer, bytesToRead);
+      
+      // Write clean JSON to file
+      writeCleanJsonFromBuffer(buffer, bytesRead, file);
+      
+      // Update total bytes and content length
+      totalBytes += bytesRead;
+      if (contentLength > 0) {
+        contentLength -= bytesRead;
+      }
+    }
+    
+    // If no data available, wait a bit
+    if (!available) {
+      delay(10);
+    }
+  }
+  
+  // Close the file
+  file.close();
   
   // Close the connection
   https.end();
   
-  // Log the response size
-  Serial.print(F("[NETATMO] Response size: "));
-  Serial.println(payload.length());
-  
-  // Preview the first part of the response
-  Serial.println(F("[NETATMO] Response preview:"));
-  Serial.println(payload.substring(0, 200));
-  
-  // Write the clean JSON to the file
-  // This file is used by the web interface to populate device selection dropdowns
-  writeCleanJsonToFile(payload, "/netatmo_stations_data.json");
-  
   // Log that we've saved the file
-  Serial.println(F("[NETATMO] Stations data saved to file"));
+  Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
+  Serial.println(totalBytes);
   
   // Reset the flag
   apiCallInProgress = false;

@@ -1367,6 +1367,10 @@ void fetchStationsData() {
   String responsePreview = "";
   // For tracking progress
   unsigned long lastProgressTime = millis();  bool previewCaptured = false;
+  // Variables for timeout detection
+  unsigned long lastDataTime = millis();
+  const unsigned long dataTimeout = 5000; // 5 second timeout if no new data
+  bool receivedData = false;
   
   while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
     // Read available data
@@ -1379,8 +1383,23 @@ void fetchStationsData() {
       Serial.print(F("[TIMING] Bytes read so far: "));
       Serial.println(totalRead);
       lastProgressTime = currentTime;
-    }    size_t available = stream->available();
+    }
+    
+    // Check for timeout - exit if no data received for dataTimeout milliseconds
+    if (receivedData && (currentTime - lastDataTime > dataTimeout)) {
+      Serial.print(F("[NETATMO] Data timeout after "));
+      Serial.print(currentTime - lastDataTime);
+      Serial.println(F(" ms with no new data"));
+      Serial.println(F("[NETATMO] Assuming transfer complete"));
+      break; // Exit the loop if no data received for timeout period
+    }
+    
+    size_t available = stream->available();
     if (available) {
+      // Reset timeout since we're receiving data
+      lastDataTime = millis();
+      receivedData = true;
+      
       // Read up to buffer size
       size_t readBytes = available > bufSize ? bufSize : available;
       int bytesRead = stream->readBytes(buf, readBytes);
@@ -1412,10 +1431,16 @@ void fetchStationsData() {
     } else if (totalRead >= expectedSize && expectedSize > 0) {
       // We've read all the data
       break;
-    } else {
+      // We've read all the data
+      Serial.println(F("[NETATMO] Expected size reached, exiting read loop"));    } else {
       // No data available, wait a bit
       delay(10);
-      yield();
+      // Update the last activity time if we've received data before
+      if (receivedData && (millis() - lastDataTime > 1000)) {
+        Serial.print(F("[NETATMO] Waiting for data... "));
+        Serial.print(millis() - lastDataTime);
+        Serial.println(F(" ms since last data"));
+      }      yield();
     }
   }
   

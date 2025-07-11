@@ -133,6 +133,36 @@ void fetchNetatmoStationsImproved() {
   Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
   Serial.println(totalBytes);
   
+  // Verify the file exists
+  Serial.print(F("[NETATMO] File exists check: "));
+  Serial.println(LittleFS.exists("/netatmo_stations_data.json") ? "Yes" : "No");
+  
+  // Verify that the file exists and can be read
+  if (LittleFS.exists("/netatmo_stations_data.json")) {
+    Serial.println(F("[NETATMO] File exists in filesystem"));
+    
+    // Try to open and read the first few bytes to verify it's accessible
+    File readFile = LittleFS.open("/netatmo_stations_data.json", "r");
+    if (readFile) {
+      Serial.print(F("[NETATMO] File opened successfully, size: "));
+      Serial.println(readFile.size());
+      
+      // Read and print the first 50 bytes
+      char buffer[51];
+      size_t bytesRead = readFile.readBytes(buffer, 50);
+      buffer[bytesRead] = '\0'; // Null-terminate the string
+      
+      Serial.print(F("[NETATMO] First 50 bytes: "));
+      Serial.println(buffer);
+      
+      readFile.close();
+    } else {
+      Serial.println(F("[NETATMO] Failed to open file for reading"));
+    }
+  } else {
+    Serial.println(F("[NETATMO] File does not exist in filesystem after saving"));
+  }
+  
   // Reset the flag
   apiCallInProgress = false;
   

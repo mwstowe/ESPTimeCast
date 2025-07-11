@@ -48,7 +48,8 @@ void processFetchDevices();
 void triggerNetatmoDevicesFetch();
 void processSettingsSave();
 String getNetatmoDeviceData();
-bool isNetatmoTokenValid(); // Add this line
+bool isNetatmoTokenValid();
+bool checkNetworkConnectivity(); // Add this line // Add this line
 String urlEncode(const char* input);
 void exchangeAuthCode(const String &code);
 void handleBlockedRequest(String errorPayload);
@@ -1465,7 +1466,13 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   }
   
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation
+  // Check network connectivity
+  if (!checkNetworkConnectivity()) {
+    Serial.println(F("[NETATMO] Network connectivity check failed"));
+    outdoorTempAvailable = false;
+    return;
+  }  client->setInsecure(); // Skip certificate validation
+  client->setTimeout(5000); // 5 second timeout
   
   HTTPClient https;
   
@@ -1486,9 +1493,18 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   
   if (https.begin(*client, url)) {
     Serial.println(F("[NETATMO] Client connected"));
+    
+    // Add headers
     https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");
+    
+    // Debug: Print all headers
+    Serial.println(F("[NETATMO] Request headers:"));
+    Serial.print(F("[NETATMO] Authorization: Bearer "));
+    Serial.println(String(netatmoAccessToken).substring(0, 10) + "...");
+    Serial.println(F("[NETATMO] Accept: application/json"));
+    Serial.println(F("[NETATMO] User-Agent: ESPTimeCast/1.0"));
     
     Serial.println(F("[NETATMO] Sending request..."));
     int httpCode = https.GET();

@@ -171,9 +171,51 @@ function populateDeviceDropdowns(devices) {
   
   // Restore previous selections if possible
   if (currentDeviceId) {
-    deviceSelect.value = currentDeviceId;
-    // Manually call loadModules with the current device ID
-    loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+    // Check if the value exists in the dropdown
+    const deviceExists = Array.from(deviceSelect.options).some(option => option.value === currentDeviceId);
+    if (deviceExists) {
+      deviceSelect.value = currentDeviceId;
+      // Manually call loadModules with the current device ID
+      loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+    } else {
+      console.warn(`Device ID ${currentDeviceId} not found in dropdown options`);
+      // Add the missing device as an option
+      const option = document.createElement('option');
+      option.value = currentDeviceId;
+      option.textContent = `Device ${currentDeviceId} (not found)`;
+      deviceSelect.appendChild(option);
+      deviceSelect.value = currentDeviceId;
+      
+      // Create empty modules for this device
+      const dummyDevice = {
+        id: currentDeviceId,
+        name: `Device ${currentDeviceId} (not found)`,
+        modules: []
+      };
+      
+      // If we have module IDs, add them as dummy modules
+      if (currentModuleId && currentModuleId !== 'none') {
+        dummyDevice.modules.push({
+          id: currentModuleId,
+          name: `Module ${currentModuleId} (not found)`,
+          type: 'NAModule1'
+        });
+      }
+      
+      if (currentIndoorModuleId && currentIndoorModuleId !== 'none') {
+        dummyDevice.modules.push({
+          id: currentIndoorModuleId,
+          name: `Module ${currentIndoorModuleId} (not found)`,
+          type: 'NAModule4'
+        });
+      }
+      
+      // Add the dummy device to the global devices array
+      window.netatmoDevices.push(dummyDevice);
+      
+      // Manually call loadModules with the current device ID
+      loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+    }
   }
 }
 
@@ -306,14 +348,82 @@ function loadModules(deviceId, currentModuleId, currentIndoorModuleId) {
       option.textContent = module.name;
       indoorModuleSelect.appendChild(option);
     }
+// Function to debug Netatmo settings
+function debugNetatmoSettings() {
+  console.log("Debugging Netatmo settings...");
+  
+  // Get current values
+  const deviceSelect = document.getElementById('netatmoDeviceId');
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+  
+  console.log("Current device ID:", deviceSelect.value);
+  console.log("Current module ID:", moduleSelect.value);
+  console.log("Current indoor module ID:", indoorModuleSelect.value);
+  
+  console.log("Device options:");
+  Array.from(deviceSelect.options).forEach(option => {
+    console.log(`  ${option.value}: ${option.textContent}`);
   });
+  
+  console.log("Module options:");
+  Array.from(moduleSelect.options).forEach(option => {
+    console.log(`  ${option.value}: ${option.textContent}`);
+  });
+  
+  console.log("Indoor module options:");
+  Array.from(indoorModuleSelect.options).forEach(option => {
+    console.log(`  ${option.value}: ${option.textContent}`);
+  });
+  
+  console.log("Global Netatmo devices:", window.netatmoDevices);
+  
+  // Check if the current device exists in the global devices array
+  const currentDeviceId = deviceSelect.value;
+  const device = window.netatmoDevices.find(d => d.id === currentDeviceId);
+  console.log("Current device in global array:", device);
+  
+  // Check if the current module exists in the current device's modules
+  if (device) {
+    const currentModuleId = moduleSelect.value;
+    const module = device.modules.find(m => m.id === currentModuleId);
+    console.log("Current module in device's modules:", module);
+    
+    const currentIndoorModuleId = indoorModuleSelect.value;
+    const indoorModule = device.modules.find(m => m.id === currentIndoorModuleId);
+    console.log("Current indoor module in device's modules:", indoorModule);
+  }
+  
+  // Show a message to check the console
+  showStatus("Debug info logged to console (press F12)", "info");
+  setTimeout(hideStatus, 5000);
+}  });
   
   // Restore previous selections if possible
   if (currentModuleId) {
-    moduleSelect.value = currentModuleId || 'none';
+    // Check if the value exists in the dropdown
+    const moduleExists = Array.from(moduleSelect.options).some(option => option.value === currentModuleId);
+    if (moduleExists) {
+      moduleSelect.value = currentModuleId;
+    } else {
+      console.warn(`Module ID ${currentModuleId} not found in dropdown options`);
+      moduleSelect.value = 'none';
+    }
   }
   
   if (currentIndoorModuleId) {
-    indoorModuleSelect.value = currentIndoorModuleId || 'none';
+    // Check if the value exists in the dropdown
+    const indoorModuleExists = Array.from(indoorModuleSelect.options).some(option => option.value === currentIndoorModuleId);
+    if (indoorModuleExists) {
+      indoorModuleSelect.value = currentIndoorModuleId;
+    } else {
+      console.warn(`Indoor Module ID ${currentIndoorModuleId} not found in dropdown options`);
+      // Add the missing module as an option
+      const option = document.createElement('option');
+      option.value = currentIndoorModuleId;
+      option.textContent = `Module ${currentIndoorModuleId} (not found)`;
+      indoorModuleSelect.appendChild(option);
+      indoorModuleSelect.value = currentIndoorModuleId;
+    }
   }
 }

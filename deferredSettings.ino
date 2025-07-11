@@ -13,6 +13,18 @@ void processSettingsSave() {
   Serial.println(F("[NETATMO] Processing pending settings save"));
   settingsSavePending = false;
   
+  // Debug: Print the values being saved
+  Serial.println(F("[CONFIG] Values being saved to config.json:"));
+  Serial.print(F("[CONFIG] netatmoDeviceId: '"));
+  Serial.print(netatmoDeviceId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] netatmoModuleId: '"));
+  Serial.print(netatmoModuleId);
+  Serial.println(F("'"));
+  Serial.print(F("[CONFIG] netatmoIndoorModuleId: '"));
+  Serial.print(netatmoIndoorModuleId);
+  Serial.println(F("'"));
+  
   // Save to config file with yield calls
   Serial.println(F("[CONFIG] Saving settings to config.json"));
   
@@ -82,11 +94,16 @@ void processSettingsSave() {
   yield(); // Feed the watchdog
   
   // Serialize the updated JSON document to the file
-  if (serializeJson(doc, outFile) == 0) {
+  size_t bytesWritten = serializeJson(doc, outFile);
+  if (bytesWritten == 0) {
     Serial.println(F("[CONFIG] Failed to write to config file"));
     outFile.close();
     return;
   }
+  
+  Serial.print(F("[CONFIG] Wrote "));
+  Serial.print(bytesWritten);
+  Serial.println(F(" bytes to config.json.new"));
   
   outFile.close();
   
@@ -94,13 +111,43 @@ void processSettingsSave() {
   
   // Replace the old config file with the new one
   if (LittleFS.exists("/config.json")) {
-    LittleFS.remove("/config.json");
+    Serial.println(F("[CONFIG] Removing old config.json file"));
+    if (LittleFS.remove("/config.json")) {
+      Serial.println(F("[CONFIG] Old config.json removed successfully"));
+    } else {
+      Serial.println(F("[CONFIG] Failed to remove old config.json"));
+      return;
+    }
+  } else {
+    Serial.println(F("[CONFIG] No existing config.json to remove"));
   }
   
   yield(); // Feed the watchdog
   
+  Serial.println(F("[CONFIG] Renaming config.json.new to config.json"));
   if (LittleFS.rename("/config.json.new", "/config.json")) {
     Serial.println(F("[CONFIG] Settings saved successfully"));
+    
+    // Verify the file was saved correctly
+    File verifyFile = LittleFS.open("/config.json", "r");
+    if (verifyFile) {
+      Serial.print(F("[CONFIG] Verification: config.json size is "));
+      Serial.print(verifyFile.size());
+      Serial.println(F(" bytes"));
+      
+      // Read and print the first 100 bytes
+      if (verifyFile.size() > 0) {
+        char buffer[101];
+        size_t bytesRead = verifyFile.readBytes(buffer, 100);
+        buffer[bytesRead] = '\0';
+        Serial.println(F("[CONFIG] First 100 bytes of saved config:"));
+        Serial.println(buffer);
+      }
+      
+      verifyFile.close();
+    } else {
+      Serial.println(F("[CONFIG] Failed to open config.json for verification"));
+    }
   } else {
     Serial.println(F("[CONFIG] Failed to rename config file"));
   }

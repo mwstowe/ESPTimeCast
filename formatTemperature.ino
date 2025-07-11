@@ -8,8 +8,11 @@ String formatTemperature(float temperature, bool roundToInteger) {
     if (roundToInteger) {
       result = String(round(temperature));
     } else {
-      result = String(temperature, 1);
-      result.replace(".0", "");
+      // Format with exactly one decimal place
+      char buffer[10];
+      sprintf(buffer, "%.1f", temperature);
+      result = String(buffer);
+      result.replace(".0", ""); // Remove decimal if it's a whole number
     }
   } else if (strcmp(weatherUnits, "imperial") == 0) {
     // Convert from Celsius to Fahrenheit and apply adjustment
@@ -17,16 +20,22 @@ String formatTemperature(float temperature, bool roundToInteger) {
     if (roundToInteger) {
       result = String(round(temperature));
     } else {
-      result = String(temperature, 1);
-      result.replace(".0", "");
+      // Format with exactly one decimal place
+      char buffer[10];
+      sprintf(buffer, "%.1f", temperature);
+      result = String(buffer);
+      result.replace(".0", ""); // Remove decimal if it's a whole number
     }
   } else { // standard (Kelvin)
     temperature = temperature + 273.15 + tempAdjust;
     if (roundToInteger) {
       result = String(round(temperature));
     } else {
-      result = String(temperature, 1);
-      result.replace(".0", "");
+      // Format with exactly one decimal place
+      char buffer[10];
+      sprintf(buffer, "%.1f", temperature);
+      result = String(buffer);
+      result.replace(".0", ""); // Remove decimal if it's a whole number
     }
   }
   

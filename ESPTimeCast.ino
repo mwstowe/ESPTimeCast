@@ -1465,19 +1465,18 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
     }
   }
   
-  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   // Check network connectivity
   if (!checkNetworkConnectivity()) {
     Serial.println(F("[NETATMO] Network connectivity check failed"));
     outdoorTempAvailable = false;
     return;
-  }  client->setInsecure(); // Skip certificate validation
-  client->setTimeout(5000); // 5 second timeout
+  }
+  
+  // Create a secure client - use the exact same setup as the working function
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation
   
   HTTPClient https;
-  
-  // Set timeout to avoid long delays
-  https.setTimeout(5000); // 5 second timeout
   
   String url = "https://api.netatmo.com/api/getstationsdata?device_id=";
   url += netatmoDeviceId;
@@ -1494,20 +1493,38 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   if (https.begin(*client, url)) {
     Serial.println(F("[NETATMO] Client connected"));
     
-    // Add headers
+    // Add headers - match the working function's headers
+    https.addHeader("Content-Type", "application/x-www-form-urlencoded");
     https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");
     
     // Debug: Print all headers
     Serial.println(F("[NETATMO] Request headers:"));
+    Serial.println(F("[NETATMO] Content-Type: application/x-www-form-urlencoded"));
     Serial.print(F("[NETATMO] Authorization: Bearer "));
     Serial.println(String(netatmoAccessToken).substring(0, 10) + "...");
     Serial.println(F("[NETATMO] Accept: application/json"));
     Serial.println(F("[NETATMO] User-Agent: ESPTimeCast/1.0"));
     
     Serial.println(F("[NETATMO] Sending request..."));
-    int httpCode = https.GET();
+    
+    // Try the request with retries
+    int httpCode = -1;
+    int retries = 3;
+    
+    while (retries > 0 && httpCode < 0) {
+      httpCode = https.GET();
+      
+      if (httpCode < 0) {
+        Serial.print(F("[NETATMO] HTTP request failed, retrying ("));
+        Serial.print(retries - 1);
+        Serial.println(F(" attempts left)"));
+        delay(1000); // Wait 1 second before retrying
+        retries--;
+      }
+    }
+    
     Serial.print(F("[NETATMO] HTTP response code: "));
     Serial.println(httpCode);
     
@@ -1608,7 +1625,9 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
         Serial.println(F("[NETATMO] Connection failed or timed out"));
         Serial.print(F("[NETATMO] Last error: "));
         Serial.println(https.errorToString(httpCode));
-      }      String errorPayload = https.getString();
+      }
+      
+      String errorPayload = https.getString();
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       

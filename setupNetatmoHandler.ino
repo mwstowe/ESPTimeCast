@@ -1919,6 +1919,14 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
               previewCaptured = true;
             }
           }
+          
+          // Print progress more frequently
+          if (totalRead % 256 == 0) {
+            Serial.print(F("[NETATMO] Read "));
+            Serial.print(totalRead);
+            Serial.println(F(" bytes"));
+            yield(); // Allow the watchdog to be fed
+          }
         }
         
         yield(); // Allow the watchdog to be fed
@@ -1940,6 +1948,17 @@ bool handleChunkedResponse(HTTPClient& https, File& file, String& preview) {
   
   Serial.print(F("[NETATMO] Total bytes read: "));
   Serial.println(totalRead);
+  
+  // Log the preview of the response
+  if (preview.length() > 0) {
+    Serial.println(F("[NETATMO] Response preview:"));
+    Serial.println(preview);
+  }
+  // Log the preview of the response
+  if (preview.length() > 0) {
+    Serial.println(F("[NETATMO] Response preview:"));
+    Serial.println(preview);
+  }
   
   return totalRead > 0;
 }

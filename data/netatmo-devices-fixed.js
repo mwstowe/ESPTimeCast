@@ -139,6 +139,7 @@ function processNetatmoData(data) {
     // Check if we have a valid response with homes (from gethomedata endpoint)
     else if (data && data.body && data.body.homes && Array.isArray(data.body.homes)) {
       console.log("Processing homes data");
+      
       // Process each home
       data.body.homes.forEach(home => {
         // Log the home object to see all available fields
@@ -154,6 +155,7 @@ function processNetatmoData(data) {
             
             console.log("Found main module with ID:", deviceId);
             
+            // Create a device using the main module's ID
             const deviceInfo = {
               id: deviceId, // Use the main module's ID instead of the home ID
               name: home.name || "Home",
@@ -162,32 +164,17 @@ function processNetatmoData(data) {
               modules: []
             };
             
-            // Add the main module as the first module
-            deviceInfo.modules.push({
-              id: deviceId,
-              name: mainModule.name || "Main Module",
-              type: mainModule.type,
-              data_type: getDataTypeForModuleType(mainModule.type)
-            });
-            
-            // Process all other modules in the home
+            // Add all modules to the device
             home.modules.forEach(module => {
-              // Skip the main module since we already added it
-              if (module.id === deviceId) return;
+              console.log("Processing module:", module);
               
-              // Log the module object to see all available fields
-              console.log("Home module object:", module);
-              
-              // Use the MAC address (id) if available
               const moduleId = module.id || '';
-              
-              console.log("Using home module ID:", moduleId);
               
               deviceInfo.modules.push({
                 id: moduleId,
                 name: module.name || "Unknown Module",
                 type: module.type,
-                data_type: module.data_type || getDataTypeForModuleType(module.type)
+                data_type: getDataTypeForModuleType(module.type)
               });
             });
             
@@ -223,6 +210,29 @@ function processNetatmoData(data) {
               devices.push(deviceInfo);
             } else {
               console.error("No module with MAC address found in home:", home.name);
+              
+              // As a last resort, create a device with the home ID but warn about it
+              console.warn("Using home ID as device ID (not recommended):", home.id);
+              
+              const deviceInfo = {
+                id: home.id,
+                name: home.name || "Home",
+                type: "NAHome",
+                isHomeId: true, // Flag to indicate this is a home ID, not a device ID
+                modules: []
+              };
+              
+              // Add all modules
+              home.modules.forEach(module => {
+                deviceInfo.modules.push({
+                  id: module.id || '',
+                  name: module.name || "Unknown Module",
+                  type: module.type,
+                  data_type: module.data_type || getDataTypeForModuleType(module.type)
+                });
+              });
+              
+              devices.push(deviceInfo);
             }
           }
         }
@@ -233,6 +243,14 @@ function processNetatmoData(data) {
   }
   
   console.log("Processed devices:", devices);
+  
+  // Check if any devices have MAC address IDs
+  const macDevices = devices.filter(d => isMacAddressFormat(d.id));
+  if (macDevices.length > 0) {
+    console.log("Found devices with MAC address IDs:", macDevices);
+    return macDevices; // Only return devices with MAC address IDs
+  }
+  
   return devices;
 }
 

@@ -1,6 +1,9 @@
 // Function to fetch indoor temperature from Netatmo
 void fetchNetatmoIndoorTemperature() {
   Serial.println(F("\n[NETATMO] Fetching indoor temperature..."));
+  Serial.print(F("[NETATMO] Indoor Module ID: '"));
+  Serial.print(netatmoIndoorModuleId);
+  Serial.println(F("'"));
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Skipped: WiFi not connected"));

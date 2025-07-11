@@ -1658,6 +1658,15 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
 void updateTemperatures() {
   Serial.println(F("[TEMP] Updating temperatures..."));
   
+  // Debug output for temperature source
+  Serial.print(F("[TEMP] Temperature source: "));
+  Serial.print(tempSource);
+  Serial.println(tempSource == 0 ? " (Local sensor primary)" : 
+                (tempSource == 1 ? " (Netatmo primary)" : " (Netatmo only)"));
+  
+  Serial.print(F("[TEMP] prioritizeNetatmoIndoor: "));
+  Serial.println(prioritizeNetatmoIndoor ? "true" : "false");
+  
   // Determine if we need to round temperatures to integers
   // Only round to integers when both indoor and outdoor temps will be displayed
   bool shouldRound = showIndoorTemp && showOutdoorTemp && 

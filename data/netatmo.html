@@ -468,11 +468,44 @@ function saveConfig() {
   showStatus('Saving configuration...', 'loading');
   
   // Get form values
-  const deviceId = document.getElementById('netatmoDeviceId').value || '';
+  const deviceSelectElement = document.getElementById('netatmoDeviceId');
   const moduleId = document.getElementById('netatmoModuleId').value || 'none';
   const indoorModuleId = document.getElementById('netatmoIndoorModuleId').value || 'none';
   const useOutdoor = document.getElementById('useNetatmoOutdoor')?.checked ? 'true' : 'false';
   const prioritizeIndoor = document.getElementById('prioritizeNetatmoIndoor')?.checked ? 'true' : 'false';
+  
+  // Get the selected device ID from the dropdown
+  const selectedDeviceId = deviceSelectElement.value || '';
+  
+  // Check if the selected device ID is a MAC address
+  const isMacAddress = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(selectedDeviceId);
+  
+  // If it's not a MAC address, try to find the main module's MAC address
+  let deviceId = selectedDeviceId;
+  if (!isMacAddress && window.netatmoDevices) {
+    const selectedDevice = window.netatmoDevices.find(d => d.id === selectedDeviceId);
+    if (selectedDevice && selectedDevice.modules && selectedDevice.modules.length > 0) {
+      // Look for the main module (NAMain)
+      const mainModule = selectedDevice.modules.find(m => m.type === 'NAMain');
+      if (mainModule && /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(mainModule.id)) {
+        console.log('Using main module MAC address instead of home ID:', mainModule.id);
+        deviceId = mainModule.id;
+      } else {
+        // If no main module, use any module with a MAC address
+        const moduleWithMac = selectedDevice.modules.find(m => /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(m.id));
+        if (moduleWithMac) {
+          console.log('Using module MAC address instead of home ID:', moduleWithMac.id);
+          deviceId = moduleWithMac.id;
+        } else {
+          console.warn('No MAC address found for device, using original ID:', selectedDeviceId);
+        }
+      }
+    }
+  }
+  
+  console.log('Saving device ID:', deviceId);
+  console.log('Saving module ID:', moduleId);
+  console.log('Saving indoor module ID:', indoorModuleId);
   
   // Build URL with query parameters
   const url = `/api/netatmo/save-settings-simple?deviceId=${encodeURIComponent(deviceId)}&moduleId=${encodeURIComponent(moduleId)}&indoorModuleId=${encodeURIComponent(indoorModuleId)}&useOutdoor=${useOutdoor}&prioritizeIndoor=${prioritizeIndoor}`;

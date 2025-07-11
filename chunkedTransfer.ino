@@ -4,7 +4,53 @@
 bool isChunkedResponse(HTTPClient& http) {
   // Check if the Transfer-Encoding header contains "chunked"
   String transferEncoding = http.header("Transfer-Encoding");
-  return transferEncoding.indexOf("chunked") >= 0;
+  bool isChunked = transferEncoding.indexOf("chunked") >= 0;
+  
+  Serial.print(F("[CHUNKED] Transfer-Encoding header: "));
+  Serial.println(transferEncoding);
+  Serial.print(F("[CHUNKED] Is chunked response: "));
+  Serial.println(isChunked ? "Yes" : "No");
+  
+  // If header doesn't indicate chunking but we see a chunk size at the start of the stream,
+  // we should still treat it as chunked
+  if (!isChunked) {
+    WiFiClient* stream = http.getStreamPtr();
+    if (stream && stream->available() >= 5) { // Need at least a few bytes to check
+      // Peek at the first few bytes without consuming them
+      char peek[6];
+      int i = 0;
+      while (i < 5 && stream->available()) {
+        peek[i] = stream->peek();
+        i++;
+      }
+      peek[i] = '\0';
+      
+      // Check if it looks like a hex chunk size followed by CRLF
+      bool looksLikeChunk = false;
+      for (int j = 0; j < i; j++) {
+        if ((peek[j] >= '0' && peek[j] <= '9') || 
+            (peek[j] >= 'a' && peek[j] <= 'f') || 
+            (peek[j] >= 'A' && peek[j] <= 'F')) {
+          // This is a hex digit, continue
+          continue;
+        } else if (peek[j] == '\r' || peek[j] == '\n') {
+          // Found CR or LF after hex digits, likely a chunk
+          looksLikeChunk = true;
+          break;
+        } else {
+          // Not a hex digit or CRLF, not a chunk
+          break;
+        }
+      }
+      
+      if (looksLikeChunk) {
+        Serial.println(F("[CHUNKED] Stream appears to be chunked based on content inspection"));
+        isChunked = true;
+      }
+    }
+  }
+  
+  return isChunked;
 }
 
 // Function to handle chunked transfer encoding
@@ -46,19 +92,33 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
         // Read the chunk size line
         int i = 0;
         char c;
+        bool foundCR = false;
+        
+        // Read until we find CRLF or buffer is full
         while (i < bufSize - 1 && stream->available()) {
           c = stream->read();
+          
           if (c == '\r') {
-            // Skip the \r
-            continue;
+            foundCR = true;
+            continue; // Skip CR
           }
+          
           if (c == '\n') {
-            // End of chunk size line
-            buf[i] = '\0';
-            break;
+            if (foundCR) {
+              // End of chunk size line
+              break;
+            }
           }
-          buf[i++] = c;
+          
+          // Only add hex digits to the buffer
+          if ((c >= '0' && c <= '9') || 
+              (c >= 'a' && c <= 'f') || 
+              (c >= 'A' && c <= 'F')) {
+            buf[i++] = c;
+          }
         }
+        
+        buf[i] = '\0'; // Null-terminate
         
         // Parse the chunk size (hex)
         chunkSize = strtol(buf, NULL, 16);
@@ -69,7 +129,8 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
         Serial.println(F(" bytes)"));
         
         if (chunkSize == 0) {
-          // Last chunk
+          // Last chunk (zero-length chunk)
+          Serial.println(F("[CHUNKED] Found zero-length chunk, end of transfer"));
           state = CHUNK_END;
         } else {
           state = CHUNK_DATA;
@@ -95,9 +156,12 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
           
           // Check if we've read the entire chunk
           if (bytesRead >= chunkSize) {
-            // Read the trailing \r\n
-            while (stream->available() && stream->read() != '\n') {
-              // Skip until we find \n
+            // Read the trailing CRLF
+            while (stream->available()) {
+              char c = stream->read();
+              if (c == '\n') {
+                break; // Found LF, move to next chunk
+              }
             }
             state = CHUNK_SIZE;
           }
@@ -106,10 +170,35 @@ bool writeChunkedResponseToFile(WiFiClient* stream, File& file) {
       }
       
       case CHUNK_END: {
-        // Read the final \r\n\r\n
-        while (stream->available()) {
-          stream->read();
+        // Read the final CRLF after the 0-length chunk
+        bool foundCRLF = false;
+        while (stream->available() && !foundCRLF) {
+          char c = stream->read();
+          if (c == '\n') {
+            foundCRLF = true;
+          }
         }
+        
+        // Read any trailing headers (if present)
+        bool endOfHeaders = false;
+        while (stream->available() && !endOfHeaders) {
+          // Look for empty line (CRLFCRLF)
+          int consecutiveNewlines = 0;
+          while (stream->available()) {
+            char c = stream->read();
+            if (c == '\r' || c == '\n') {
+              consecutiveNewlines++;
+              if (consecutiveNewlines >= 2) {
+                endOfHeaders = true;
+                break;
+              }
+            } else {
+              consecutiveNewlines = 0;
+            }
+          }
+        }
+        
+        Serial.println(F("[CHUNKED] End of chunked transfer detected"));
         state = FINISHED;
         break;
       }

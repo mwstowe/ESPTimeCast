@@ -53,6 +53,11 @@ void setupSaveSettingsHandler() {
     if (request->hasParam("prioritizeIndoor")) {
       String value = request->getParam("prioritizeIndoor")->value();
       prioritizeNetatmoIndoor = (value == "true" || value == "1");
+      
+      // Set tempSource based on prioritizeNetatmoIndoor setting
+      tempSource = prioritizeNetatmoIndoor ? 1 : 0;
+      Serial.print(F("[NETATMO] Setting tempSource to: "));
+      Serial.println(tempSource);
     }
     
     // Send response

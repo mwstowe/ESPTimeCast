@@ -391,7 +391,11 @@ void loadConfig() {
   if (doc.containsKey("netatmoIndoorModuleId")) strlcpy(netatmoIndoorModuleId, doc["netatmoIndoorModuleId"], sizeof(netatmoIndoorModuleId));
   if (doc.containsKey("netatmoStationId")) strlcpy(netatmoStationId, doc["netatmoStationId"], sizeof(netatmoStationId));
   if (doc.containsKey("useNetatmoOutdoor")) useNetatmoOutdoor = doc["useNetatmoOutdoor"];
-  if (doc.containsKey("prioritizeNetatmoIndoor")) prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
+  if (doc.containsKey("prioritizeNetatmoIndoor")) {
+    prioritizeNetatmoIndoor = doc["prioritizeNetatmoIndoor"];
+    // Set tempSource based on prioritizeNetatmoIndoor setting
+    tempSource = prioritizeNetatmoIndoor ? 1 : 0;
+  }
   
   // Debug output for Netatmo settings
   Serial.println(F("[CONFIG] Netatmo settings loaded:"));

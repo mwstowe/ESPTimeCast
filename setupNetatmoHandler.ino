@@ -491,6 +491,10 @@ void setupNetatmoHandler() {
       }
       else if (name == "prioritizeNetatmoIndoor") {
         prioritizeNetatmoIndoor = (value == "true" || value == "on" || value == "1");
+        // Set tempSource based on prioritizeNetatmoIndoor setting
+        tempSource = prioritizeNetatmoIndoor ? 1 : 0;
+        Serial.print(F("[NETATMO] Setting tempSource to: "));
+        Serial.println(tempSource);
       }
     }
     

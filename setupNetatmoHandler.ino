@@ -1358,13 +1358,28 @@ void fetchStationsData() {
   Serial.print(expectedSize);
   Serial.println(F(" bytes"));
   
+  // Store start time for accurate file write timing
+  unsigned long fileWriteStartTime = millis();
+  Serial.print(F("[TIMING] Starting file write at: "));
+  Serial.print(fileWriteStartTime - requestEndTime);
+  Serial.println(F(" ms after request completion"));  
   // For logging the first part of the response
   String responsePreview = "";
-  bool previewCaptured = false;
+  // For tracking progress
+  unsigned long lastProgressTime = millis();  bool previewCaptured = false;
   
   while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
     // Read available data
-    size_t available = stream->available();
+    // Log progress every 5 seconds
+    unsigned long currentTime = millis();
+    if (currentTime - lastProgressTime > 5000) {
+      Serial.print(F("[TIMING] Still reading stream after "));
+      Serial.print(currentTime - fileWriteStartTime);
+      Serial.println(F(" ms"));
+      Serial.print(F("[TIMING] Bytes read so far: "));
+      Serial.println(totalRead);
+      lastProgressTime = currentTime;
+    }    size_t available = stream->available();
     if (available) {
       // Read up to buffer size
       size_t readBytes = available > bufSize ? bufSize : available;
@@ -1409,11 +1424,29 @@ void fetchStationsData() {
   
   unsigned long afterFileWriteTime = millis();
   Serial.print(F("[TIMING] File write time: "));
-  Serial.print(afterFileWriteTime - millis());
+  Serial.print(afterFileWriteTime - fileWriteStartTime);
+  Serial.println(F(" ms"));
+  
+  Serial.print(F("[TIMING] Total time from request to file completion: "));
+  Serial.print(afterFileWriteTime - requestEndTime);
   Serial.println(F(" ms"));
   
   Serial.print(F("[NETATMO] Stations data saved to file, bytes: "));
   Serial.println(totalRead);
+  
+  // Read and log the first 100 bytes of the saved file
+  File checkFile = LittleFS.open("/netatmo_config.json", "r");
+  if (checkFile) {
+    Serial.println(F("[DEBUG] First 100 bytes of saved file:"));
+    char checkBuf[101];
+    size_t bytesRead = checkFile.readBytes(checkBuf, 100);
+    checkBuf[bytesRead] = '\0';
+    Serial.println(checkBuf);
+    checkFile.close();
+  }
+  
+  // Dump the entire file content to logs for debugging
+  dumpFileContents("/netatmo_config.json");
   
   // Log the first part of the response
   Serial.println(F("[NETATMO] Response preview:"));

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log("Netatmo devices script loaded, attempting to load device data");
   
   // Try to load the device data file directly
-  fetch('/netatmo_stations_data.json')
+  fetch('/netatmo_config.json')
     .then(response => {
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);

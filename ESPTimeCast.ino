@@ -1450,29 +1450,14 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
     return;
   }
   
-  // Check if we have a valid access token
-  if (!isNetatmoTokenValid()) {
-    Serial.println(F("[NETATMO] Invalid or missing access token"));
-    // Try to refresh the token
-    Serial.println(F("[NETATMO] Attempting to refresh token..."));
-    String newToken = getNetatmoToken();
-    if (newToken.length() > 0) {
-      Serial.println(F("[NETATMO] Token refreshed successfully"));
-    } else {
-      Serial.println(F("[NETATMO] Failed to refresh token"));
-      outdoorTempAvailable = false;
-      return;
-    }
-  }
-  
-  // Check network connectivity
-  if (!checkNetworkConnectivity()) {
-    Serial.println(F("[NETATMO] Network connectivity check failed"));
+  // Get a fresh token directly from the function
+  String token = getNetatmoToken();
+  if (token.length() == 0) {
+    Serial.println(F("[NETATMO] Skipped: No access token available"));
     outdoorTempAvailable = false;
     return;
   }
   
-  // Create a secure client - use the exact same setup as the working function
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure(); // Skip certificate validation
   
@@ -1481,50 +1466,18 @@ void fetchOutdoorTemperature(bool roundToInteger = true) {
   String url = "https://api.netatmo.com/api/getstationsdata?device_id=";
   url += netatmoDeviceId;
   
-  Serial.print(F("[NETATMO] Requesting URL: "));
+  Serial.print(F("[NETATMO] GET "));
   Serial.println(url);
   Serial.print(F("[NETATMO] Using token: "));
-  Serial.println(String(netatmoAccessToken).substring(0, 10) + "...");
-  
-  // Debug: Print token length
-  Serial.print(F("[NETATMO] Token length: "));
-  Serial.println(strlen(netatmoAccessToken));
+  Serial.println(token.substring(0, 10) + "...");
   
   if (https.begin(*client, url)) {
-    Serial.println(F("[NETATMO] Client connected"));
-    
-    // Add headers - match the working function's headers
-    https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    https.addHeader("Authorization", "Bearer " + String(netatmoAccessToken));
+    https.addHeader("Authorization", "Bearer " + token);
     https.addHeader("Accept", "application/json");
     https.addHeader("User-Agent", "ESPTimeCast/1.0");
     
-    // Debug: Print all headers
-    Serial.println(F("[NETATMO] Request headers:"));
-    Serial.println(F("[NETATMO] Content-Type: application/x-www-form-urlencoded"));
-    Serial.print(F("[NETATMO] Authorization: Bearer "));
-    Serial.println(String(netatmoAccessToken).substring(0, 10) + "...");
-    Serial.println(F("[NETATMO] Accept: application/json"));
-    Serial.println(F("[NETATMO] User-Agent: ESPTimeCast/1.0"));
-    
     Serial.println(F("[NETATMO] Sending request..."));
-    
-    // Try the request with retries
-    int httpCode = -1;
-    int retries = 3;
-    
-    while (retries > 0 && httpCode < 0) {
-      httpCode = https.GET();
-      
-      if (httpCode < 0) {
-        Serial.print(F("[NETATMO] HTTP request failed, retrying ("));
-        Serial.print(retries - 1);
-        Serial.println(F(" attempts left)"));
-        delay(1000); // Wait 1 second before retrying
-        retries--;
-      }
-    }
-    
+    int httpCode = https.GET();
     Serial.print(F("[NETATMO] HTTP response code: "));
     Serial.println(httpCode);
     

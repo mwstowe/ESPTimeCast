@@ -1,3 +1,115 @@
+// Function to check if a string is in MAC address format (xx:xx:xx:xx:xx:xx)
+function isMacAddressFormat(str) {
+  return /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(str);
+}
+
+// Function to find the MAC address field in a device object
+function findMacAddress(obj) {
+  // Check common field names for MAC addresses
+  const possibleFields = ['mac_address', 'macAddress', 'MAC', 'mac', 'id', 'device_id', '_id'];
+  
+  for (const field of possibleFields) {
+    if (obj[field] && typeof obj[field] === 'string') {
+      if (isMacAddressFormat(obj[field])) {
+        console.log(`Found MAC address in field '${field}':`, obj[field]);
+        return obj[field];
+      }
+    }
+  }
+  
+  // If no MAC address format found, look for any field that might contain a MAC
+  for (const key in obj) {
+    if (typeof obj[key] === 'string' && isMacAddressFormat(obj[key])) {
+      console.log(`Found MAC address in field '${key}':`, obj[key]);
+      return obj[key];
+    }
+  }
+  
+  // If still not found, return the _id as fallback
+  return obj._id || '';
+}
+
+// Function to log raw device data
+function logRawDeviceData(data) {
+  console.log("Raw device data:", data);
+  
+  if (data && data.body && data.body.devices && Array.isArray(data.body.devices)) {
+    data.body.devices.forEach((device, index) => {
+      console.log(`Device ${index}:`, device);
+      console.log(`Device ${index} ID fields:`, {
+        _id: device._id,
+        id: device.id,
+        device_id: device.device_id,
+        mac_address: device.mac_address
+      });
+      
+      if (device.modules && Array.isArray(device.modules)) {
+        device.modules.forEach((module, moduleIndex) => {
+          console.log(`Device ${index} Module ${moduleIndex}:`, module);
+          console.log(`Device ${index} Module ${moduleIndex} ID fields:`, {
+            _id: module._id,
+// Function to debug Netatmo settings
+function debugNetatmoSettings() {
+  console.log("Debugging Netatmo settings");
+  
+  // Log the global devices array
+  console.log("Global devices array:", window.netatmoDevices);
+  
+  // Log the current selections
+  const deviceSelect = document.getElementById('netatmoDeviceId');
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
+  
+  console.log("Current device selection:", deviceSelect ? deviceSelect.value : "Element not found");
+  console.log("Current module selection:", moduleSelect ? moduleSelect.value : "Element not found");
+  console.log("Current indoor module selection:", indoorModuleSelect ? indoorModuleSelect.value : "Element not found");
+  
+  // Check if we have device data
+  fetch('/netatmo_config.json')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then(text => {
+      console.log("Raw config data:", text);
+      try {
+        const data = JSON.parse(text);
+        console.log("Parsed config data:", data);
+      } catch (e) {
+        console.error("Error parsing config JSON:", e);
+      }
+    })
+    .catch(error => {
+      console.log("Error loading config:", error.message);
+    });
+  
+  // Check memory stats
+  fetch('/api/system/memory')
+    .then(response => response.json())
+    .then(data => {
+      console.log("Memory stats:", data);
+    })
+    .catch(error => {
+      console.log("Error fetching memory stats:", error.message);
+    });
+  
+  // Show an alert with basic info
+  alert("Debug information has been logged to the console. Press F12 to view.");
+}
+
+// Make the debug function available globally
+window.debugNetatmoSettings = debugNetatmoSettings;            id: module.id,
+            module_id: module.module_id,
+            mac_address: module.mac_address
+          });
+        });
+      }
+    });
+  }
+}
+
 // Global variable to store Netatmo devices
 window.netatmoDevices = [];
 

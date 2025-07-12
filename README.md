@@ -1,32 +1,9 @@
 # ESPTimeCast
 ## Netatmo / Local Sensor 
 
-Some notes:  While this is still a work-in-progress and lacks polish, it is at least functional as of 
-29c2f39.  A lot of the code churn is because the tiny device struggles with the complexity of modern API calls and JSON payloads.  It can handle it, in theory, but experience has shown that careful memory management is necessary, and code which prioritizes memory conservation over anything else.
+Some notes: While this is still a work-in-progress and lacks polish, it is fully functional. A lot of the code churn is because the tiny device struggles with the complexity of modern API calls and JSON payloads. It can handle it, in theory, but experience has shown that careful memory management is necessary, and code which prioritizes memory conservation over anything else.
 
-## Recent Changes
-
-### OAuth2 Authentication for Netatmo
-
-The authentication system has been completely redesigned to use OAuth2 instead of username/password. This provides better security and compatibility with Netatmo's API requirements.
-
-### Watchdog Timer Fix
-
-The proxy functionality has been moved to the main loop to avoid watchdog timeouts. This is accomplished by:
-1. Setting up a deferred request system where the web server handler only stores the request parameters
-2. Processing the actual HTTP requests in the main loop() function
-3. Adding yield() calls at critical points to feed the watchdog timer
-
-### Memory Optimization
-
-Several memory optimizations have been implemented to prevent out-of-memory crashes:
-1. Improved handling of "NoMemory" errors during configuration validation
-2. Disabled file dumping in production to save memory
-3. Used fixed-size buffers instead of String objects for response preview
-4. Added memory optimization functions for BearSSL clients and HTTPClient instances
-5. Added explicit memory cleanup after API calls
-
-While the local temperature sensor works great, I'd recommend putting the probe outside the case where it can get clean readings.  Inside the case, the modest heat from the ESP8266 is enough to make temperature readings suspiciously high and probably pointless.
+While the local temperature sensor works great, I'd recommend putting the probe outside the case where it can get clean readings. Inside the case, the modest heat from the ESP8266 is enough to make temperature readings suspiciously high and probably pointless.
 
 **ESPTimeCast** is a WiFi-connected LED matrix clock and temperature display based on ESP8266 and MAX7219.  
 It displays the current time, day of the week (with custom symbols), indoor temperature from a DS18B20 sensor, and outdoor temperature from a Netatmo weather station.  
@@ -36,6 +13,8 @@ Setup and configuration are fully managed via a built-in web interface.
 
 
 <img src="assets/image01.png" alt="3D Printable Case" width="320" max-width="320" />
+
+Get the 3D printable case!
 
 Get the 3D printable case!
 

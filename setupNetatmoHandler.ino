@@ -1476,9 +1476,15 @@ void fetchStationsData() {
       int bytesRead = stream->readBytes(buf, readBytes);
       
       if (bytesRead > 0) {
-        // Write to file
-        writeCleanJsonFromBuffer(buf, bytesRead, deviceFile);
+        // Write to file and check if chunked transfer is complete
+        bool transferComplete = writeCleanJsonFromBuffer(buf, bytesRead, deviceFile);
         totalRead += bytesRead;
+        
+        // If chunked transfer is complete, break out of the loop
+        if (transferComplete) {
+          Serial.println(F("[NETATMO] Chunked transfer complete, exiting read loop"));
+          break;
+        }
         
         // Capture the first part of the response for logging
         if (!previewCaptured && responsePreview.length() < 500) {
@@ -1941,3 +1947,5 @@ void fetchStationsDataFallback() {
   // Now extract the device and module IDs for easy access
   extractDeviceInfo();
 }
+// External declarations
+extern bool chunkedTransferComplete;

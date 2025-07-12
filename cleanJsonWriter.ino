@@ -31,8 +31,11 @@ void writeCleanJsonToFile(const String &jsonString, const char* filePath) {
   Serial.println(filePath);
 }
 
+// Global flag to indicate when a chunked transfer is complete
+bool chunkedTransferComplete = false;
+
 // Function to write clean JSON to a file from a buffer
-void writeCleanJsonFromBuffer(const uint8_t* buffer, size_t bufferSize, File &file) {
+bool writeCleanJsonFromBuffer(const uint8_t* buffer, size_t bufferSize, File &file) {
   // Debug: Print the first few bytes of the buffer to help diagnose chunked encoding
   static bool firstChunk = true;
   static bool isChunkedEncoding = false;
@@ -69,6 +72,7 @@ void writeCleanJsonFromBuffer(const uint8_t* buffer, size_t bufferSize, File &fi
         inChunkHeader = true;
         chunkSize = 0;
         bytesReadInChunk = 0;
+        chunkedTransferComplete = false; // Reset the flag
         Serial.println(F("[JSON] Detected chunked encoding in first chunk"));
       }
     }
@@ -103,7 +107,8 @@ void writeCleanJsonFromBuffer(const uint8_t* buffer, size_t bufferSize, File &fi
           // If chunk size is 0, we're done
           if (chunkSize == 0) {
             Serial.println(F("[JSON] Found end chunk (size 0)"));
-            return;
+            chunkedTransferComplete = true; // Set the flag
+            return true; // Return true to indicate transfer is complete
           }
           
           Serial.print(F("[JSON] Chunk size: "));
@@ -144,4 +149,6 @@ void writeCleanJsonFromBuffer(const uint8_t* buffer, size_t bufferSize, File &fi
       file.write(ch);
     }
   }
+  
+  return false; // Return false to indicate transfer is not complete
 }

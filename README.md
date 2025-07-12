@@ -1,5 +1,32 @@
 # ESPTimeCast
-## Local sensor / Netatmo outdoor
+## Netatmo / Local Sensor 
+
+Some notes:  While this is still a work-in-progress and lacks polish, it is at least functional as of 
+29c2f39.  A lot of the code churn is because the tiny device struggles with the complexity of modern API calls and JSON payloads.  It can handle it, in theory, but experience has shown that careful memory management is necessary, and code which prioritizes memory conservation over anything else.
+
+## Recent Changes
+
+### OAuth2 Authentication for Netatmo
+
+The authentication system has been completely redesigned to use OAuth2 instead of username/password. This provides better security and compatibility with Netatmo's API requirements.
+
+### Watchdog Timer Fix
+
+The proxy functionality has been moved to the main loop to avoid watchdog timeouts. This is accomplished by:
+1. Setting up a deferred request system where the web server handler only stores the request parameters
+2. Processing the actual HTTP requests in the main loop() function
+3. Adding yield() calls at critical points to feed the watchdog timer
+
+### Memory Optimization
+
+Several memory optimizations have been implemented to prevent out-of-memory crashes:
+1. Improved handling of "NoMemory" errors during configuration validation
+2. Disabled file dumping in production to save memory
+3. Used fixed-size buffers instead of String objects for response preview
+4. Added memory optimization functions for BearSSL clients and HTTPClient instances
+5. Added explicit memory cleanup after API calls
+
+While the local temperature sensor works great, I'd recommend putting the probe outside the case where it can get clean readings.  Inside the case, the modest heat from the ESP8266 is enough to make temperature readings suspiciously high and probably pointless.
 
 **ESPTimeCast** is a WiFi-connected LED matrix clock and temperature display based on ESP8266 and MAX7219.  
 It displays the current time, day of the week (with custom symbols), indoor temperature from a DS18B20 sensor, and outdoor temperature from a Netatmo weather station.  
@@ -72,7 +99,7 @@ Get the 3D printable case!
 The built-in web interface provides full configuration for:
 
 - **WiFi settings** (SSID & Password)
-- **Netatmo settings** (Client ID, Client Secret, Username, Password, Device ID, Module ID)
+- **Netatmo settings** (Client ID, Client Secret, OAuth2 authorization)
 - **Time zone** (will auto-populate if TZ is found)
 - **Display durations** for clock and temperature (milliseconds)
 - **Advanced Settings** (see below)
@@ -85,6 +112,14 @@ The built-in web interface provides full configuration for:
    - Open `http://192.168.4.1` in your browser.
 2. Set your WiFi and all other options.
 3. Click **Save Setting** – the device saves config, reboots, and connects.
+
+### Netatmo Setup
+
+1. After connecting to WiFi, navigate to `http://[device-ip]/netatmo.html`
+2. Enter your Netatmo Client ID and Client Secret
+3. Click "Authorize with Netatmo" to start the OAuth2 flow
+4. After authorization, you can select your weather station and modules
+5. Use the "Refresh Token" button if the token expires
 
 ### UI Example:
 <img src="assets/webui_new.png" alt="Web Interface" width="320">
@@ -117,26 +152,32 @@ Click the **cog icon** next to "Advanced Settings" in the web UI to reveal extra
 - **Netatmo API Setup:**
   1. Create a Netatmo developer account at [https://dev.netatmo.com/](https://dev.netatmo.com/)
   2. Create a new app to get your Client ID and Client Secret
-  3. Use your Netatmo account email and password for the username and password fields
-  4. **Important**: Make sure to enable both `read_station`, `read_thermostat`, and `read_homecoach` scopes for your app
-  5. If you see "request is blocked" errors:
-     - Check your app permissions in the Netatmo developer portal
-     - Ensure your app has all required scopes
-     - Try regenerating your client ID and secret
-     - Make sure your Netatmo account has the proper permissions to access the weather station
-  6. **Troubleshooting authentication issues**:
-     - Visit `http://[device-ip]/debug` to run authentication diagnostics
-     - Check if your email contains special characters that might need URL encoding
-     - Try using manually generated tokens if automatic authentication fails
-     - Verify that your Netatmo account is not using 2FA (not supported)
+  3. Enter your Client ID and Client Secret in the ESPTimeCast web interface
+  4. Click "Authorize with Netatmo" to start the OAuth2 flow
+  5. Log in to your Netatmo account when prompted
+  6. Grant the requested permissions (read_station and read_homecoach)
+  7. You'll be redirected back to ESPTimeCast with an authorization code
+  8. ESPTimeCast will exchange this code for access and refresh tokens
+  9. **Important**: Make sure to enable both `read_station` and `read_homecoach` scopes for your app
+  10. In your Netatmo developer app settings, add the redirect URI: `http://[device-ip]/api/netatmo/callback`
+  11. If you see "request is blocked" errors:
+      - Check your app permissions in the Netatmo developer portal
+      - Ensure your app has all required scopes
+      - Try regenerating your client ID and secret
+      - Make sure your Netatmo account has the proper permissions to access the weather station
+  12. **Troubleshooting authentication issues**:
+      - Visit `http://[device-ip]/netatmo.html` to manage Netatmo settings
+      - Check the "Token Status" to verify if authentication is working
+      - Use the "Refresh Token" button if the token has expired
+      - Verify that your redirect URI is correctly configured in the Netatmo developer portal
 - **Device ID and Module IDs:** 
-  - Find these using the Netatmo API Explorer
-  - For outdoor temperature, use the outdoor module ID
-  - For indoor temperature, you can optionally use the base station or another indoor module ID
+  - After authenticating with Netatmo, ESPTimeCast will automatically fetch your devices
+  - Select your weather station and modules from the dropdown menus
+  - For outdoor temperature, select the outdoor module
+  - For indoor temperature, you can optionally select the base station or another indoor module
 - **Temperature Source Options:**
   - **Local sensor primary:** Uses the DS18B20 sensor for indoor temperature, falls back to Netatmo if local sensor fails
   - **Netatmo primary:** Uses Netatmo for indoor temperature, falls back to local sensor if Netatmo fails
-  - **Netatmo only:** Only uses Netatmo for indoor temperature, ignores local sensor
 - **Time Zone:** Select from IANA zones (e.g., `America/New_York`, handles DST automatically)
 - **Units:** `metric` (°C), `imperial` (°F), or `standard` (K)
 

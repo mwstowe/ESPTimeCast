@@ -222,7 +222,7 @@ void processProxyRequest() {
         uint8_t buf[bufSize];
         int totalRead = 0;
         
-        while (https2.connected() && (totalRead < https2.getSize())) {
+        while (https2.connected() && (totalRead < https2.getSize() || https2.getSize() <= 0)) {
           // Read available data
           size_t available = stream->available();
           if (available) {
@@ -238,9 +238,7 @@ void processProxyRequest() {
             
             yield(); // Allow the watchdog to be fed
           } else {
-            // No data available, wait a bit
-            delay(1);
-            yield();
+            yield(); // Just feed the watchdog, no delay needed
           }
         }
         
@@ -282,7 +280,7 @@ void processProxyRequest() {
   uint8_t buf[bufSize];
   int totalRead = 0;
   
-  while (https.connected() && (totalRead < https.getSize())) {
+  while (https.connected() && (totalRead < https.getSize() || https.getSize() <= 0)) {
     // Read available data
     size_t available = stream->available();
     if (available) {
@@ -298,9 +296,7 @@ void processProxyRequest() {
       
       yield(); // Allow the watchdog to be fed
     } else {
-      // No data available, wait a bit
-      delay(1);
-      yield();
+      yield(); // Just feed the watchdog, no delay needed
     }
   }
   

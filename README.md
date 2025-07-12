@@ -72,25 +72,30 @@ Get the 3D printable case!
 
 ## 🪛 Wiring
 
+Note: Although the pins are labeled differently in the V4, the positions are the same as the V3.x
+
 **Wemos D1 Mini (ESP8266) → MAX7219**
 
-| Wemos D1 Mini | MAX7219 |
-|:-------------:|:-------:|
-| GND           | GND     |
-| D6            | CLK     |
-| D7            | CS      |
-| D8            | DIN     |
-| 3V3           | VCC     |
+| Wemos D1 Mini (v3.x) | Wemos D1 Mini (v4.0) | MAX7219 |
+|:-------------:|:-------:|:-------:|
+| GND           | GND     | GND     |
+| D6            | 12      | CLK     |
+| D7            | 13      | CS      |
+| D8            | 15      | DIN     |
+| 3V3           | 3V3     | VCC     |
 
 **Wemos D1 Mini (ESP8266) → DS18B20**
 
-| Wemos D1 Mini | DS18B20 |
-|:-------------:|:-------:|
-| GND           | GND     |
-| D2            | DATA    |
-| 3V3           | VCC     |
+| Wemos D1 Mini (v3.x) | Wemos D1 Mini (v4.0) | DS18B20 |
+|:-------------:|:-------:|:-------:|
+| GND           | GND     | GND     |
+| D2            | 4       | DATA    |
+| 3V3           | 3V3     | VCC     |
 
 **Note:** Connect a 4.7kΩ pull-up resistor between DATA and VCC for the DS18B20.
+
+For the MAX7219 connection, you can refer to the original ESPTimeCast wiring diagram:
+<img src="https://raw.githubusercontent.com/mfactory-osaka/ESPTimeCast/master/assets/wiring.png" alt="Wiring" width="400" />
 
 ---
 

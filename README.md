@@ -1,5 +1,10 @@
 # ESPTimeCast
-## Local sensor / Netatmo outdoor
+## Netatmo / Local Sensor 
+
+Some notes:  While this is still a work-in-progress and lacks polish, it is at least functional as of 
+d7df31d.  A lot of the code churn is because the tiny device struggles with the complexity of modern API calls and JSON payloads.  It can handle it, in theory, but experience has shown that careful memory management is necessary, and code which prioritizes memory conservation over anything else.
+
+While the local temperature sensor works great, I'd recommend putting the probe outside the case where it can get clean readings.  Inside the case, the modest heat from the ESP8266 is enough to make temperature readings suspiciously high and probably pointless.
 
 **ESPTimeCast** is a WiFi-connected LED matrix clock and temperature display based on ESP8266 and MAX7219.  
 It displays the current time, day of the week (with custom symbols), indoor temperature from a DS18B20 sensor, and outdoor temperature from a Netatmo weather station.  

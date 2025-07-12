@@ -74,6 +74,17 @@ bool restoreConfig() {
   DeserializationError err = deserializeJson(doc, backupData);
   
   if (err) {
+    // Special handling for NoMemory errors
+    if (err == DeserializationError::NoMemory) {
+      Serial.print(F("[CONFIG] Not enough memory to parse backup: "));
+      Serial.println(err.c_str());
+      Serial.println(F("[CONFIG] This is a memory limitation, not file corruption"));
+      
+      // For backup validation, we should be conservative and not use it
+      return false;
+    }
+    
+    // For other errors, treat as corruption
     Serial.print(F("[CONFIG] Backup file is corrupted: "));
     Serial.println(err.c_str());
     return false;
@@ -181,6 +192,22 @@ bool checkAndRepairConfig() {
   yield(); // Feed the watchdog
   
   if (err) {
+    // Special handling for NoMemory errors
+    if (err == DeserializationError::NoMemory) {
+      Serial.print(F("[CONFIG] Not enough memory to parse configuration: "));
+      Serial.println(err.c_str());
+      
+      // Don't treat memory errors as corruption
+      Serial.println(F("[CONFIG] This is a memory limitation, not file corruption"));
+      Serial.println(F("[CONFIG] Keeping existing configuration"));
+      
+      yield(); // Feed the watchdog
+      
+      // Return true to indicate we're keeping the existing config
+      return true;
+    }
+    
+    // For other errors, treat as corruption
     Serial.print(F("[CONFIG] Configuration file is corrupted: "));
     Serial.println(err.c_str());
     

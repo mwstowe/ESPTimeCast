@@ -1255,22 +1255,8 @@ void fetchStationsData() {
   unsigned long startTime = millis();
   Serial.println(F("[NETATMO] Fetching stations data"));
   
-  // Report memory status before API call
-  Serial.println(F("[MEMORY] Memory status before API call:"));
-  printMemoryStats();
-  
-  // Defragment heap before making the API call
-  Serial.println(F("[MEMORY] Defragmenting heap before API call"));
-  defragmentHeap();
-  
-  // Report memory status after defragmentation
-  Serial.println(F("[MEMORY] Memory status after defragmentation:"));
-  printMemoryStats();
-  
-  unsigned long afterDefragTime = millis();
-  Serial.print(F("[TIMING] Setup and defrag time: "));
-  Serial.print(afterDefragTime - startTime);
-  Serial.println(F(" ms"));
+  // Prepare memory for API call
+  prepareForAPICall();
   
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println(F("[NETATMO] Error - WiFi not connected"));
@@ -1329,7 +1315,7 @@ void fetchStationsData() {
   
   unsigned long beforeRequestTime = millis();
   Serial.print(F("[TIMING] HTTP client setup time: "));
-  Serial.print(beforeRequestTime - afterDefragTime);
+  Serial.print(beforeRequestTime - startTime); // Changed from afterDefragTime to startTime
   Serial.println(F(" ms"));
   
   // Make the request with yield to avoid watchdog issues
@@ -1525,8 +1511,13 @@ void fetchStationsData() {
     }
   }
   
+  // Close the file and end the HTTP client as early as possible
   deviceFile.close();
   https.end();
+  
+  // Force garbage collection to free memory
+  Serial.println(F("[MEMORY] Forcing garbage collection after HTTP request"));
+  forceGarbageCollection();
   
   unsigned long afterFileWriteTime = millis();
   Serial.print(F("[TIMING] File write time: "));
@@ -1551,8 +1542,13 @@ void fetchStationsData() {
     checkFile.close();
   }
   
+  // Skip file dumping in production to save memory
+#ifdef DEBUG_FILE_DUMP
   // Dump the entire file content to logs for debugging
   dumpFileContents("/netatmo_config.json");
+#else
+  Serial.println(F("[DEBUG] File dump disabled to save memory"));
+#endif
   
   // Log the first part of the response
   Serial.println(F("[NETATMO] Response preview:"));
@@ -1571,12 +1567,14 @@ void fetchStationsData() {
   Serial.print(beforeExtractTime - afterFileWriteTime);
   Serial.println(F(" ms"));
   
-  // Report memory status after defragmentation
-  Serial.println(F("[MEMORY] Memory status after post-API defragmentation:"));
-  printMemoryStats();
+  // Clean up memory after API call
+  cleanupAfterAPICall();
   
   // Now extract the device and module IDs for easy access
   extractDeviceInfo();
+  
+  // Final memory cleanup
+  releaseUnusedMemory();
 }
 // Function to extract device info from the saved JSON file
 void extractDeviceInfo() {
@@ -1599,10 +1597,22 @@ void extractDeviceInfo() {
   Serial.print(fileOpenTime - startExtractTime);
   Serial.println(F(" ms"));
   
-  // Use a streaming parser to avoid loading the entire file into memory
-  DynamicJsonDocument doc(2048);
-  DeserializationError error = deserializeJson(doc, deviceFile);
+  // Use a filter to extract only the data we need
+  StaticJsonDocument<256> filter;
+  
+  // Set up the filter to only extract the module IDs and types
+  filter["body"]["homes"][0]["modules"][0]["id"] = true;
+  filter["body"]["homes"][0]["modules"][0]["type"] = true;
+  filter["body"]["homes"][0]["modules"][0]["name"] = true;
+  filter["body"]["homes"][0]["modules"][0]["bridge"] = true;
+  
+  // Use a smaller JSON document with the filter
+  DynamicJsonDocument doc(768); // Even smaller with filter
+  DeserializationError error = deserializeJson(doc, deviceFile, DeserializationOption::Filter(filter));
   deviceFile.close();
+  
+  // Force garbage collection after JSON parsing
+  forceGarbageCollection();
   
   if (error) {
     Serial.print(F("[NETATMO] Error parsing device data: "));
@@ -1618,16 +1628,18 @@ void extractDeviceInfo() {
     if (homes.size() > 0) {
       JsonObject home = homes[0];
       
+      // Use direct char* access instead of String conversion
+      const char* homeName = home["name"] | "Unknown";
       Serial.print(F("[NETATMO] Found home: "));
-      Serial.println(home["name"].as<String>());
+      Serial.println(homeName);
       
       // Look for modules of type NAMain (weather stations)
       JsonArray modules = home["modules"];
       
       for (JsonObject module : modules) {
-        const char* moduleType = module["type"];
-        const char* moduleId = module["id"];
-        const char* moduleName = module["name"];
+        const char* moduleType = module["type"] | "";
+        const char* moduleId = module["id"] | "";
+        const char* moduleName = module["name"] | "";
         
         Serial.print(F("[NETATMO] Found module: "));
         Serial.print(moduleId);
@@ -1637,7 +1649,7 @@ void extractDeviceInfo() {
         Serial.println(moduleType);
         
         // Save main station ID
-        if (strcmp(moduleType, "NAMain") == 0 && strlen(netatmoDeviceId) == 0) {
+        if (moduleType && strcmp(moduleType, "NAMain") == 0 && strlen(netatmoDeviceId) == 0) {
           strlcpy(netatmoDeviceId, moduleId, sizeof(netatmoDeviceId));
           Serial.print(F("[NETATMO] Set main station ID: "));
           Serial.println(netatmoDeviceId);

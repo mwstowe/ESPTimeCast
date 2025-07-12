@@ -265,10 +265,54 @@ function populateDeviceDropdowns(devices) {
     return;
   }
   
-  // Store current selections
+  // Store current selections from the dropdowns
   const currentDeviceId = deviceSelect.value;
   const currentModuleId = moduleSelect.value;
   const currentIndoorModuleId = indoorModuleSelect.value;
+  
+  console.log("Current selections from dropdowns:");
+  console.log("Device ID:", currentDeviceId);
+  console.log("Module ID:", currentModuleId);
+  console.log("Indoor Module ID:", currentIndoorModuleId);
+  
+  // If we don't have current selections, fetch them from config.json
+  if (!currentDeviceId) {
+    console.log("No current device selection, fetching from config.json");
+    
+    // Fetch config.json to get the saved selections
+    fetch('/config.json')
+      .then(response => response.json())
+      .then(config => {
+        console.log("Loaded config.json:", config);
+        
+        const savedDeviceId = config.netatmoDeviceId || '';
+        const savedModuleId = config.netatmoModuleId || '';
+        const savedIndoorModuleId = config.netatmoIndoorModuleId || '';
+        
+        console.log("Saved selections from config.json:");
+        console.log("Device ID:", savedDeviceId);
+        console.log("Module ID:", savedModuleId);
+        console.log("Indoor Module ID:", savedIndoorModuleId);
+        
+        // Now populate the dropdowns with the saved selections
+        populateDropdownsWithSelections(devices, savedDeviceId, savedModuleId, savedIndoorModuleId);
+      })
+      .catch(error => {
+        console.error("Error loading config.json:", error);
+        // If we can't load config.json, just populate with the current selections
+        populateDropdownsWithSelections(devices, currentDeviceId, currentModuleId, currentIndoorModuleId);
+      });
+  } else {
+    // We already have current selections, use them
+    populateDropdownsWithSelections(devices, currentDeviceId, currentModuleId, currentIndoorModuleId);
+  }
+}
+
+// Helper function to populate dropdowns with selections
+function populateDropdownsWithSelections(devices, deviceId, moduleId, indoorModuleId) {
+  const deviceSelect = document.getElementById('netatmoDeviceId');
+  const moduleSelect = document.getElementById('netatmoModuleId');
+  const indoorModuleSelect = document.getElementById('netatmoIndoorModuleId');
   
   // Clear existing options
   deviceSelect.innerHTML = '<option value="">Select Device...</option>';
@@ -284,42 +328,42 @@ function populateDeviceDropdowns(devices) {
   });
   
   // Restore previous selections if possible
-  if (currentDeviceId) {
+  if (deviceId) {
     // Check if the value exists in the dropdown
-    const deviceExists = Array.from(deviceSelect.options).some(option => option.value === currentDeviceId);
+    const deviceExists = Array.from(deviceSelect.options).some(option => option.value === deviceId);
     if (deviceExists) {
-      deviceSelect.value = currentDeviceId;
-      // Manually call loadModules with the current device ID
-      loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+      deviceSelect.value = deviceId;
+      // Manually call loadModules with the device ID
+      loadModules(deviceId, moduleId, indoorModuleId);
     } else {
-      console.warn(`Device ID ${currentDeviceId} not found in dropdown options`);
+      console.warn(`Device ID ${deviceId} not found in dropdown options`);
       // Add the missing device as an option
       const option = document.createElement('option');
-      option.value = currentDeviceId;
-      option.textContent = `Device ${currentDeviceId} (not found)`;
+      option.value = deviceId;
+      option.textContent = `Device ${deviceId} (not found)`;
       deviceSelect.appendChild(option);
-      deviceSelect.value = currentDeviceId;
+      deviceSelect.value = deviceId;
       
       // Create empty modules for this device
       const dummyDevice = {
-        id: currentDeviceId,
-        name: `Device ${currentDeviceId} (not found)`,
+        id: deviceId,
+        name: `Device ${deviceId} (not found)`,
         modules: []
       };
       
       // If we have module IDs, add them as dummy modules
-      if (currentModuleId && currentModuleId !== 'none') {
+      if (moduleId && moduleId !== 'none') {
         dummyDevice.modules.push({
-          id: currentModuleId,
-          name: `Module ${currentModuleId} (not found)`,
+          id: moduleId,
+          name: `Module ${moduleId} (not found)`,
           type: 'NAModule1'
         });
       }
       
-      if (currentIndoorModuleId && currentIndoorModuleId !== 'none') {
+      if (indoorModuleId && indoorModuleId !== 'none') {
         dummyDevice.modules.push({
-          id: currentIndoorModuleId,
-          name: `Module ${currentIndoorModuleId} (not found)`,
+          id: indoorModuleId,
+          name: `Module ${indoorModuleId} (not found)`,
           type: 'NAModule4'
         });
       }
@@ -327,8 +371,8 @@ function populateDeviceDropdowns(devices) {
       // Add the dummy device to the global devices array
       window.netatmoDevices.push(dummyDevice);
       
-      // Manually call loadModules with the current device ID
-      loadModules(currentDeviceId, currentModuleId, currentIndoorModuleId);
+      // Manually call loadModules with the device ID
+      loadModules(deviceId, moduleId, indoorModuleId);
     }
   }
 }

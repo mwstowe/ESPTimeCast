@@ -155,17 +155,15 @@ Click the **cog icon** next to "Advanced Settings" in the web UI to reveal extra
   3. Enter your Client ID and Client Secret in the ESPTimeCast web interface
   4. Click "Authorize with Netatmo" to start the OAuth2 flow
   5. Log in to your Netatmo account when prompted
-  6. Grant the requested permissions (read_station and read_homecoach)
+  6. Grant the requested permissions (the required scopes are automatically requested)
   7. You'll be redirected back to ESPTimeCast with an authorization code
   8. ESPTimeCast will exchange this code for access and refresh tokens
-  9. **Important**: Make sure to enable both `read_station` and `read_homecoach` scopes for your app
-  10. In your Netatmo developer app settings, add the redirect URI: `http://[device-ip]/api/netatmo/callback`
-  11. If you see "request is blocked" errors:
+  9. In your Netatmo developer app settings, add the redirect URI: `http://[device-ip]/api/netatmo/callback`
+  10. If you see "request is blocked" errors:
       - Check your app permissions in the Netatmo developer portal
-      - Ensure your app has all required scopes
       - Try regenerating your client ID and secret
       - Make sure your Netatmo account has the proper permissions to access the weather station
-  12. **Troubleshooting authentication issues**:
+  11. **Troubleshooting authentication issues**:
       - Visit `http://[device-ip]/netatmo.html` to manage Netatmo settings
       - Check the "Token Status" to verify if authentication is working
       - Use the "Refresh Token" button if the token has expired

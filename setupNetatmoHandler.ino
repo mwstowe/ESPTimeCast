@@ -928,10 +928,10 @@ void processFetchDevices() {
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation to save memory
+  optimizeBearSSLClient(client.get()); // Use our optimization function
   
   HTTPClient https;
-  https.setTimeout(10000); // Increase timeout to 10 seconds
+  optimizeHTTPClient(https); // Use our optimization function
   
   // Use getstationsdata endpoint which we know works
   String apiUrl = "https://api.netatmo.com/api/getstationsdata";
@@ -1284,11 +1284,10 @@ void fetchStationsData() {
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation to save memory
-  client->setBufferSizes(1024, 1024); // Increase buffer sizes
+  optimizeBearSSLClient(client.get()); // Use our optimization function
   
   HTTPClient https;
-  https.setTimeout(15000); // Increase timeout to 15 seconds
+  optimizeHTTPClient(https); // Use our optimization function
   
   // Use homesdata endpoint instead of getstationsdata
   String apiUrl = "https://api.netatmo.com/api/homesdata";
@@ -1322,9 +1321,9 @@ void fetchStationsData() {
     return;
   }
   
-  // Add authorization header
-  String authHeader = "Bearer ";
-  authHeader += netatmoAccessToken;
+  // Add authorization header using our memory-efficient function
+  char authHeader[256]; // Generous buffer size for the header
+  createAuthHeader(authHeader, sizeof(authHeader), netatmoAccessToken);
   https.addHeader("Authorization", authHeader);
   https.addHeader("Accept", "application/json");
   
@@ -1434,10 +1433,15 @@ void fetchStationsData() {
   Serial.print(F("[TIMING] Starting file write at: "));
   Serial.print(fileWriteStartTime - requestEndTime);
   Serial.println(F(" ms after request completion"));  
-  // For logging the first part of the response
-  String responsePreview = "";
+  
+  // For logging the first part of the response - use fixed buffer instead of String
+  char responsePreview[512]; // Fixed-size buffer for preview
+  int previewLength = 0;
+  bool previewCaptured = false;
+  
   // For tracking progress
-  unsigned long lastProgressTime = millis();  bool previewCaptured = false;
+  unsigned long lastProgressTime = millis();
+  
   // Variables for timeout detection
   unsigned long lastDataTime = millis();
   const unsigned long dataTimeout = 5000; // 5 second timeout if no new data
@@ -1486,12 +1490,17 @@ void fetchStationsData() {
           break;
         }
         
-        // Capture the first part of the response for logging
-        if (!previewCaptured && responsePreview.length() < 500) {
-          for (int i = 0; i < bytesRead && responsePreview.length() < 500; i++) {
-            responsePreview += (char)buf[i];
+        // Capture the first part of the response for logging using fixed buffer
+        if (!previewCaptured && previewLength < sizeof(responsePreview) - 1) {
+          // Copy bytes to the preview buffer, ensuring we don't overflow
+          int bytesToCopy = min((int)bytesRead, (int)(sizeof(responsePreview) - 1 - previewLength));
+          if (bytesToCopy > 0) {
+            memcpy(responsePreview + previewLength, buf, bytesToCopy);
+            previewLength += bytesToCopy;
+            responsePreview[previewLength] = '\0'; // Ensure null termination
           }
-          if (responsePreview.length() >= 500) {
+          
+          if (previewLength >= sizeof(responsePreview) - 1) {
             previewCaptured = true;
           }
         }
@@ -1771,11 +1780,10 @@ void fetchStationsDataFallback() {
   
   // Create a new client for the API call
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation to save memory
-  client->setBufferSizes(1024, 1024); // Increase buffer sizes
+  optimizeBearSSLClient(client.get()); // Use our optimization function
   
   HTTPClient https;
-  https.setTimeout(15000); // Increase timeout to 15 seconds
+  optimizeHTTPClient(https); // Use our optimization function
   
   // Use getstationsdata endpoint as fallback
   String apiUrl = "https://api.netatmo.com/api/getstationsdata";
@@ -1876,8 +1884,9 @@ void fetchStationsDataFallback() {
   Serial.print(expectedSize);
   Serial.println(F(" bytes"));
   
-  // For logging the first part of the response
-  String responsePreview = "";
+  // For logging the first part of the response - use fixed buffer
+  char responsePreview[512]; // Fixed-size buffer for preview
+  int previewLength = 0;
   bool previewCaptured = false;
   
   while (https.connected() && (totalRead < expectedSize || expectedSize <= 0)) {
@@ -1893,12 +1902,17 @@ void fetchStationsDataFallback() {
         deviceFile.write(buf, bytesRead);
         totalRead += bytesRead;
         
-        // Capture the first part of the response for logging
-        if (!previewCaptured && responsePreview.length() < 500) {
-          for (int i = 0; i < bytesRead && responsePreview.length() < 500; i++) {
-            responsePreview += (char)buf[i];
+        // Capture the first part of the response for logging using fixed buffer
+        if (!previewCaptured && previewLength < sizeof(responsePreview) - 1) {
+          // Copy bytes to the preview buffer, ensuring we don't overflow
+          int bytesToCopy = min((int)bytesRead, (int)(sizeof(responsePreview) - 1 - previewLength));
+          if (bytesToCopy > 0) {
+            memcpy(responsePreview + previewLength, buf, bytesToCopy);
+            previewLength += bytesToCopy;
+            responsePreview[previewLength] = '\0'; // Ensure null termination
           }
-          if (responsePreview.length() >= 500) {
+          
+          if (previewLength >= sizeof(responsePreview) - 1) {
             previewCaptured = true;
           }
         }

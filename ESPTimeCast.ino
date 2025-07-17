@@ -5063,6 +5063,9 @@ bool refreshNetatmoToken() {
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
+  // Use HTTP/1.0 instead of HTTP/1.1 which might be more reliable with limited resources
+  https.useHTTP10(true);
+  
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
   if (!https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));

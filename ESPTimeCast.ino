@@ -286,6 +286,12 @@ char daysOfTheWeek[7][12] = {"&", "*", "/", "?", "@", "=", "$"};
 char indoorSymbol[12] = {"^"};  // Custom symbol for indoor temperature (IN)
 char outdoorSymbol[12] = {"~"}; // Custom symbol for outdoor temperature (OUT)
 
+// Flag to track if refresh token authentication has failed
+bool refreshTokenAuthFailed = false;
+
+// Flag to track if refresh token connection has failed
+bool refreshTokenConnectionFailed = false;
+
 // NTP Synchronization State Machine
 enum NtpState {
   NTP_IDLE,
@@ -1180,6 +1186,15 @@ String getNetatmoToken() {
     return "";
   }
   
+  // Check memory status and defragment if needed before making API call
+  Serial.println(F("[NETATMO] Checking memory before token refresh"));
+  printMemoryStats();
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting before token refresh"));
+    defragmentHeap();
+  }
+  
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure(); // Skip certificate validation
   
@@ -1244,6 +1259,16 @@ String getNetatmoToken() {
     }
     Serial.println(redactedPostData);
     
+    // DEBUG: Log the complete request details
+    Serial.println(F("\n========== COMPLETE TOKEN REQUEST =========="));
+    Serial.println(F("POST https://api.netatmo.com/oauth2/token HTTP/1.1"));
+    Serial.println(F("Content-Type: application/x-www-form-urlencoded"));
+    Serial.println(F("Accept: application/json"));
+    Serial.println(F("User-Agent: ESPTimeCast/1.0"));
+    Serial.println();
+    Serial.println(redactedPostData); // Use redacted version for security
+    Serial.println(F("===========================================\n"));
+    
     Serial.println(F("[NETATMO] Sending token request..."));
     int httpCode = https.POST(postData);
     Serial.print(F("[NETATMO] HTTP response code: "));
@@ -1251,6 +1276,23 @@ String getNetatmoToken() {
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();
+      
+      // DEBUG: Log the complete response
+      Serial.println(F("\n========== COMPLETE TOKEN RESPONSE =========="));
+      Serial.print(F("HTTP/1.1 "));
+      Serial.print(httpCode);
+      Serial.println(F(" OK"));
+      
+      // Log response headers
+      for (int i = 0; i < https.headers(); i++) {
+        Serial.print(https.headerName(i));
+        Serial.print(F(": "));
+        Serial.println(https.header(i));
+      }
+      Serial.println();
+      Serial.println(payload);
+      Serial.println(F("============================================\n"));
+      
       Serial.println(F("[NETATMO] Response received:"));
       Serial.println(payload);
       
@@ -1272,6 +1314,9 @@ String getNetatmoToken() {
             saveTokensToConfig();
           }
           
+          // Reset the auth failure flag since we got a valid token
+          refreshTokenAuthFailed = false;
+          
           Serial.println(F("[NETATMO] Token obtained successfully"));
         } else {
           Serial.println(F("[NETATMO] Error: No access token in response"));
@@ -1286,6 +1331,23 @@ String getNetatmoToken() {
       
       // Get the error response
       String errorPayload = https.getString();
+      
+      // DEBUG: Log the complete error response
+      Serial.println(F("\n========== COMPLETE TOKEN ERROR RESPONSE =========="));
+      Serial.print(F("HTTP/1.1 "));
+      Serial.print(httpCode);
+      Serial.println(F(" Error"));
+      
+      // Log response headers
+      for (int i = 0; i < https.headers(); i++) {
+        Serial.print(https.headerName(i));
+        Serial.print(F(": "));
+        Serial.println(https.header(i));
+      }
+      Serial.println();
+      Serial.println(errorPayload);
+      Serial.println(F("==================================================\n"));
+      
       Serial.println(F("[NETATMO] Error response:"));
       Serial.println(errorPayload);
       
@@ -1318,10 +1380,19 @@ String getNetatmoToken() {
       
       // If using an existing refresh token and it failed, clear it
       if (useRefreshToken) {
-        Serial.println(F("[NETATMO] Refresh token might be expired, clearing it"));
-        netatmoRefreshToken[0] = '\0';
-        netatmoAccessToken[0] = '\0';
-        saveTokensToConfig();
+        // Check if it's a connection error (httpCode <= 0)
+        if (httpCode <= 0) {
+          Serial.println(F("[NETATMO] Connection error, not clearing refresh token"));
+          refreshTokenConnectionFailed = true;
+          Serial.println(F("[NETATMO] Setting refreshTokenConnectionFailed flag"));
+        } else {
+          Serial.println(F("[NETATMO] Refresh token might be expired, clearing it"));
+          netatmoRefreshToken[0] = '\0';
+          netatmoAccessToken[0] = '\0';
+          saveTokensToConfig();
+          refreshTokenAuthFailed = true;
+          Serial.println(F("[NETATMO] Setting refreshTokenAuthFailed flag"));
+        }
       }
     }
     
@@ -2086,7 +2157,28 @@ void loop() {
       P.print(timeString);
     }
   } else { // Temperature mode
-    if (indoorTempAvailable || outdoorTempAvailable) {
+    if (refreshTokenConnectionFailed) {
+      // Display "conn" to indicate connection failure
+      P.print("conn");
+      refreshTokenConnectionFailed = false; // Reset the flag after displaying
+      
+      // If this is the first time showing the conn message, log it
+      static bool connMessageShown = false;
+      if (!connMessageShown) {
+        Serial.println(F("[DISPLAY] Showing 'conn' message due to connection failure"));
+        connMessageShown = true;
+      }
+    } else if (refreshTokenAuthFailed) {
+      // Display "auth" to indicate authentication failure
+      P.print("auth");
+      
+      // If this is the first time showing the auth message, log it
+      static bool authMessageShown = false;
+      if (!authMessageShown) {
+        Serial.println(F("[DISPLAY] Showing 'auth' message due to refresh token failure"));
+        authMessageShown = true;
+      }
+    } else if (indoorTempAvailable || outdoorTempAvailable) {
       // --- Temperature display string ---
       String tempDisplay;
       
@@ -4949,13 +5041,17 @@ bool refreshNetatmoToken() {
     return false;
   }
   
-  // Create a new client for the API call
+  // Memory optimization: Use static client to reduce stack usage
   static BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
+  
+  // Use moderate buffer sizes for balance between efficiency and memory usage
+  client.setBufferSizes(512, 512); // Balanced buffer sizes
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
+  Serial.println(F("[NETATMO] Connecting to token endpoint"));
   if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return false;
@@ -4963,27 +5059,88 @@ bool refreshNetatmoToken() {
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
-  // Build the POST data
-  String postData = "grant_type=refresh_token";
-  postData += "&client_id=";
-  postData += urlEncode(netatmoClientId);
-  postData += "&client_secret=";
-  postData += urlEncode(netatmoClientSecret);
-  postData += "&refresh_token=";
-  postData += urlEncode(netatmoRefreshToken);
+  // Build the POST data in chunks to minimize memory usage
+  // Use static buffers to avoid heap fragmentation
+  static char postData[512]; // Increased buffer size for POST data
+  memset(postData, 0, sizeof(postData));
   
-  // Make the request
+  // Build the POST data manually to minimize memory usage
+  strcat(postData, "grant_type=refresh_token");
+  strcat(postData, "&client_id=");
+  strcat(postData, netatmoClientId);
+  strcat(postData, "&client_secret=");
+  strcat(postData, netatmoClientSecret);
+  strcat(postData, "&refresh_token=");
+  strcat(postData, netatmoRefreshToken);
+  
+  Serial.println(F("[NETATMO] Sending token refresh request"));
   int httpCode = https.POST(postData);
   yield(); // Allow the watchdog to be fed
   
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.print(F("[NETATMO] Error - HTTP code: "));
+  // Handle connection errors differently from server errors
+  if (httpCode <= 0) {
+    // This is a connection error, not a token error
+    Serial.print(F("[NETATMO] Connection error - HTTP code: "));
     Serial.println(httpCode);
+    Serial.print(F("[NETATMO] Error description: "));
+    Serial.println(https.errorToString(httpCode));
+    
+    // Log the complete response headers for debugging
+    Serial.println(F("\n========== COMPLETE TOKEN ERROR RESPONSE =========="));
+    Serial.println(F("HTTP/1.1 Error"));
+    Serial.println(F("\n==================================================\n"));
+    
+    https.end();
+    
+    // Don't clear the refresh token for connection errors
+    Serial.println(F("[NETATMO] This is a connection error, not clearing refresh token"));
+    return false;
+  }
+  
+  // Handle server errors (HTTP status codes)
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO] Server error - HTTP code: "));
+    Serial.println(httpCode);
+    
+    // Get error payload
     String errorPayload = https.getString();
     yield(); // Allow the watchdog to be fed
-    Serial.print(F("[NETATMO] Error payload: "));
+    
+    Serial.println(F("\n========== COMPLETE TOKEN ERROR RESPONSE =========="));
     Serial.println(errorPayload);
+    Serial.println(F("==================================================\n"));
+    
     https.end();
+    
+    // Only clear the token if we get a specific error from the server
+    // Parse the error response to check for specific error types
+    bool invalidToken = false;
+    
+    // Try to parse the error response
+    StaticJsonDocument<256> errorDoc;
+    DeserializationError error = deserializeJson(errorDoc, errorPayload);
+    
+    if (!error && errorDoc.containsKey("error")) {
+      String errorType = errorDoc["error"].as<String>();
+      Serial.print(F("[NETATMO] Error type: "));
+      Serial.println(errorType);
+      
+      // Only clear tokens for specific error types that indicate invalid credentials
+      if (errorType == "invalid_grant" || errorType == "invalid_client" || 
+          errorType == "invalid_request" || errorType == "invalid_token") {
+        invalidToken = true;
+      }
+    }
+    
+    if (invalidToken) {
+      Serial.println(F("[NETATMO] Invalid token error detected, clearing tokens"));
+      netatmoRefreshToken[0] = '\0';
+      netatmoAccessToken[0] = '\0';
+      saveTokensToConfig();
+    } else {
+      Serial.println(F("[NETATMO] Server error, but not clearing tokens"));
+    }
+    
     return false;
   }
   
@@ -5008,11 +5165,16 @@ bool refreshNetatmoToken() {
     return false;
   }
   
-  // Save the tokens
+  // Memory optimization: Extract tokens directly as strings
   const char* accessToken = doc["access_token"];
   const char* refreshToken = doc["refresh_token"];
   
   Serial.println(F("[NETATMO] Saving new tokens"));
+  Serial.print(F("[NETATMO] Access token length: "));
+  Serial.println(strlen(accessToken));
+  Serial.print(F("[NETATMO] Refresh token length: "));
+  Serial.println(strlen(refreshToken));
+  
   strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
   strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
   

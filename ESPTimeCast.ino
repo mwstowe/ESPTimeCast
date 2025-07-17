@@ -5037,12 +5037,35 @@ String urlEncode(const char* input) {
 
 // Function to refresh the Netatmo token
 bool refreshNetatmoToken() {
-  Serial.println(F("[NETATMO] Refreshing token"));
+  Serial.println(F("[NETATMO] Starting token refresh with enhanced diagnostics"));
   
   if (strlen(netatmoRefreshToken) == 0) {
     Serial.println(F("[NETATMO] Error - No refresh token"));
     return false;
   }
+  
+  // DIAGNOSTIC: Memory status before any operation
+  Serial.println(F("[MEMORY] Memory status before token refresh:"));
+  Serial.print(F("[MEMORY] Free heap: "));
+  Serial.print(ESP.getFreeHeap());
+  Serial.println(F(" bytes"));
+  Serial.print(F("[MEMORY] Heap fragmentation: "));
+  Serial.print(ESP.getHeapFragmentation());
+  Serial.println(F("%"));
+  Serial.print(F("[MEMORY] Largest free block: "));
+  Serial.print(ESP.getMaxFreeBlockSize());
+  Serial.println(F(" bytes"));
+  Serial.print(F("[MEMORY] Free stack: "));
+  Serial.print(ESP.getFreeContStack());
+  Serial.println(F(" bytes"));
+  
+  // DIAGNOSTIC: WiFi status before any operation
+  Serial.print(F("[WIFI] Connection status: "));
+  Serial.println(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+  Serial.print(F("[WIFI] IP address: "));
+  Serial.println(WiFi.localIP().toString());
+  Serial.print(F("[WIFI] Signal strength (RSSI): "));
+  Serial.println(WiFi.RSSI());
   
   // Print and optimize memory before starting
   Serial.println(F("[NETATMO] Checking memory before token refresh"));
@@ -5053,9 +5076,22 @@ bool refreshNetatmoToken() {
     defragmentHeap();
   }
   
+  // DIAGNOSTIC: Timing for client creation
+  unsigned long startTime = millis();
+  
   // Use unique_ptr for client creation like in successful implementations
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure(); // Skip certificate validation to save memory
+  
+  // DIAGNOSTIC: Client creation timing
+  Serial.print(F("[TIMING] Client creation took: "));
+  Serial.print(millis() - startTime);
+  Serial.println(F(" ms"));
+  Serial.print(F("[MEMORY] Free heap after client creation: "));
+  Serial.println(ESP.getFreeHeap());
+  
+  // DIAGNOSTIC: TLS debugging not available in this version of BearSSL
+  Serial.println(F("[SSL] Debug callback not available in this version of BearSSL"));
   
   // Use moderate buffer sizes for balance between efficiency and memory usage
   client->setBufferSizes(512, 512); // Balanced buffer sizes
@@ -5066,10 +5102,26 @@ bool refreshNetatmoToken() {
   // Use HTTP/1.0 instead of HTTP/1.1 which might be more reliable with limited resources
   https.useHTTP10(true);
   
+  // DIAGNOSTIC: Timing for https.begin
+  startTime = millis();
+  
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
   // Try alternative HTTPS begin method using String object instead of char*
   String url = "https://api.netatmo.com/oauth2/token";
-  if (!https.begin(*client, url)) {
+  bool beginSuccess = https.begin(*client, url);
+  
+  // DIAGNOSTIC: https.begin timing and result
+  Serial.print(F("[TIMING] HTTPS begin took: "));
+  Serial.print(millis() - startTime);
+  Serial.println(F(" ms"));
+  Serial.print(F("[HTTPS] Begin result: "));
+  Serial.println(beginSuccess ? "Success" : "Failure");
+  Serial.print(F("[MEMORY] Free heap after https.begin: "));
+  Serial.println(ESP.getFreeHeap());
+  Serial.print(F("[CLIENT] Connected after begin: "));
+  Serial.println(client->connected() ? "Yes" : "No");
+  
+  if (!beginSuccess) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return false;
   }
@@ -5093,17 +5145,59 @@ bool refreshNetatmoToken() {
   strcat(postData, netatmoRefreshToken);
   // Remove scope parameter as it's not needed for refresh token requests
   
+  // DIAGNOSTIC: Print redacted POST data
+  Serial.println(F("[NETATMO] POST data (redacted):"));
+  String redactedPostData = postData;
+  if (redactedPostData.indexOf("client_secret=") >= 0) {
+    int start = redactedPostData.indexOf("client_secret=") + 14;
+    int end = redactedPostData.indexOf("&", start);
+    if (end < 0) end = redactedPostData.length();
+    redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
+  }
+  if (redactedPostData.indexOf("refresh_token=") >= 0) {
+    int start = redactedPostData.indexOf("refresh_token=") + 14;
+    int end = redactedPostData.indexOf("&", start);
+    if (end < 0) end = redactedPostData.length();
+    redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
+  }
+  Serial.println(redactedPostData);
+  
+  // DIAGNOSTIC: Timing for POST request
+  startTime = millis();
+  
   Serial.println(F("[NETATMO] Sending token refresh request"));
   int httpCode = https.POST(postData);
   yield(); // Allow the watchdog to be fed
+  
+  // DIAGNOSTIC: POST timing and result
+  Serial.print(F("[TIMING] POST request took: "));
+  Serial.print(millis() - startTime);
+  Serial.println(F(" ms"));
+  Serial.print(F("[MEMORY] Free heap after POST: "));
+  Serial.println(ESP.getFreeHeap());
+  Serial.print(F("[CLIENT] Still connected after POST: "));
+  Serial.println(client->connected() ? "Yes" : "No");
   
   // Handle connection errors differently from server errors
   if (httpCode <= 0) {
     // This is a connection error, not a token error
     Serial.print(F("[NETATMO] Connection error - HTTP code: "));
     Serial.println(httpCode);
-    Serial.print(F("[NETATMO] Error description: "));
+    Serial.print(F("[NETATMO] Detailed error: "));
     Serial.println(https.errorToString(httpCode));
+    
+    // DIAGNOSTIC: Try to get more information about the connection state
+    Serial.print(F("[CLIENT] Available data: "));
+    Serial.println(client->available());
+    
+    // DIAGNOSTIC: Check if we can read anything from the client
+    if (client->available() > 0) {
+      Serial.println(F("[CLIENT] Reading available data:"));
+      while (client->available()) {
+        Serial.write(client->read());
+      }
+      Serial.println();
+    }
     
     // Log the complete response headers for debugging
     Serial.println(F("\n========== COMPLETE TOKEN ERROR RESPONSE =========="));

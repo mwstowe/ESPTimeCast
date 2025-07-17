@@ -1216,6 +1216,7 @@ String getNetatmoToken() {
       postData += netatmoClientId;
       postData += "&client_secret=";
       postData += netatmoClientSecret;
+      // No scope parameter for refresh token requests
     } else {
       // Use password flow
       postData = "grant_type=password&client_id=";
@@ -1233,8 +1234,10 @@ String getNetatmoToken() {
           postData.indexOf('=') != -1 || postData.indexOf(' ') != -1) {
         Serial.println(F("[NETATMO] WARNING: Credentials contain special characters that might need URL encoding"));
       }
+      
+      // Only add scope parameter for password grant
+      postData += "&scope=read_station read_thermostat read_homecoach";
     }
-    postData += "&scope=read_station read_thermostat read_homecoach";
     
     Serial.print(F("[NETATMO] POST data: "));
     // Print a redacted version of the POST data for debugging
@@ -5058,6 +5061,8 @@ bool refreshNetatmoToken() {
   }
   
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  https.addHeader("Accept", "application/json");
+  https.addHeader("User-Agent", "ESPTimeCast/1.0");
   
   // Build the POST data in chunks to minimize memory usage
   // Use static buffers to avoid heap fragmentation
@@ -5072,6 +5077,7 @@ bool refreshNetatmoToken() {
   strcat(postData, netatmoClientSecret);
   strcat(postData, "&refresh_token=");
   strcat(postData, netatmoRefreshToken);
+  // Remove scope parameter as it's not needed for refresh token requests
   
   Serial.println(F("[NETATMO] Sending token refresh request"));
   int httpCode = https.POST(postData);

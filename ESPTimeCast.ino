@@ -1186,20 +1186,26 @@ String getNetatmoToken() {
     return "";
   }
   
-  // Check memory status and defragment if needed before making API call
-  Serial.println(F("[NETATMO] Checking memory before token refresh"));
-  printMemoryStats();
+  // Use the same memory preparation function as successful calls
+  prepareForAPICall();
   
-  if (shouldDefragment()) {
-    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting before token refresh"));
-    defragmentHeap();
-  }
-  
+  // Create a new client for the API call using the optimization function
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation
+  optimizeBearSSLClient(client.get()); // Use our optimization function
   
   HTTPClient https;
+  optimizeHTTPClient(https); // Use our optimization function
   String token = "";
+  
+  // Add DNS resolution test
+  Serial.println(F("[NETATMO-DEBUG] Testing DNS resolution..."));
+  IPAddress ip;
+  if (WiFi.hostByName("api.netatmo.com", ip)) {
+    Serial.print(F("[NETATMO-DEBUG] api.netatmo.com resolved to: "));
+    Serial.println(ip.toString());
+  } else {
+    Serial.println(F("[NETATMO-DEBUG] DNS resolution failed!"));
+  }
   
   if (https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -1272,10 +1278,27 @@ String getNetatmoToken() {
     Serial.println(redactedPostData); // Use redacted version for security
     Serial.println(F("===========================================\n"));
     
+    // Defragment heap right before making the request - like successful API calls
+    Serial.println(F("[MEMORY] Final defragmentation before API call"));
+    defragmentHeap();
+    yield(); // Allow the watchdog to be fed
+    
     Serial.println(F("[NETATMO] Sending token request..."));
     int httpCode = https.POST(postData);
     Serial.print(F("[NETATMO] HTTP response code: "));
     Serial.println(httpCode);
+    
+    // Add SSL error diagnostics for connection errors
+    if (httpCode <= 0) {
+      int sslError = client->getLastSSLError();
+      char errorMsg[100];
+      client->getLastSSLError(errorMsg, sizeof(errorMsg));
+      
+      Serial.print(F("[NETATMO-DEBUG] SSL Error Code: "));
+      Serial.println(sslError);
+      Serial.print(F("[NETATMO-DEBUG] SSL Error Message: "));
+      Serial.println(errorMsg);
+    }
     
     if (httpCode == HTTP_CODE_OK) {
       String payload = https.getString();
@@ -5036,102 +5059,73 @@ String urlEncode(const char* input) {
 }
 
 // Function to refresh the Netatmo token
+// Function to refresh the Netatmo token
 bool refreshNetatmoToken() {
-  Serial.println(F("[NETATMO] Starting token refresh with enhanced diagnostics"));
+  unsigned long startTime = millis();
+  Serial.println(F("[NETATMO-DEBUG] Starting token refresh function"));
+  Serial.println(F("[NETATMO] Refreshing token"));
   
   if (strlen(netatmoRefreshToken) == 0) {
     Serial.println(F("[NETATMO] Error - No refresh token"));
     return false;
   }
   
-  // DIAGNOSTIC: Memory status before any operation
-  Serial.println(F("[MEMORY] Memory status before token refresh:"));
-  Serial.print(F("[MEMORY] Free heap: "));
-  Serial.print(ESP.getFreeHeap());
-  Serial.println(F(" bytes"));
-  Serial.print(F("[MEMORY] Heap fragmentation: "));
-  Serial.print(ESP.getHeapFragmentation());
-  Serial.println(F("%"));
-  Serial.print(F("[MEMORY] Largest free block: "));
-  Serial.print(ESP.getMaxFreeBlockSize());
-  Serial.println(F(" bytes"));
-  Serial.print(F("[MEMORY] Free stack: "));
-  Serial.print(ESP.getFreeContStack());
-  Serial.println(F(" bytes"));
+  // Prepare memory for API call - use the same function as successful calls
+  prepareForAPICall();
   
-  // DIAGNOSTIC: WiFi status before any operation
-  Serial.print(F("[WIFI] Connection status: "));
-  Serial.println(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
-  Serial.print(F("[WIFI] IP address: "));
-  Serial.println(WiFi.localIP().toString());
-  Serial.print(F("[WIFI] Signal strength (RSSI): "));
-  Serial.println(WiFi.RSSI());
-  
-  // Print and optimize memory before starting
-  Serial.println(F("[NETATMO] Checking memory before token refresh"));
-  printMemoryStats();
-  
-  if (shouldDefragment()) {
-    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting..."));
-    defragmentHeap();
-  }
-  
-  // DIAGNOSTIC: Timing for client creation
-  unsigned long startTime = millis();
-  
-  // Use unique_ptr for client creation like in successful implementations
-  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
-  client->setInsecure(); // Skip certificate validation to save memory
-  
-  // DIAGNOSTIC: Client creation timing
-  Serial.print(F("[TIMING] Client creation took: "));
-  Serial.print(millis() - startTime);
-  Serial.println(F(" ms"));
-  Serial.print(F("[MEMORY] Free heap after client creation: "));
-  Serial.println(ESP.getFreeHeap());
-  
-  // DIAGNOSTIC: TLS debugging not available in this version of BearSSL
-  Serial.println(F("[SSL] Debug callback not available in this version of BearSSL"));
-  
-  // Use moderate buffer sizes for balance between efficiency and memory usage
-  client->setBufferSizes(512, 512); // Balanced buffer sizes
-  
-  HTTPClient https;
-  https.setTimeout(10000); // 10 second timeout
-  
-  // Use HTTP/1.0 instead of HTTP/1.1 which might be more reliable with limited resources
-  https.useHTTP10(true);
-  
-  // DIAGNOSTIC: Timing for https.begin
-  startTime = millis();
-  
-  Serial.println(F("[NETATMO] Connecting to token endpoint"));
-  // Try alternative HTTPS begin method using String object instead of char*
-  String url = "https://api.netatmo.com/oauth2/token";
-  bool beginSuccess = https.begin(*client, url);
-  
-  // DIAGNOSTIC: https.begin timing and result
-  Serial.print(F("[TIMING] HTTPS begin took: "));
-  Serial.print(millis() - startTime);
-  Serial.println(F(" ms"));
-  Serial.print(F("[HTTPS] Begin result: "));
-  Serial.println(beginSuccess ? "Success" : "Failure");
-  Serial.print(F("[MEMORY] Free heap after https.begin: "));
-  Serial.println(ESP.getFreeHeap());
-  Serial.print(F("[CLIENT] Connected after begin: "));
-  Serial.println(client->connected() ? "Yes" : "No");
-  
-  if (!beginSuccess) {
-    Serial.println(F("[NETATMO] Error - Failed to connect"));
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(F("[NETATMO] Error - WiFi not connected"));
     return false;
   }
   
+  // Add a ping test to verify basic network connectivity
+  Serial.println(F("[NETATMO-DEBUG] Testing network connectivity..."));
+  IPAddress ip;
+  if (!WiFi.hostByName("api.netatmo.com", ip)) {
+    Serial.println(F("[NETATMO-DEBUG] DNS resolution failed for api.netatmo.com"));
+    return false;
+  }
+  
+  Serial.print(F("[NETATMO-DEBUG] api.netatmo.com resolved to: "));
+  Serial.println(ip.toString());
+  
+  // Ping the resolved IP to test connectivity
+  Serial.print(F("[NETATMO] Pinging "));
+  Serial.print(ip.toString());
+  Serial.println(F("..."));
+  
+  // Create a new client for the API call
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  optimizeBearSSLClient(client.get()); // Use our optimization function
+  
+  HTTPClient https;
+  optimizeHTTPClient(https); // Use our optimization function
+  
+  // Use the same URL format as successful API calls
+  String apiUrl = "https://api.netatmo.com/oauth2/token";
+  Serial.print(F("[NETATMO] Connecting to: "));
+  Serial.println(apiUrl);
+  
+  // Now try the HTTPS connection with SSL error diagnostics
+  Serial.println(F("[NETATMO-DEBUG] Initializing HTTPS connection..."));
+  if (!https.begin(*client, apiUrl)) {
+    int sslError = client->getLastSSLError();
+    char errorMsg[100];
+    client->getLastSSLError(errorMsg, sizeof(errorMsg));
+    
+    Serial.print(F("[NETATMO-DEBUG] Error - Failed to connect. SSL Error Code: "));
+    Serial.println(sslError);
+    Serial.print(F("[NETATMO-DEBUG] SSL Error Message: "));
+    Serial.println(errorMsg);
+    return false;
+  }
+  
+  // Add headers like successful API calls
   https.addHeader("Content-Type", "application/x-www-form-urlencoded");
   https.addHeader("Accept", "application/json");
   https.addHeader("User-Agent", "ESPTimeCast/1.0");
   
   // Build the POST data in chunks to minimize memory usage
-  // Use static buffers to avoid heap fragmentation
   static char postData[512]; // Increased buffer size for POST data
   memset(postData, 0, sizeof(postData));
   
@@ -5143,128 +5137,71 @@ bool refreshNetatmoToken() {
   strcat(postData, netatmoClientSecret);
   strcat(postData, "&refresh_token=");
   strcat(postData, netatmoRefreshToken);
-  // Remove scope parameter as it's not needed for refresh token requests
   
-  // DIAGNOSTIC: Print redacted POST data
-  Serial.println(F("[NETATMO] POST data (redacted):"));
-  String redactedPostData = postData;
-  if (redactedPostData.indexOf("client_secret=") >= 0) {
-    int start = redactedPostData.indexOf("client_secret=") + 14;
-    int end = redactedPostData.indexOf("&", start);
-    if (end < 0) end = redactedPostData.length();
-    redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
-  }
-  if (redactedPostData.indexOf("refresh_token=") >= 0) {
-    int start = redactedPostData.indexOf("refresh_token=") + 14;
-    int end = redactedPostData.indexOf("&", start);
-    if (end < 0) end = redactedPostData.length();
-    redactedPostData = redactedPostData.substring(0, start) + "REDACTED" + redactedPostData.substring(end);
-  }
-  Serial.println(redactedPostData);
+  // Defragment heap right before making the request
+  Serial.println(F("[MEMORY] Final defragmentation before API call"));
+  defragmentHeap();
+  yield(); // Allow the watchdog to be fed
   
-  // DIAGNOSTIC: Timing for POST request
-  startTime = millis();
-  
-  Serial.println(F("[NETATMO] Sending token refresh request"));
+  // Make the request with yield to avoid watchdog issues
+  Serial.println(F("[NETATMO-DEBUG] Sending request..."));
   int httpCode = https.POST(postData);
   yield(); // Allow the watchdog to be fed
   
-  // DIAGNOSTIC: POST timing and result
-  Serial.print(F("[TIMING] POST request took: "));
-  Serial.print(millis() - startTime);
-  Serial.println(F(" ms"));
-  Serial.print(F("[MEMORY] Free heap after POST: "));
-  Serial.println(ESP.getFreeHeap());
-  Serial.print(F("[CLIENT] Still connected after POST: "));
-  Serial.println(client->connected() ? "Yes" : "No");
+  Serial.print(F("[NETATMO-DEBUG] HTTP response code: "));
+  Serial.println(httpCode);
   
-  // Handle connection errors differently from server errors
-  if (httpCode <= 0) {
-    // This is a connection error, not a token error
-    Serial.print(F("[NETATMO] Connection error - HTTP code: "));
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.print(F("[NETATMO-DEBUG] Error - HTTP code: "));
     Serial.println(httpCode);
-    Serial.print(F("[NETATMO] Detailed error: "));
-    Serial.println(https.errorToString(httpCode));
     
-    // DIAGNOSTIC: Try to get more information about the connection state
-    Serial.print(F("[CLIENT] Available data: "));
-    Serial.println(client->available());
-    
-    // DIAGNOSTIC: Check if we can read anything from the client
-    if (client->available() > 0) {
-      Serial.println(F("[CLIENT] Reading available data:"));
-      while (client->available()) {
-        Serial.write(client->read());
-      }
-      Serial.println();
+    // Add SSL error diagnostics for connection errors
+    if (httpCode <= 0) {
+      int sslError = client->getLastSSLError();
+      char errorMsg[100];
+      client->getLastSSLError(errorMsg, sizeof(errorMsg));
+      
+      Serial.print(F("[NETATMO-DEBUG] SSL Error Code: "));
+      Serial.println(sslError);
+      Serial.print(F("[NETATMO-DEBUG] SSL Error Message: "));
+      Serial.println(errorMsg);
     }
     
-    // Log the complete response headers for debugging
-    Serial.println(F("\n========== COMPLETE TOKEN ERROR RESPONSE =========="));
-    Serial.println(F("HTTP/1.1 Error"));
-    Serial.println(F("\n==================================================\n"));
-    
-    https.end();
-    
-    // Don't clear the refresh token for connection errors
-    Serial.println(F("[NETATMO] This is a connection error, not clearing refresh token"));
-    return false;
-  }
-  
-  // Handle server errors (HTTP status codes)
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.print(F("[NETATMO] Server error - HTTP code: "));
-    Serial.println(httpCode);
-    
-    // Get error payload
+    // Get error payload with yield
     String errorPayload = https.getString();
     yield(); // Allow the watchdog to be fed
     
-    Serial.println(F("\n========== COMPLETE TOKEN ERROR RESPONSE =========="));
+    Serial.print(F("[NETATMO] Error payload: "));
     Serial.println(errorPayload);
-    Serial.println(F("==================================================\n"));
-    
     https.end();
     
-    // Only clear the token if we get a specific error from the server
-    // Parse the error response to check for specific error types
-    bool invalidToken = false;
-    
-    // Try to parse the error response
-    StaticJsonDocument<256> errorDoc;
-    DeserializationError error = deserializeJson(errorDoc, errorPayload);
-    
-    if (!error && errorDoc.containsKey("error")) {
-      String errorType = errorDoc["error"].as<String>();
-      Serial.print(F("[NETATMO] Error type: "));
-      Serial.println(errorType);
-      
-      // Only clear tokens for specific error types that indicate invalid credentials
-      if (errorType == "invalid_grant" || errorType == "invalid_client" || 
-          errorType == "invalid_request" || errorType == "invalid_token") {
-        invalidToken = true;
-      }
-    }
-    
-    if (invalidToken) {
-      Serial.println(F("[NETATMO] Invalid token error detected, clearing tokens"));
+    // If we get a 401 or 403, try to refresh the token
+    if (httpCode == 401 || httpCode == 403) {
+      Serial.println(F("[NETATMO] Invalid credentials or refresh token, clearing tokens"));
       netatmoRefreshToken[0] = '\0';
       netatmoAccessToken[0] = '\0';
       saveTokensToConfig();
-    } else {
-      Serial.println(F("[NETATMO] Server error, but not clearing tokens"));
+      refreshTokenAuthFailed = true;
+      Serial.println(F("[NETATMO] Setting refreshTokenAuthFailed flag"));
+    } else if (httpCode <= 0) {
+      // This is a connection error
+      Serial.println(F("[NETATMO] Connection error, not clearing refresh token"));
+      refreshTokenConnectionFailed = true;
+      Serial.println(F("[NETATMO] Setting refreshTokenConnectionFailed flag"));
     }
     
     return false;
   }
   
-  // Get the response
+  // Get the response with yield
   String response = https.getString();
   yield(); // Allow the watchdog to be fed
+  
+  Serial.println(F("[NETATMO] Response received"));
   https.end();
   
-  // Parse the response with a larger JSON document size like in successful implementations
-  DynamicJsonDocument doc(2048); // Increased from StaticJsonDocument<384>
+  // Parse the response with a larger JSON document size
+  DynamicJsonDocument doc(2048);
   DeserializationError error = deserializeJson(doc, response);
   
   if (error) {
@@ -5292,7 +5229,18 @@ bool refreshNetatmoToken() {
   strlcpy(netatmoAccessToken, accessToken, sizeof(netatmoAccessToken));
   strlcpy(netatmoRefreshToken, refreshToken, sizeof(netatmoRefreshToken));
   
+  // Reset the auth failure flag since we got a valid token
+  refreshTokenAuthFailed = false;
+  refreshTokenConnectionFailed = false;
+  
+  // Save the tokens to config
   saveTokensToConfig();
+  
+  // Report total time taken
+  Serial.print(F("[TIMING] Total token refresh took: "));
+  Serial.print(millis() - startTime);
+  Serial.println(F(" ms"));
+  
   return true;
 }
 

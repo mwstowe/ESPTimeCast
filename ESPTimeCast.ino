@@ -5041,8 +5041,8 @@ bool refreshNetatmoToken() {
     return false;
   }
   
-  // Memory optimization: Use static client to reduce stack usage
-  static BearSSL::WiFiClientSecure client;
+  // Create a fresh client each time instead of reusing a static one
+  BearSSL::WiFiClientSecure client;
   client.setInsecure(); // Skip certificate validation to save memory
   
   // Use moderate buffer sizes for balance between efficiency and memory usage

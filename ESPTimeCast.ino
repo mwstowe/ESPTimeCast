@@ -5044,18 +5044,27 @@ bool refreshNetatmoToken() {
     return false;
   }
   
-  // Create a fresh client each time instead of reusing a static one
-  BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // Skip certificate validation to save memory
+  // Print and optimize memory before starting
+  Serial.println(F("[NETATMO] Checking memory before token refresh"));
+  printMemoryStats();
+  
+  if (shouldDefragment()) {
+    Serial.println(F("[NETATMO] Memory fragmentation detected, defragmenting..."));
+    defragmentHeap();
+  }
+  
+  // Use unique_ptr for client creation like in successful implementations
+  std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+  client->setInsecure(); // Skip certificate validation to save memory
   
   // Use moderate buffer sizes for balance between efficiency and memory usage
-  client.setBufferSizes(512, 512); // Balanced buffer sizes
+  client->setBufferSizes(512, 512); // Balanced buffer sizes
   
   HTTPClient https;
   https.setTimeout(10000); // 10 second timeout
   
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
-  if (!https.begin(client, "https://api.netatmo.com/oauth2/token")) {
+  if (!https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return false;
   }
@@ -5155,8 +5164,8 @@ bool refreshNetatmoToken() {
   yield(); // Allow the watchdog to be fed
   https.end();
   
-  // Parse the response
-  StaticJsonDocument<384> doc;
+  // Parse the response with a larger JSON document size like in successful implementations
+  DynamicJsonDocument doc(2048); // Increased from StaticJsonDocument<384>
   DeserializationError error = deserializeJson(doc, response);
   
   if (error) {

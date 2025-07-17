@@ -5067,7 +5067,9 @@ bool refreshNetatmoToken() {
   https.useHTTP10(true);
   
   Serial.println(F("[NETATMO] Connecting to token endpoint"));
-  if (!https.begin(*client, "https://api.netatmo.com/oauth2/token")) {
+  // Try alternative HTTPS begin method using String object instead of char*
+  String url = "https://api.netatmo.com/oauth2/token";
+  if (!https.begin(*client, url)) {
     Serial.println(F("[NETATMO] Error - Failed to connect"));
     return false;
   }
